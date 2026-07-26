@@ -1,0 +1,11 @@
+# Compilación
+.build/
+build/
+.swiftpm/
+Package.resolved
+
+# Identidad de firma: es de la máquina que compila, no del proyecto
+.firma-identidad
+
+# macOS
+.DS_Store
