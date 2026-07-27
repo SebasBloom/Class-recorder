@@ -20,6 +20,8 @@
 	<string>15.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>ATSApplicationFontsPath</key>
+	<string>Fuentes</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Bloomind Lab. Uso interno.</string>
 	<key>NSMicrophoneUsageDescription</key>

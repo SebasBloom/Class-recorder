@@ -230,6 +230,16 @@ La app vive en la barra de menú, sin ícono en el Dock (LSUIElement). Ícono co
 - Nombre: `AAAA-MM-DD HHhMM - Nombre de sesión.mov` y su `.cursor.json` gemelo.
 - Video HEVC por hardware, audio AAC 48 kHz, contenedor QuickTime (`.mov`) con fragmentos periódicos. Se eligió `.mov` sobre `.mp4` porque la recuperación de un archivo truncado a la fuerza es notoriamente más confiable en el contenedor QuickTime, y la resistencia a fallos es requisito desde la Fase 1 (decisión 11). QuickTime, ffmpeg y Whisper leen `.mov` con HEVC sin diferencia alguna respecto a `.mp4`, así que VideoFlow no se ve afectado.
 
+### 8.13 Identidad visual
+
+Toda la interfaz de la app sigue la identidad Bloomind, la misma de CLM, whatasAPI y Bloomind Oficinas. La guía canónica es la sección 5 de `~/CLM Bloomind/docs/instructivo.md`, y en este proyecto está traducida a AppKit en `UI/BloomindStyle.swift`.
+
+Resumen operativo: tema oscuro sobre Azul Profundo `#0F1A2C`, superficies elevadas `#16243D`, texto blanco con secundario `#8CA3C4`, acento Azul Lab `#3A7BFF` con hover `#1F4DFF`, turquesa `#45D3C5` **exclusivo** para éxito, coral `#F0857A` para error y alerta, hairlines `#26364F`. Tipografía display Fraunces (vendorizada en el bundle), sans del sistema para interfaz y monoespaciada para datos técnicos.
+
+Las cuatro reglas que no se rompen: colores planos sin degradados, profundidad con hairlines y no con sombras, aire generoso, y el turquesa reservado para el éxito.
+
+Aplica a todo lo visible: panel de configuración, widget flotante, preferencias, tarjeta de atajos, countdown y avisos. No aplica a lo que se compone dentro del video, que se rige por la sección 8.5 (el círculo amarillo del cursor es `#FFD700` y no cambia).
+
 ## 9. Fases de construcción
 
 Regla general: una fase a la vez. Cada fase termina cuando Sebas ejecuta sus criterios de aceptación y da el visto bueno. Solo entonces se hace el commit de cierre de fase y se arranca la siguiente. Si una fase revela que algo del plan no funciona como se pensó, se detiene, se documenta en DECISIONS.md la situación y se consulta con Sebas.

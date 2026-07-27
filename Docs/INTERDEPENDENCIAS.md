@@ -36,6 +36,18 @@ Consumidores: tablero (Fase 7) y capa de anotación sobre pantalla (Fase 8).
 
 Regla: motor único, contenidos separados por superficie. Borrar una superficie nunca toca la otra.
 
+## Identidad visual
+
+**Fase 1. Existe.** `UI/BloomindStyle.swift` y la fuente en `Recursos/Fuentes/`.
+
+Paleta, espaciado, tipografía y el botón plano de la marca. Es la traducción a AppKit de la guía de estilo del CLM.
+
+Consumidores actuales: `ControlWindow`.
+
+Consumidores previstos: absolutamente toda la UI que venga. El panel de configuración y el widget flotante (Fase 11), la pantalla de preferencias (Fase 9), la tarjeta de atajos (Fase 9), el countdown (Fase 11) y los avisos de disco.
+
+Cuidado al tocarlo: los colores son tokens de marca compartidos con CLM, whatasAPI y Bloomind Oficinas. No se inventan valores nuevos acá; si hace falta un color que no está, se resuelve con la guía del CLM. El turquesa es exclusivo de éxito y no se usa como decoración.
+
 ## Selector de rectángulo en pantalla
 
 **Fase 10. Pendiente.** Carpeta prevista: `UI/`.
@@ -43,6 +55,18 @@ Regla: motor único, contenidos separados por superficie. Borrar una superficie 
 Arrastrar para definir una zona de la pantalla.
 
 Consumidores: slot de censura permanente, slot de censura de sesión (Fase 10), y grabación de área personalizada (Fase 11).
+
+## Captura de pantalla
+
+**Fase 1. Existe.** `Captura/ScreenCapture.swift` y `Captura/ScreenRecordingPermission.swift`.
+
+Enumeración de pantallas con su tamaño en píxeles reales, y el stream de ScreenCaptureKit a 30 fps con el cursor visible.
+
+Consumidores actuales: `RecordingController`.
+
+Consumidores previstos: el pipeline de composición (Fase 2) y las fuentes de audio, porque el micrófono y el audio del sistema entran por el mismo `SCStream` (Fases 3 y 4).
+
+Cuidado al tocarlo: el filtro excluye la **aplicación entera**, no ventanas sueltas. Esa es la única forma de que las ventanas que nacen a mitad de grabación queden fuera del video. No cambiarlo a una lista de ventanas.
 
 ## Pipeline de composición de frames
 
@@ -57,13 +81,17 @@ Nace en la Fase 2 con una sola capa (el círculo), pero desde ya con la forma de
 
 ## Escritor de video y audio
 
-**Fase 1. Pendiente.** Carpeta prevista: `Escritura/`.
+**Fase 1. Existe.** `Escritura/RecordingWriter.swift`.
 
-AVAssetWriter, fragmentos periódicos, pausa con desplazamiento de timestamps.
+AVAssetWriter en contenedor `.mov`, HEVC por hardware, fragmentos cada 5 segundos, y el desplazamiento de timestamps por pausa ya implementado.
 
-Lo alimentan: el pipeline de composición y las fuentes de audio.
+Consumidores actuales: `RecordingController`, que le pasa los frames de la captura directo.
 
-Nace en la Fase 1 con la abstracción de sesión que contempla pausa, aunque la pausa real se implemente en la Fase 5, para no refactorizar después.
+Consumidores previstos: el pipeline de composición (Fase 2, se mete en el medio) y las fuentes de audio (Fases 3 a 5).
+
+Cuidado al tocarlo: `shouldOptimizeForNetworkUse` tiene que quedar apagado y `movieFragmentInterval` puesto, o se pierde la resistencia a fallos de la decisión 11. La perilla de calidad es `bitsPerPixel`, y vive solo acá.
+
+La pista de audio todavía no existe: cuando llegue, el `startSession` tiene que seguir disparándose con el primer buffer que llegue de cualquier pista, no solo de video.
 
 ## Registro de acciones y atajos
 
@@ -87,7 +115,7 @@ Aunque son dos módulos, comparten patrón: si cambia el manejo de desconexión 
 
 Un solo `config.json` en `~/Library/Application Support/Grabador Bloomind/`, legible a mano. Borrarlo equivale a reset de fábrica.
 
-Consumidores actuales: `AppDelegate` (la carga al arrancar).
+Consumidores actuales: `AppDelegate` (la carga al arrancar), `RecordingController` (carpeta de salida), `ControlWindow` (última pantalla usada), `MenuBarController` (abrir la carpeta).
 
 Consumidores previstos: casi todos los módulos. Cada fase que agregue un campo lo agrega al struct `Configuration` con su valor por defecto, para que un archivo viejo siga cargando.
 
@@ -99,7 +127,7 @@ Cuidado: los campos son opcionales a propósito. Nulo significa "todavía no se 
 
 Un archivo por grabación en `~/Library/Logs/Grabador Bloomind/`, más uno general mientras no hay grabación. Conserva los últimos 20.
 
-Consumidores actuales: `AppDelegate`, `ConfigurationStore`.
+Consumidores actuales: `AppDelegate`, `ConfigurationStore`, `RecordingController`, `ScreenCapture`, `RecordingWriter`, `ControlWindow`, `ScreenRecordingPermission`.
 
 Consumidores previstos: todos los módulos.
 

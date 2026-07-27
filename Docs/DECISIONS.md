@@ -68,7 +68,7 @@ Alternativa descartada: instalar Xcode. No se pierde nada: si algún día se ins
 Las compilaciones se firman con un certificado autofirmado del Llavero, no ad-hoc. El nombre de la identidad vive en `.firma-identidad`, fuera de git.
 Razón: macOS ata los permisos de TCC (pantalla, micrófono, cámara, accesibilidad) a la identidad del binario. Con firma ad-hoc la identidad cambia en cada recompilación y el sistema vuelve a pedir los cuatro permisos, en un proyecto de 12 fases donde casi todos los criterios de aceptación implican grabar pantalla.
 Detalle del entorno: en macOS 26 ya no existe Acceso a Llaveros, así que el certificado se crea por terminal. El paso a paso está en `Docs/FIRMA.md`.
-Estado: pendiente de que Sebas lo ejecute. Mientras tanto `construir.sh` firma ad-hoc y avisa.
+Estado: hecho el 2026-07-26. El certificado se llama "Bloomind Desarrollo" y se verificó que el requisito designado del bundle queda idéntico entre compilaciones, que es lo que hace que los permisos no se reseteen. Nota: el paso de confianza con `sudo` que se creía necesario resultó innecesario; el detalle está en `Docs/FIRMA.md`.
 
 **18. 2026-07-26 — Modo de lenguaje Swift 5, no Swift 6.**
 Razón: el modo 6 exige anotaciones de aislamiento de concurrencia en cada callback de AVFoundation y ScreenCaptureKit, que llegan desde colas propias del sistema. Eso convierte cada fase del pipeline de captura en una pelea con el verificador en vez de con el problema real.
@@ -86,3 +86,33 @@ Alternativa descartada: copiarlo a la raíz además de a `Docs/`, como sugería 
 **21. 2026-07-26 — Un `config.json` ilegible se aparta, no se pisa.**
 Si el archivo de configuración no se puede decodificar, se renombra a `config.json.dañado` y se arranca con los valores por defecto.
 Razón: coherente con la decisión 12. Un archivo corrupto puede tener la posición de la censura permanente y los atajos personalizados; destruirlo en silencio para arrancar limpio es exactamente lo que el equipo no hace.
+
+**22. 2026-07-26 — La captura excluye la aplicación entera, no ventanas sueltas.**
+El filtro de ScreenCaptureKit se arma con `excludingApplications`, pasándole la app propia, en vez de listar ventanas en `exceptingWindows`.
+Razón: la regla derivada de la decisión 3 exige que la exclusión cubra también las ventanas que nacen a mitad de grabación (el espejo del tablero, la tarjeta de atajos, el widget). Una lista de ventanas se arma al iniciar y queda vieja; excluir la aplicación entera cubre todo lo que abra después, para siempre y sin mantenimiento.
+Alternativa descartada: enumerar ventanas y mantener la lista al día durante la grabación. Más código y una fuga garantizada el día que alguien agregue una ventana nueva y olvide registrarla.
+
+**23. 2026-07-26 — Ante atraso, se descartan frames; nunca se encolan.**
+La cola de la captura es corta (`queueDepth = 5`) y el escritor descarta el frame si la pista todavía no está lista para recibir datos.
+Razón: es la regla de memoria de la sección 5 del plan llevada al código. Encolar sin límite es exactamente la causa de la app que se cae en el minuto 55 de una clase de una hora. Un frame perdido a 30 fps no se nota; un crash a los 55 minutos arruina la clase.
+
+**24. 2026-07-26 — `shouldOptimizeForNetworkUse` apagado a propósito.**
+Razón: esa opción mueve el índice del archivo al principio cuando se cierra, y un archivo cuyo índice solo existe si el cierre fue limpio es justo lo que la decisión 11 prohíbe. Con fragmentos periódicos y sin esa optimización, un archivo truncado sigue siendo reproducible.
+
+**25. 2026-07-26 — La calidad de video se controla con una sola perilla, bits por píxel.**
+El bitrate se calcula como ancho × alto × 30 fps × `bitsPerPixel`, con `bitsPerPixel = 0.09` definido en un solo lugar de `RecordingWriter`.
+Razón: el valor correcto depende de la resolución de cada pantalla, así que un bitrate fijo estaría mal en una de las dos Macs. El contenido de pantalla comprime muy bien en HEVC, de ahí que el valor sea bajo. Si un video sale pixelado o si los archivos pesan de más, se toca ese número y nada más.
+
+**26. 2026-07-26 — Identidad visual Bloomind, con Fraunces vendorizada en el bundle.**
+La app adopta la guía de estilo de la sección 5 de `~/CLM Bloomind/docs/instructivo.md`: tema oscuro Azul Profundo `#0F1A2C`, superficies `#16243D`, acento Azul Lab `#3A7BFF`, turquesa `#45D3C5` exclusivo para éxito, coral `#F0857A` para error, colores planos sin degradados, hairlines en vez de sombras y aire generoso. Traducida a AppKit en `UI/BloomindStyle.swift`.
+Razón: es la cara común de la familia de productos Bloomind (CLM, whatasAPI, Oficinas) y Sebas la quiere en todo, incluida la ventana previa a grabar. Tener los tokens en un solo módulo desde ahora evita que el panel y el widget de la Fase 11 nazcan con otro aspecto y haya que unificarlos después.
+Sobre la tipografía: Fraunces es una fuente variable y en los proyectos web vive como `.woff2`, que macOS no puede cargar. Se trajo el `.ttf` variable oficial del repositorio de Google Fonts (licencia SIL Open Font, la copia de la licencia va al lado del archivo en `Recursos/Fuentes/`) y se vendoriza en el bundle, registrándose vía `ATSApplicationFontsPath`. Esto no rompe la decisión 14: la regla de cero red es sobre la app corriendo, y el archivo viaja dentro del bundle.
+Detalle técnico: el peso se pide por eje de variación, porque la instancia por defecto del archivo es Black y resulta demasiado pesada para una interfaz. El eje WONK va en 0 porque sus glifos alternos son excéntricos de más para un panel.
+Alternativa descartada: usar solo la fuente del sistema hasta que el manual de marca Bloomind defina la tipografía oficial. Sebas prefirió la fidelidad con los otros productos, asumiendo que si el manual define otra fuente se cambia en una sola línea de `BloomindStyle`.
+
+**27. 2026-07-26 — Cómo se verifica de verdad la resistencia a fallos (y cómo NO).**
+Verificado con una prueba aislada: la resistencia a fallos de la decisión 11 **funciona**. Se mató un proceso escritor con `kill -9` a los 20 segundos y el archivo quedó legible hasta el segundo 15, o sea se perdió solo el último fragmento incompleto.
+El detalle que importa para no volver a equivocarse: **un archivo que se cerró bien NO se ve fragmentado.** AVAssetWriter escribe fragmentos (`moof`) mientras graba, pero al llamar `finishWriting()` consolida todo en un `.mov` clásico con el índice `moov` al final. Un archivo matado a mitad, en cambio, queda con el `moov` al principio seguido de una cadena de `moof`, y es reproducible.
+Consecuencia práctica: **truncar a mano un archivo terminado no prueba nada** y da un falso negativo, porque le estás cortando el índice a un archivo ya consolidado. La única prueba válida es matar el proceso durante la grabación y abrir el archivo que quedó.
+Costo conocido: se pierde hasta un intervalo de fragmento, hoy 5 segundos. Si alguna vez se quiere perder menos, se baja `fragmentInterval` en `RecordingWriter`, a costa de un archivo levemente más pesado.
+

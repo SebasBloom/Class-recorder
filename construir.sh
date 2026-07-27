@@ -16,6 +16,7 @@ rm -rf "$DESTINO"
 mkdir -p "$DESTINO/Contents/MacOS" "$DESTINO/Contents/Resources"
 cp ".build/release/${EJECUTABLE}" "$DESTINO/Contents/MacOS/${EJECUTABLE}"
 cp "Recursos/Info.plist" "$DESTINO/Contents/Info.plist"
+cp -R "Recursos/Fuentes" "$DESTINO/Contents/Resources/Fuentes"
 
 # La identidad de firma vive en .firma-identidad (fuera de git). Sin ese archivo
 # se firma ad-hoc, y como macOS ata los permisos a la identidad del binario, los
