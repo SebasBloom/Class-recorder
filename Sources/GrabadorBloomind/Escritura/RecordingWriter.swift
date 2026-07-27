@@ -40,7 +40,9 @@ final class RecordingWriter {
     // al reanudar, todos los buffers se corren hacia atrás por la duración de la
     // pausa, así el archivo no queda con un hueco.
     private(set) var isPaused = false
-    private var pausedTotal: CMTime = .zero
+    /// Duración total pausada hasta ahora. El pipeline la usa para calcular el
+    /// tiempo del video final, que es el que ve VideoFlow.
+    private(set) var pausedTotal: CMTime = .zero
     private var pauseStartedAt: CMTime?
 
     init(outputURL: URL, pixelSize: CGSize) throws {

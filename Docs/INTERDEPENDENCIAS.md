@@ -8,11 +8,15 @@ Mapa de las piezas compartidas del proyecto, organizado por pieza y no por featu
 
 ## Conversión de coordenadas
 
-**Fase 2. Pendiente.** Carpeta prevista: `Coordenadas/`.
+**Fase 2. Existe.** `Coordenadas/CoordinateConverter.swift`.
 
 Es la pieza más compartida del proyecto y se escribe una sola vez.
 
-Consumidores: círculo de cursor, efecto de clic, JSON de cursor, capa de dibujo, tablero, censura, selector de rectángulo, burbuja de cámara.
+Consumidores actuales: `FramePipeline`, que la usa para el círculo, los clics y el JSON.
+
+Consumidores previstos: capa de dibujo, tablero, censura, selector de rectángulo y burbuja de cámara.
+
+**Tiene la única prueba automática del proyecto** (`./probar.sh`), incluida la configuración de dos monitores con escalas distintas, que a mano es impráctica de verificar. Si se toca esta pieza, correr esa prueba antes de nada.
 
 Detalle crítico: origen abajo izquierda en eventos de mouse contra arriba izquierda en píxeles del frame; factor de escala Retina por display; con dos monitores cada display tiene su propio espacio de coordenadas y su propio factor de escala.
 
@@ -20,11 +24,15 @@ Si el círculo aparece desfasado, el bug está acá y solo acá.
 
 ## Tracking global del mouse
 
-**Fase 2. Pendiente.** Carpeta prevista: `EntradaGlobal/`.
+**Fase 2. Existe.** `EntradaGlobal/MouseTracker.swift`.
 
 Posición y clics del mouse a nivel de sistema.
 
-Consumidores: círculo de cursor, efecto de clic, JSON de cursor, y el motor de dibujo cuando hay un modo de dibujo activo.
+Consumidores actuales: `FramePipeline`.
+
+Consumidores previstos: el motor de dibujo, cuando haya un modo de dibujo activo (Fases 7 y 8).
+
+Cuidado al tocarlo: la posición se guarda desde el hilo principal y se lee desde la cola de captura bajo candado. No consultar `NSEvent.mouseLocation` desde la cola de captura.
 
 ## Motor de dibujo
 
@@ -70,14 +78,26 @@ Cuidado al tocarlo: el filtro excluye la **aplicación entera**, no ventanas sue
 
 ## Pipeline de composición de frames
 
-**Fase 2. Pendiente.** Carpeta prevista: `Composicion/`.
+**Fase 2. Existe.** `Composicion/FrameCompositor.swift` y `Composicion/FramePipeline.swift`.
 
-Fondo según el modo activo más capas según la matriz de visibilidad de la sección 8.4 del plan.
+`FrameCompositor` dibuja las capas; `FramePipeline` une todo lo que le pasa a un frame entre la captura y el archivo.
 
-Consume: conversión de coordenadas, tracking de mouse, motor de dibujo, censura, cámara.
-Alimenta: el escritor de video.
+La matriz de visibilidad de la sección 8.4 está implementada tal cual en la función `isVisible(_:in:)`. Hoy solo existen las capas del círculo y el clic, y el modo siempre es `pantalla`, pero la matriz completa ya está escrita: cada fase que agregue una capa solo tiene que dibujarla, no decidir cuándo se ve.
 
-Nace en la Fase 2 con una sola capa (el círculo), pero desde ya con la forma de la matriz completa.
+Consume: conversión de coordenadas y tracking de mouse.
+Alimenta: el escritor de video y el escritor del JSON de cursor.
+
+Cuidado al tocarlo: dibuja dentro del mismo buffer de la captura, sin crear uno nuevo por frame. No cambiar eso sin leer la decisión 28.
+
+## Escritor del JSON de cursor
+
+**Fase 2. Existe.** `Escritura/CursorTrackWriter.swift`.
+
+Escribe el `<mismo nombre>.cursor.json` que VideoFlow usa para el zoom automático.
+
+Consumidores actuales: `FramePipeline`.
+
+Cuidado al tocarlo: las coordenadas van en píxeles del video final y los tiempos en segundos del video final, descontando pausas. VideoFlow no sabe nada de macOS, ni de escalas, ni de pausas, y así tiene que seguir. Ya tiene el método para los eventos de cambio de modo, que se empieza a usar en la Fase 6.
 
 ## Escritor de video y audio
 

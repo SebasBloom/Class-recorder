@@ -116,3 +116,23 @@ El detalle que importa para no volver a equivocarse: **un archivo que se cerró 
 Consecuencia práctica: **truncar a mano un archivo terminado no prueba nada** y da un falso negativo, porque le estás cortando el índice a un archivo ya consolidado. La única prueba válida es matar el proceso durante la grabación y abrir el archivo que quedó.
 Costo conocido: se pierde hasta un intervalo de fragmento, hoy 5 segundos. Si alguna vez se quiere perder menos, se baja `fragmentInterval` en `RecordingWriter`, a costa de un archivo levemente más pesado.
 
+**28. 2026-07-26 — Las capas se dibujan dentro del mismo buffer de la captura.**
+El compositor pinta el círculo y las ondas directamente sobre el `CVPixelBuffer` que llegó de ScreenCaptureKit, con un `CGContext` montado sobre su memoria, en vez de crear un buffer nuevo por frame.
+Razón: a 30 fps durante una hora son 108.000 frames. Crear y destruir un buffer de pantalla completa en cada uno es exactamente la presión de memoria que la regla de la sección 5 del plan manda evitar. Se verificó que los buffers respaldados por IOSurface, que son los que entrega la captura, aceptan que se escriba sobre ellos.
+Alternativa descartada: componer en un buffer aparte y copiar. Más limpio en teoría, pero paga una copia de pantalla completa por frame sin ganar nada.
+
+**29. 2026-07-26 — La posición del mouse se guarda con cada evento, no se consulta por frame.**
+`MouseTracker` actualiza la última posición conocida desde los eventos globales de movimiento, en el hilo principal, y el compositor la lee bajo un candado desde la cola de captura.
+Razón: AppKit hay que tocarlo desde el hilo principal, y los frames llegan en otra cola. Consultar `NSEvent.mouseLocation` desde la cola de captura funcionaría casi siempre y fallaría raro.
+Nota de permisos: los monitores globales de mouse **no** necesitan Accesibilidad. El de teclado sí, y por eso los atajos globales llegan recién en la Fase 9.
+
+**30. 2026-07-26 — El JSON del cursor solo escribe cuando la posición cambia.**
+El muestreo sigue siendo a la cadencia del frame, como pide la sección 8.5, pero si el mouse está quieto no se repite la misma coordenada frame tras frame.
+Razón: en una clase de una hora, escribir un evento por frame son más de 100.000 entradas y varios MB de JSON, la mayoría idénticos entre sí. VideoFlow no pierde nada: una coordenada que no cambió no aporta información para decidir un zoom.
+Alternativa descartada: un evento por frame siempre. Se descartó por tamaño, no por precisión.
+
+**31. 2026-07-26 — Las pruebas automáticas van con asertos, sin XCTest.**
+La única suite del proyecto es `Pruebas/main.swift`, que se corre con `./probar.sh`.
+Razón: XCTest viene con Xcode, no con las Command Line Tools, así que un `swift test` normal no compila en esta máquina (decisión 16). Con asertos y un script de tres líneas alcanza y corre en cualquier Mac.
+Qué se prueba y qué no: solo la conversión de coordenadas, porque es la pieza más compartida y un error ahí desfasa el círculo, los clics, el JSON, la censura y el dibujo todos a la vez, apareciendo como un síntoma vago. El resto del proyecto se valida con los criterios de aceptación, que es lo que manda el plan.
+

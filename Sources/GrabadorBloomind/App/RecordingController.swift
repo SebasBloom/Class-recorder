@@ -15,7 +15,9 @@ final class RecordingController {
     private(set) var isRecording = false
 
     private let capture = ScreenCapture()
+    private let mouseTracker = MouseTracker()
     private var writer: RecordingWriter?
+    private var pipeline: FramePipeline?
 
     /// Se avisa cuando el estado cambia, para que la UI se actualice.
     var onStateChange: (() -> Void)?
@@ -38,18 +40,35 @@ final class RecordingController {
         Logger.shared.openLog(named: url.deletingPathExtension().lastPathComponent)
         Logger.shared.log("Iniciando grabación en \(display.name)")
 
+        guard let converter = CoordinateConverter(displayID: display.scDisplay.displayID) else {
+            Logger.shared.log("ERROR: la pantalla elegida ya no está conectada")
+            showError("Esa pantalla ya no está disponible", detail: "Volvé a abrir el control para actualizar la lista de pantallas.")
+            onStateChange?()
+            return
+        }
+
         do {
             let writer = try RecordingWriter(outputURL: url, pixelSize: display.pixelSize)
             self.writer = writer
 
-            // El frame llega en la cola de captura y se escribe ahí mismo. El
-            // escritor se toma directo, no vía self: así la cola de captura nunca
+            let pipeline = FramePipeline(
+                converter: converter,
+                compositor: FrameCompositor(pixelSize: display.pixelSize),
+                cursorTrack: CursorTrackWriter(videoURL: url, pixelSize: display.pixelSize, fps: 30),
+                tracker: mouseTracker,
+                writer: writer
+            )
+            self.pipeline = pipeline
+            mouseTracker.start()
+
+            // El frame llega en la cola de captura y se procesa ahí mismo. El
+            // pipeline se toma directo, no vía self: así la cola de captura nunca
             // toca el controlador, que vive en el hilo principal.
             // autoreleasepool por frame: sin esto los buffers se acumulan hasta
             // el final del ciclo de eventos.
-            capture.onFrame = { [writer] buffer in
+            capture.onFrame = { [pipeline] buffer in
                 autoreleasepool {
-                    writer.append(buffer)
+                    pipeline.process(buffer)
                 }
             }
 
@@ -66,7 +85,9 @@ final class RecordingController {
 
         } catch {
             Logger.shared.log("ERROR al iniciar la grabación: \(error.localizedDescription)")
+            mouseTracker.stop()
             self.writer = nil
+            self.pipeline = nil
             showError("No se pudo iniciar la grabación", detail: error.localizedDescription)
             onStateChange?()
         }
@@ -78,9 +99,16 @@ final class RecordingController {
 
         await capture.stop()
         capture.onFrame = nil
+        mouseTracker.stop()
 
         let writer = self.writer
+        let pipeline = self.pipeline
         self.writer = nil
+        self.pipeline = nil
+
+        // El JSON del cursor se cierra antes que el video: si algo falla al
+        // cerrar el video, igual queda el recorrido escrito.
+        pipeline?.finish()
 
         await withCheckedContinuation { continuation in
             guard let writer else { return continuation.resume() }
