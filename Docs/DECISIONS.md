@@ -172,3 +172,12 @@ Razón: macOS pide imágenes de plantilla en la barra de menú para que el ícon
 Cómo se hizo la silueta: el cerebro es blanco sobre un degradado azul, así que se separa por luminancia con una transición suave entre 0.80 y 0.95 en vez de un umbral duro, que dejaría el borde dentado.
 Nota para la Fase 11: los tres estados del ícono (inactivo, grabando, pausado) se construyen sobre esta misma silueta.
 
+**40. 2026-07-28 — El selector de audio es de modo, no de dispositivo.**
+La interfaz ofrece "Sin audio", "Micrófono" y "Audio del sistema" como modos, y el selector de micrófono con su barra de nivel solo aparece cuando el modo elegido usa micrófono. "Micrófono + sistema" se suma en la Fase 5, que es la que trae la mezcla.
+Razón: el plan (sección 8.2) define tres modos, no una lista de dispositivos con una opción de apagado. Modelarlo como modo deja el cuarto caso listo para entrar sin rehacer la interfaz, y evita el estado sin sentido de "audio del sistema con un micrófono seleccionado".
+
+**41. 2026-07-28 — El audio de la propia app se excluye de la captura del sistema.**
+Se activa `excludesCurrentProcessAudio`.
+Razón: es la decisión 3 llevada al audio. Así como ninguna ventana propia sale en el video, ningún sonido propio sale en la pista. Sin esto, un aviso del Grabador quedaría grabado dentro de la clase.
+El audio del sistema no pide un permiso aparte: viaja con el de grabación de pantalla, que ya se verifica antes de arrancar.
+

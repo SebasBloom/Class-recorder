@@ -31,8 +31,7 @@ final class RecordingController {
         try await ScreenCapture.availableDisplays()
     }
 
-    /// - Parameter microphoneID: micrófono elegido, o nil para grabar sin audio.
-    func start(display: CaptureDisplay, microphoneID: String?) async {
+    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?) async {
         guard !isRecording else { return }
 
         // Avisar del estado igual al salir por acá: si no, la UI se queda con el
@@ -42,13 +41,17 @@ final class RecordingController {
             return
         }
 
+        var audioMode = audioMode
         var microphoneID = microphoneID
-        if microphoneID != nil, await !AudioDeviceEnumerator.requestPermission() {
-            // Sin permiso se graba igual, pero mudo y avisando: es preferible a
-            // no grabar la clase.
+        if audioMode.capturesMicrophone, await !AudioDeviceEnumerator.requestPermission() {
+            // Sin permiso se graba igual, pero sin micrófono y avisando: es
+            // preferible a no grabar la clase.
             showMicrophonePermissionAlert()
             microphoneID = nil
+            audioMode = audioMode == .microphone ? .none : .system
         }
+        // El audio del sistema no necesita permiso propio: viaja con el de
+        // grabación de pantalla, que ya se verificó arriba.
 
         let url = Self.makeOutputURL(sessionName: "Prueba")
         Logger.shared.openLog(named: url.deletingPathExtension().lastPathComponent)
@@ -57,8 +60,8 @@ final class RecordingController {
         // vieja no hay forma de saber con cuál se grabó.
         let microphoneName = microphoneID.flatMap { id in
             AudioDeviceEnumerator.device(withID: id)?.name
-        } ?? "sin audio"
-        Logger.shared.log("Iniciando grabación en \(display.name), micrófono: \(microphoneName)")
+        } ?? "ninguno"
+        Logger.shared.log("Iniciando grabación en \(display.name), audio: \(audioMode.label), micrófono: \(microphoneName)")
 
         guard let converter = CoordinateConverter(displayID: display.scDisplay.displayID) else {
             Logger.shared.log("ERROR: la pantalla elegida ya no está conectada")
@@ -68,7 +71,7 @@ final class RecordingController {
         }
 
         do {
-            let writer = try RecordingWriter(outputURL: url, pixelSize: display.pixelSize, withAudio: microphoneID != nil)
+            let writer = try RecordingWriter(outputURL: url, pixelSize: display.pixelSize, withAudio: audioMode.hasAudio)
             self.writer = writer
 
             let pipeline = FramePipeline(
@@ -92,10 +95,15 @@ final class RecordingController {
                 }
             }
 
+            // En la Fase 4 solo una de las dos fuentes está activa a la vez, así
+            // que ambas escriben directo en la pista. La suma de las dos llega en
+            // la Fase 5 y se mete en el medio de acá.
             capture.onMicrophone = { [writer] buffer in
-                autoreleasepool {
-                    writer.appendAudio(buffer)
-                }
+                autoreleasepool { writer.appendAudio(buffer) }
+            }
+
+            capture.onSystemAudio = { [writer] buffer in
+                autoreleasepool { writer.appendAudio(buffer) }
             }
 
             capture.onStop = { [weak self] error in
@@ -104,9 +112,9 @@ final class RecordingController {
                 }
             }
 
-            try await capture.start(display: display, microphoneID: microphoneID)
+            try await capture.start(display: display, audioMode: audioMode, microphoneID: microphoneID)
 
-            activeMicrophoneID = microphoneID
+            activeMicrophoneID = audioMode.capturesMicrophone ? microphoneID : nil
             observeDeviceDisconnection()
 
             isRecording = true
@@ -116,6 +124,7 @@ final class RecordingController {
             Logger.shared.log("ERROR al iniciar la grabación: \(error.localizedDescription)")
             mouseTracker.stop()
             capture.onMicrophone = nil
+            capture.onSystemAudio = nil
             self.writer = nil
             self.pipeline = nil
             showError("No se pudo iniciar la grabación", detail: error.localizedDescription)
@@ -130,6 +139,7 @@ final class RecordingController {
         await capture.stop()
         capture.onFrame = nil
         capture.onMicrophone = nil
+        capture.onSystemAudio = nil
         mouseTracker.stop()
         stopObservingDeviceDisconnection()
         activeMicrophoneID = nil

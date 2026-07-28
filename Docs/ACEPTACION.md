@@ -133,6 +133,34 @@ Lo que no puede pasar: que la app se caiga, o que siga grabando sin avisarte.
 2. **Desconexión a mitad de grabación:** grabación con AirPods desde las 08:59:30; a las 09:00:46 se guardaron en el estuche. Quedó registrado el aviso, la grabación siguió 25 segundos más y se detuvo normal. Ni caída ni silencio sin avisar.
 3. **Calidad de audio:** se comparó el mismo micrófono grabado por `AVCaptureSession` (camino clásico de macOS) contra ScreenCaptureKit, con codificación idéntica. Nuestro camino salió mejor: mismo nivel de voz (−24.1 dBFS), ruido de fondo 6 dB más bajo (−59.3 contra −53.5), espectros equivalentes y cero recorte. Ver decisión 37.
 
-### Fase 4 — PENDIENTE
+## Fase 4. Audio del sistema — VALIDADA el 2026-07-28
 
-Audio del sistema como modo independiente: grabar 2 minutos con música sonando y sin hablar, y que el archivo tenga el audio del sistema limpio y sincronizado.
+En el control de grabación ahora hay un selector de **Audio** con tres opciones: Sin audio, Micrófono y Audio del sistema. El selector de micrófono y su barra de nivel solo aparecen cuando elegís Micrófono.
+
+### 1. Dos minutos de audio del sistema
+
+Poné música o un video sonando. En el control, elegí **Audio del sistema** en el selector de audio, y grabá **2 minutos sin hablar**.
+
+**Tiene que:** escucharse la música limpia en el archivo, y sincronizada con la imagen. Si en el video se ve el reproductor, lo que suena tiene que corresponder a lo que se ve.
+
+### 2. Los sonidos de la app no salen
+
+En esa misma grabación, o en una corta aparte, provocá algún sonido del sistema (subir el volumen con las teclas, por ejemplo).
+
+**Tiene que:** grabarse el audio del sistema, pero ningún sonido que produzca el propio Grabador.
+
+### 3. Los tres modos siguen funcionando
+
+Tres grabaciones cortas, una por modo: Sin audio, Micrófono, Audio del sistema.
+
+**Tiene que:** la primera salir muda, la segunda con tu voz, la tercera con el sonido del computador. Y al cerrar y reabrir la app, el selector tiene que arrancar en el último modo que usaste.
+
+### Resultados medidos
+
+Grabación de 2m12 en modo Audio del sistema: pico −0.9 dBFS, promedio −18.1 dBFS, espectro completo hasta 14.3 kHz, sin recorte. Es el nivel más sano de todas las grabaciones del proyecto hasta ahora.
+
+**Hallazgo colateral sobre los AirPods como micrófono:** en la grabación con AirPods, el 99% de la energía queda **bajo 8.5 kHz**, contra 12.9 kHz del DJI por iPhone y 13.5 kHz del micrófono del Mac. Eso es la firma del perfil de manos libres de Bluetooth: al usar unos audífonos inalámbricos como entrada, el enlace baja a calidad de teléfono. No es un problema del grabador y no se puede arreglar por software. **Los AirPods sirven para escuchar, no para grabar una clase.**
+
+### Fase 5 — PENDIENTE
+
+Mezcla de micrófono y sistema en una sola pista, el modo "Micrófono + sistema" en el selector, y la pausa real con desplazamiento de timestamps.

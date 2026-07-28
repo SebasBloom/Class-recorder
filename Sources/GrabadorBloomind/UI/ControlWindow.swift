@@ -14,6 +14,7 @@ final class ControlWindow: NSWindowController {
     private var displays: [CaptureDisplay] = []
     private let displayPopUp = NSPopUpButton()
 
+    private let audioModePopUp = NSPopUpButton()
     private let microphoneEnumerator = AudioDeviceEnumerator()
     private let levelMeter = AudioLevelMeter()
     private var microphones: [AudioDevice] = []
@@ -23,6 +24,8 @@ final class ControlWindow: NSWindowController {
     private let statusLabel = NSTextField(labelWithString: "")
     private let titleLabel = NSTextField(labelWithString: "Grabador")
     private let eyebrowLabel = NSTextField(labelWithString: "")
+
+    private var microphoneLabel: NSTextField?
 
     private var timer: Timer?
     private var startedAt: Date?
@@ -81,6 +84,22 @@ final class ControlWindow: NSWindowController {
         displayPopUp.font = BloomindStyle.ui(13)
         displayPopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
+        let audioModeLabel = NSTextField(labelWithString: "Audio")
+        audioModeLabel.font = BloomindStyle.ui(12)
+        audioModeLabel.textColor = BloomindStyle.muted
+
+        audioModePopUp.font = BloomindStyle.ui(13)
+        audioModePopUp.target = self
+        audioModePopUp.action = #selector(audioModeChanged)
+        for mode in AudioMode.available { audioModePopUp.addItem(withTitle: mode.label) }
+        if let saved = ConfigurationStore.shared.current.lastAudioMode,
+           let mode = AudioMode(rawValue: saved),
+           let index = AudioMode.available.firstIndex(of: mode) {
+            audioModePopUp.selectItem(at: index)
+        } else {
+            audioModePopUp.selectItem(at: AudioMode.available.firstIndex(of: .microphone) ?? 0)
+        }
+
         let microphoneLabel = NSTextField(labelWithString: "Micrófono")
         microphoneLabel.font = BloomindStyle.ui(12)
         microphoneLabel.textColor = BloomindStyle.muted
@@ -104,12 +123,15 @@ final class ControlWindow: NSWindowController {
 
         let cardStack = NSStackView(views: [
             displayLabel, displayPopUp,
+            audioModeLabel, audioModePopUp,
             microphoneLabel, microphonePopUp, levelBar
         ])
         cardStack.orientation = .vertical
         cardStack.alignment = .leading
         cardStack.spacing = BloomindStyle.Space.tight
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: displayPopUp)
+        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: audioModePopUp)
+        self.microphoneLabel = microphoneLabel
         cardStack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(cardStack)
         NSLayoutConstraint.activate([
@@ -118,6 +140,7 @@ final class ControlWindow: NSWindowController {
             cardStack.topAnchor.constraint(equalTo: card.topAnchor, constant: BloomindStyle.Space.normal),
             cardStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -BloomindStyle.Space.normal),
             displayPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            audioModePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             microphonePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             levelBar.widthAnchor.constraint(equalTo: cardStack.widthAnchor)
         ])
@@ -179,10 +202,12 @@ final class ControlWindow: NSWindowController {
         } else {
             guard displays.indices.contains(displayPopUp.indexOfSelectedItem) else { return }
             let display = displays[displayPopUp.indexOfSelectedItem]
-            let microphone = selectedMicrophone()
+            let audioMode = selectedAudioMode()
+            let microphone = audioMode.capturesMicrophone ? selectedMicrophone() : nil
 
             ConfigurationStore.shared.update {
                 $0.lastDisplayID = display.scDisplay.displayID
+                $0.lastAudioMode = audioMode.rawValue
                 $0.lastMicrophoneID = microphone?.uniqueID
             }
 
@@ -191,14 +216,28 @@ final class ControlWindow: NSWindowController {
             levelBar.level = 0
 
             actionButton.isEnabled = false
-            Task { await recorder.start(display: display, microphoneID: microphone?.uniqueID) }
+            Task { await recorder.start(display: display, audioMode: audioMode, microphoneID: microphone?.uniqueID) }
         }
     }
 
-    /// Índice 0 de la lista es "Sin audio"; de ahí en adelante son dispositivos.
+    private func selectedAudioMode() -> AudioMode {
+        let index = audioModePopUp.indexOfSelectedItem
+        return AudioMode.available.indices.contains(index) ? AudioMode.available[index] : .none
+    }
+
     private func selectedMicrophone() -> AudioDevice? {
-        let index = microphonePopUp.indexOfSelectedItem - 1
+        let index = microphonePopUp.indexOfSelectedItem
         return microphones.indices.contains(index) ? microphones[index] : nil
+    }
+
+    /// El selector de micrófono y su medidor solo tienen sentido si el modo usa
+    /// micrófono. Con audio del sistema o sin audio, se apagan.
+    @objc private func audioModeChanged() {
+        let usesMicrophone = selectedAudioMode().capturesMicrophone
+        microphoneLabel?.isHidden = !usesMicrophone
+        microphonePopUp.isHidden = !usesMicrophone
+        levelBar.isHidden = !usesMicrophone
+        microphoneChanged()
     }
 
     private func loadMicrophones() {
@@ -206,23 +245,22 @@ final class ControlWindow: NSWindowController {
 
         microphones = AudioDeviceEnumerator.available()
         microphonePopUp.removeAllItems()
-        microphonePopUp.addItem(withTitle: "Sin audio")
         for microphone in microphones {
             microphonePopUp.addItem(withTitle: microphone.name)
         }
 
         // Memoria pegajosa: vuelve al último micrófono usado si sigue conectado.
         if let previous, let index = microphones.firstIndex(where: { $0.uniqueID == previous }) {
-            microphonePopUp.selectItem(at: index + 1)
+            microphonePopUp.selectItem(at: index)
         }
 
         Logger.shared.log("Micrófonos detectados: \(microphones.count)")
-        if !recorder.isRecording { microphoneChanged() }
+        if !recorder.isRecording { audioModeChanged() }
     }
 
     @objc private func microphoneChanged() {
         levelBar.level = 0
-        guard let microphone = selectedMicrophone() else {
+        guard selectedAudioMode().capturesMicrophone, let microphone = selectedMicrophone() else {
             levelMeter.stop()
             return
         }
@@ -243,10 +281,11 @@ final class ControlWindow: NSWindowController {
     private func refresh() {
         actionButton.isEnabled = true
         displayPopUp.isEnabled = !recorder.isRecording
+        audioModePopUp.isEnabled = !recorder.isRecording
         microphonePopUp.isEnabled = !recorder.isRecording
         // Durante la grabación el micrófono lo tiene la captura, así que el
         // medidor no puede leerlo: la barra se queda quieta a propósito.
-        if !recorder.isRecording { microphoneChanged() }
+        if !recorder.isRecording { audioModeChanged() }
         statusLabel.textColor = BloomindStyle.muted
 
         if recorder.isRecording {

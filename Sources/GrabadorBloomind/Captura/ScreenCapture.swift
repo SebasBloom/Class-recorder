@@ -25,6 +25,9 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Se llama con cada bloque de audio del micrófono, en la cola de audio.
     var onMicrophone: ((CMSampleBuffer) -> Void)?
 
+    /// Se llama con cada bloque de audio del sistema, en la cola de audio.
+    var onSystemAudio: ((CMSampleBuffer) -> Void)?
+
     /// Se llama si el stream se cae solo.
     var onStop: ((Error) -> Void)?
 
@@ -54,9 +57,10 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         }
     }
 
-    /// - Parameter microphoneID: identificador del micrófono, o nil para grabar
-    ///   sin audio.
-    func start(display: CaptureDisplay, microphoneID: String?) async throws {
+    /// - Parameters:
+    ///   - audioMode: qué fuentes de audio se capturan.
+    ///   - microphoneID: identificador del micrófono, solo si el modo lo usa.
+    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
 
         // Excluir la app entera, no ventanas puntuales: así el widget, el espejo
@@ -84,20 +88,30 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 
         // El micrófono entra por el mismo stream que la pantalla. Es la razón por
         // la que el proyecto exige macOS 15: antes de Sequoia esto no existía.
-        if let microphoneID {
+        if audioMode.capturesMicrophone, let microphoneID {
             configuration.captureMicrophone = true
             configuration.microphoneCaptureDeviceID = microphoneID
         }
 
+        if audioMode.capturesSystem {
+            configuration.capturesAudio = true
+            // Los sonidos de la propia app no entran al video. Sin esto, un aviso
+            // del Grabador quedaría grabado en la clase.
+            configuration.excludesCurrentProcessAudio = true
+        }
+
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: outputQueue)
-        if microphoneID != nil {
+        if audioMode.capturesMicrophone, microphoneID != nil {
             try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: audioQueue)
+        }
+        if audioMode.capturesSystem {
+            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: audioQueue)
         }
         try await stream.startCapture()
         self.stream = stream
 
-        Logger.shared.log("Captura iniciada: \(display.name), \(configuration.width)x\(configuration.height) a 30 fps, excluyendo \(ownApplications.count) app(s) propia(s), micrófono: \(microphoneID == nil ? "no" : "sí")")
+        Logger.shared.log("Captura iniciada: \(display.name), \(configuration.width)x\(configuration.height) a 30 fps, excluyendo \(ownApplications.count) app(s) propia(s), audio: \(audioMode.label)")
     }
 
     func stop() async {
@@ -114,6 +128,11 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
 
         if type == .microphone {
             onMicrophone?(sampleBuffer)
+            return
+        }
+
+        if type == .audio {
+            onSystemAudio?(sampleBuffer)
             return
         }
 

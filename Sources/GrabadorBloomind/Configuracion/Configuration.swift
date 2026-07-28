@@ -31,7 +31,7 @@ struct Configuration: Codable, Equatable {
     // Memoria pegajosa del panel: cada campo recuerda lo último usado. Nulo
     // significa "todavía no se eligió", y cada fase lo llena cuando llega.
     var lastDisplayID: UInt32?
-    var lastAudioMode: String?          // "microfono" | "sistema" | "ambos"
+    var lastAudioMode: String?          // valor bruto de AudioMode
     var lastMicrophoneID: String?
     var lastCameraID: String?
 
