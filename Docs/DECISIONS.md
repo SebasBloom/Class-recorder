@@ -136,3 +136,39 @@ La única suite del proyecto es `Pruebas/main.swift`, que se corre con `./probar
 Razón: XCTest viene con Xcode, no con las Command Line Tools, así que un `swift test` normal no compila en esta máquina (decisión 16). Con asertos y un script de tres líneas alcanza y corre en cualquier Mac.
 Qué se prueba y qué no: solo la conversión de coordenadas, porque es la pieza más compartida y un error ahí desfasa el círculo, los clics, el JSON, la censura y el dibujo todos a la vez, apareciendo como un síntoma vago. El resto del proyecto se valida con los criterios de aceptación, que es lo que manda el plan.
 
+**32. 2026-07-27 — La pista de audio es estéreo aunque el micrófono sea mono.**
+Se declara AAC 48 kHz de dos canales desde la Fase 3, cuando lo único que entra es un micrófono, que casi siempre es mono.
+Razón: las pistas de un `AVAssetWriter` hay que declararlas **antes** de empezar a escribir y no se pueden cambiar después. En la Fase 4 entra el audio del sistema, que sí es estéreo, y en la Fase 5 los dos comparten esta misma pista. Declararla mono ahora obligaría a rehacer el escritor dos fases más adelante.
+Verificado con una prueba aislada: 200 bloques de micrófono mono float32 a 48 kHz entraron sin un solo rechazo y el archivo salió con audio estéreo de 48 kHz.
+
+**33. 2026-07-27 — La sesión de escritura arranca con el primer buffer de cualquier pista.**
+`startSession` se dispara con el primero que llegue, sea de video o de audio, y las dos pistas referencian ese mismo origen.
+Razón: es el punto delicado 3 del plan. Si cada pista arrancara su propio origen, el audio y el video quedarían desfasados exactamente por la diferencia entre sus primeras llegadas, que además varía en cada grabación. Este es el mecanismo que hace que la palmada del principio y la del final calcen en la prueba de la Fase 12.
+
+**34. 2026-07-27 — El audio tiene su propia cola, separada de la de los frames.**
+Razón: el compositor dibuja sobre cada frame y puede demorarse. Si el audio esperara en la misma cola, un frame lento se traduciría en un salto audible, que es mucho más molesto que un frame perdido.
+
+**35. 2026-07-27 — El medidor de nivel usa su propia sesión de captura, aparte de la grabación.**
+`AudioLevelMeter` levanta una `AVCaptureSession` propia mientras el panel está abierto y no se está grabando; durante la grabación el micrófono entra por ScreenCaptureKit y el medidor se apaga.
+Razón: mostrar una barra de nivel no justifica levantar un stream de pantalla completo, que es lo que haría falta para leer el micrófono por ScreenCaptureKit. Y los dos no pueden tener el dispositivo a la vez.
+Consecuencia visible: durante la grabación la barra se queda quieta a propósito. No es un bug.
+
+**36. 2026-07-27 — Sin permiso de micrófono se graba igual, pero mudo y avisando.**
+Razón: perder una clase entera porque faltaba un permiso es peor que perder el audio de esa clase. La app avisa cuál falta, ofrece abrir el panel exacto y deja seguir. Es la regla de "nunca fallar en silencio ni cerrarse sola" aplicada a un caso donde además hay una salida razonable.
+
+**37. 2026-07-28 — El procesamiento de audio (reducción de ruido) va en VideoFlow, no en el grabador.**
+El grabador escribe el audio tal como llega del micrófono, sin reducción de ruido ni realce.
+Razón: misma lógica que la decisión 6 sobre el zoom automático. En edición se puede analizar la grabación completa, medir el ruido real de la sala y quitarlo con precisión; en vivo hay que adivinar con un algoritmo que corre a ciegas y que, cuando se equivoca, se come el principio de las palabras en medio de una clase de una hora.
+Contexto de la decisión: Sebas reportó que el audio sonaba peor que en Notas de voz. Se midió el mismo micrófono grabado por `AVCaptureSession` (camino clásico de macOS) contra ScreenCaptureKit, con codificación idéntica, y **el nuestro salió mejor**: mismo nivel de voz (−24.1 dBFS), ruido de fondo 6 dB más bajo (−59.3 contra −53.5) y espectros equivalentes. La diferencia percibida contra Notas de voz se atribuye al procesamiento posterior que esa app aplica, no al camino de captura.
+Alternativa descartada: meter reducción de ruido en vivo en el grabador.
+
+**38. 2026-07-28 — El medidor de nivel lee el formato del audio, no lo asume.**
+Razón: la primera versión daba por sentado enteros de 16 bits y la barra nunca se movía, porque macOS entrega flotantes de 32 bits. Verificado leyendo el formato real del dispositivo: 48000 Hz, flotante de 32 bits. Ahora se lee del propio buffer y se manejan los dos casos.
+Aprendizaje que aplica más allá de esto: en audio en macOS, el formato se consulta, nunca se supone.
+
+**39. 2026-07-28 — El logo va a color en el ícono de la app y en silueta en la barra de menú.**
+El ícono de la app se genera desde `Logo bloomind hr.png` (el mismo del CLM) en las diez resoluciones que pide macOS, montado sobre el cuadrado redondeado con el margen de la rejilla del sistema. El de la barra de menú es una silueta monocroma con alfa, marcada como imagen de plantilla.
+Razón: macOS pide imágenes de plantilla en la barra de menú para que el ícono se adapte solo al tema claro y oscuro y a la barra teñida. Un logo a color con degradado ahí se ve como una calcomanía y no responde al tema.
+Cómo se hizo la silueta: el cerebro es blanco sobre un degradado azul, así que se separa por luminancia con una transición suave entre 0.80 y 0.95 en vez de un umbral duro, que dejaría el borde dentado.
+Nota para la Fase 11: los tres estados del ícono (inactivo, grabando, pausado) se construyen sobre esta misma silueta.
+

@@ -10,11 +10,13 @@ final class RecordingWriter {
     enum WriterError: LocalizedError {
         case cannotCreateWriter(String)
         case cannotAddVideoInput
+        case cannotAddAudioInput
 
         var errorDescription: String? {
             switch self {
             case .cannotCreateWriter(let detail): return "No se pudo crear el archivo de salida: \(detail)"
             case .cannotAddVideoInput: return "No se pudo preparar la pista de video."
+            case .cannotAddAudioInput: return "No se pudo preparar la pista de audio."
             }
         }
     }
@@ -32,6 +34,7 @@ final class RecordingWriter {
 
     private let writer: AVAssetWriter
     private let videoInput: AVAssetWriterInput
+    private var audioInput: AVAssetWriterInput?
 
     private var didStartSession = false
 
@@ -45,7 +48,10 @@ final class RecordingWriter {
     private(set) var pausedTotal: CMTime = .zero
     private var pauseStartedAt: CMTime?
 
-    init(outputURL: URL, pixelSize: CGSize) throws {
+    /// - Parameter withAudio: si es falso no se crea la pista de audio. Las
+    ///   pistas hay que declararlas antes de empezar a escribir, así que esto se
+    ///   decide al iniciar la grabación y no se puede cambiar después.
+    init(outputURL: URL, pixelSize: CGSize, withAudio: Bool) throws {
         self.outputURL = outputURL
 
         do {
@@ -77,17 +83,50 @@ final class RecordingWriter {
         guard writer.canAdd(videoInput) else { throw WriterError.cannotAddVideoInput }
         writer.add(videoInput)
 
+        if withAudio {
+            // AAC 48 kHz según la decisión 10. Estéreo aunque el micrófono sea
+            // mono: desde la Fase 4 entra el audio del sistema, que sí lo es, y
+            // en la Fase 5 los dos comparten esta misma pista.
+            let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 48000,
+                AVNumberOfChannelsKey: 2,
+                AVEncoderBitRateKey: 128_000
+            ])
+            input.expectsMediaDataInRealTime = true
+            guard writer.canAdd(input) else { throw WriterError.cannotAddAudioInput }
+            writer.add(input)
+            audioInput = input
+        }
+
         guard writer.startWriting() else {
             throw WriterError.cannotCreateWriter(writer.error?.localizedDescription ?? "razón desconocida")
         }
 
-        Logger.shared.log("Escritor listo: \(Int(pixelSize.width))x\(Int(pixelSize.height)), \(bitRate / 1_000_000) Mbps, fragmentos cada \(Int(Self.fragmentInterval.seconds))s")
+        Logger.shared.log("Escritor listo: \(Int(pixelSize.width))x\(Int(pixelSize.height)), \(bitRate / 1_000_000) Mbps, fragmentos cada \(Int(Self.fragmentInterval.seconds))s, audio: \(withAudio ? "sí" : "no")")
     }
 
-    /// Agrega un frame. Descarta en silencio mientras está en pausa o si el
-    /// escritor todavía no puede recibir datos: encolar frames sin límite es la
-    /// causa clásica de la app que se cae en el minuto 55.
+    /// Agrega un frame de video. Descarta en silencio mientras está en pausa o si
+    /// el escritor todavía no puede recibir datos: encolar frames sin límite es
+    /// la causa clásica de la app que se cae en el minuto 55.
     func append(_ sampleBuffer: CMSampleBuffer) {
+        append(sampleBuffer, to: videoInput)
+    }
+
+    /// Agrega un bloque de audio. No hace nada si la grabación se inició sin
+    /// pista de audio.
+    func appendAudio(_ sampleBuffer: CMSampleBuffer) {
+        guard let audioInput else { return }
+        append(sampleBuffer, to: audioInput)
+    }
+
+    /// Camino común de las dos pistas.
+    ///
+    /// La sesión arranca con el **primer buffer que llegue de cualquier pista**,
+    /// y todas las pistas referencian ese mismo origen. Si cada una arrancara su
+    /// propio origen, el audio y el video quedarían desfasados por la diferencia
+    /// entre sus primeras llegadas.
+    private func append(_ sampleBuffer: CMSampleBuffer, to input: AVAssetWriterInput) {
         guard writer.status == .writing else { return }
 
         let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
@@ -98,12 +137,12 @@ final class RecordingWriter {
             Logger.shared.log("Sesión de escritura iniciada")
         }
 
-        guard !isPaused, videoInput.isReadyForMoreMediaData else { return }
+        guard !isPaused, input.isReadyForMoreMediaData else { return }
 
         if pausedTotal == .zero {
-            videoInput.append(sampleBuffer)
+            input.append(sampleBuffer)
         } else if let shifted = shiftedBuffer(sampleBuffer, by: pausedTotal) {
-            videoInput.append(shifted)
+            input.append(shifted)
         }
     }
 
@@ -129,6 +168,7 @@ final class RecordingWriter {
             return
         }
         videoInput.markAsFinished()
+        audioInput?.markAsFinished()
         writer.finishWriting {
             if let error = self.writer.error {
                 Logger.shared.log("ERROR al cerrar el archivo: \(error.localizedDescription)")

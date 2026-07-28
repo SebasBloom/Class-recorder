@@ -19,6 +19,11 @@ final class RecordingController {
     private var writer: RecordingWriter?
     private var pipeline: FramePipeline?
 
+    /// Micrófono en uso. Se pone en nil si el dispositivo se desconecta a mitad
+    /// de grabación, para no avisar dos veces por lo mismo.
+    private var activeMicrophoneID: String?
+    private var disconnectObserver: NSObjectProtocol?
+
     /// Se avisa cuando el estado cambia, para que la UI se actualice.
     var onStateChange: (() -> Void)?
 
@@ -26,7 +31,8 @@ final class RecordingController {
         try await ScreenCapture.availableDisplays()
     }
 
-    func start(display: CaptureDisplay) async {
+    /// - Parameter microphoneID: micrófono elegido, o nil para grabar sin audio.
+    func start(display: CaptureDisplay, microphoneID: String?) async {
         guard !isRecording else { return }
 
         // Avisar del estado igual al salir por acá: si no, la UI se queda con el
@@ -36,9 +42,23 @@ final class RecordingController {
             return
         }
 
+        var microphoneID = microphoneID
+        if microphoneID != nil, await !AudioDeviceEnumerator.requestPermission() {
+            // Sin permiso se graba igual, pero mudo y avisando: es preferible a
+            // no grabar la clase.
+            showMicrophonePermissionAlert()
+            microphoneID = nil
+        }
+
         let url = Self.makeOutputURL(sessionName: "Prueba")
         Logger.shared.openLog(named: url.deletingPathExtension().lastPathComponent)
-        Logger.shared.log("Iniciando grabación en \(display.name)")
+
+        // El nombre del micrófono va al log: sin él, al revisar una grabación
+        // vieja no hay forma de saber con cuál se grabó.
+        let microphoneName = microphoneID.flatMap { id in
+            AudioDeviceEnumerator.device(withID: id)?.name
+        } ?? "sin audio"
+        Logger.shared.log("Iniciando grabación en \(display.name), micrófono: \(microphoneName)")
 
         guard let converter = CoordinateConverter(displayID: display.scDisplay.displayID) else {
             Logger.shared.log("ERROR: la pantalla elegida ya no está conectada")
@@ -48,7 +68,7 @@ final class RecordingController {
         }
 
         do {
-            let writer = try RecordingWriter(outputURL: url, pixelSize: display.pixelSize)
+            let writer = try RecordingWriter(outputURL: url, pixelSize: display.pixelSize, withAudio: microphoneID != nil)
             self.writer = writer
 
             let pipeline = FramePipeline(
@@ -72,13 +92,22 @@ final class RecordingController {
                 }
             }
 
+            capture.onMicrophone = { [writer] buffer in
+                autoreleasepool {
+                    writer.appendAudio(buffer)
+                }
+            }
+
             capture.onStop = { [weak self] error in
                 Task { @MainActor in
                     self?.handleUnexpectedStop(error)
                 }
             }
 
-            try await capture.start(display: display)
+            try await capture.start(display: display, microphoneID: microphoneID)
+
+            activeMicrophoneID = microphoneID
+            observeDeviceDisconnection()
 
             isRecording = true
             onStateChange?()
@@ -86,6 +115,7 @@ final class RecordingController {
         } catch {
             Logger.shared.log("ERROR al iniciar la grabación: \(error.localizedDescription)")
             mouseTracker.stop()
+            capture.onMicrophone = nil
             self.writer = nil
             self.pipeline = nil
             showError("No se pudo iniciar la grabación", detail: error.localizedDescription)
@@ -99,7 +129,10 @@ final class RecordingController {
 
         await capture.stop()
         capture.onFrame = nil
+        capture.onMicrophone = nil
         mouseTracker.stop()
+        stopObservingDeviceDisconnection()
+        activeMicrophoneID = nil
 
         let writer = self.writer
         let pipeline = self.pipeline
@@ -129,6 +162,54 @@ final class RecordingController {
         Task {
             await stop()
             showError("La grabación se detuvo sola", detail: "\(error.localizedDescription)\n\nLo grabado hasta ahora quedó guardado.")
+        }
+    }
+
+    /// Resiliencia de hardware (plan, sección 5): si el micrófono se cae a mitad
+    /// de grabación, la grabación **sigue** con lo que quede, se avisa visible y
+    /// se registra. Crashear o seguir grabando en silencio sin avisar son ambos
+    /// inaceptables.
+    private func observeDeviceDisconnection() {
+        disconnectObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureDevice.wasDisconnectedNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            guard let device = notification.object as? AVCaptureDevice else { return }
+            let name = device.localizedName
+            let id = device.uniqueID
+
+            Task { @MainActor [weak self] in
+                guard let self, id == self.activeMicrophoneID else { return }
+
+                self.activeMicrophoneID = nil
+                Logger.shared.log("AVISO: se desconectó el micrófono (\(name)); la grabación continúa sin audio")
+                self.showError(
+                    "Se desconectó el micrófono",
+                    detail: "\(name) dejó de estar disponible.\n\nLa grabación sigue corriendo y el video no se pierde, pero de acá en adelante queda sin audio."
+                )
+            }
+        }
+    }
+
+    private func stopObservingDeviceDisconnection() {
+        if let disconnectObserver {
+            NotificationCenter.default.removeObserver(disconnectObserver)
+        }
+        disconnectObserver = nil
+    }
+
+    private func showMicrophonePermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Falta el permiso de micrófono"
+        alert.informativeText = "La grabación va a arrancar sin audio.\n\nPara grabar tu voz, activá el Grabador Bloomind en Configuración del Sistema, Privacidad y seguridad, Micrófono."
+        alert.addButton(withTitle: "Abrir Configuración del Sistema")
+        alert.addButton(withTitle: "Grabar sin audio")
+        alert.alertStyle = .warning
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!
+            NSWorkspace.shared.open(url)
         }
     }
 

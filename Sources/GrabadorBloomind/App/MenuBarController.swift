@@ -14,10 +14,21 @@ final class MenuBarController {
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "record.circle",
-            accessibilityDescription: "Grabador Bloomind"
-        )
+        // El cerebro de Bloomind en silueta. En la barra de menú macOS exige
+        // imágenes de plantilla, monocromas con alfa: así el ícono se adapta solo
+        // al tema claro y oscuro y a la barra teñida. El logo a color va en el
+        // ícono de la app, donde sí corresponde.
+        if let logo = NSImage(named: "BarraMenu") {
+            logo.isTemplate = true
+            logo.size = NSSize(width: 18, height: 18)
+            statusItem.button?.image = logo
+        } else {
+            statusItem.button?.image = NSImage(
+                systemSymbolName: "record.circle",
+                accessibilityDescription: "Grabador Bloomind"
+            )
+        }
+        statusItem.button?.toolTip = "Grabador Bloomind"
 
         let menu = NSMenu()
         menu.addItem(withTitle: "Grabador Bloomind", action: nil, keyEquivalent: "")

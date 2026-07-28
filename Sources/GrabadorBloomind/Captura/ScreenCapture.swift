@@ -22,11 +22,17 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     /// Se llama con cada frame, en la cola de captura.
     var onFrame: ((CMSampleBuffer) -> Void)?
 
+    /// Se llama con cada bloque de audio del micrófono, en la cola de audio.
+    var onMicrophone: ((CMSampleBuffer) -> Void)?
+
     /// Se llama si el stream se cae solo.
     var onStop: ((Error) -> Void)?
 
     private var stream: SCStream?
     private let outputQueue = DispatchQueue(label: "com.bloomind.grabador.captura")
+    // Cola aparte para el audio: si el compositor se demora con un frame, el
+    // audio no tiene por qué esperarlo.
+    private let audioQueue = DispatchQueue(label: "com.bloomind.grabador.microfono")
 
     /// Lista las pantallas disponibles.
     static func availableDisplays() async throws -> [CaptureDisplay] {
@@ -48,7 +54,9 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         }
     }
 
-    func start(display: CaptureDisplay) async throws {
+    /// - Parameter microphoneID: identificador del micrófono, o nil para grabar
+    ///   sin audio.
+    func start(display: CaptureDisplay, microphoneID: String?) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
 
         // Excluir la app entera, no ventanas puntuales: así el widget, el espejo
@@ -74,12 +82,22 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         // acumularlos, que es lo que revienta la memoria en grabaciones largas.
         configuration.queueDepth = 5
 
+        // El micrófono entra por el mismo stream que la pantalla. Es la razón por
+        // la que el proyecto exige macOS 15: antes de Sequoia esto no existía.
+        if let microphoneID {
+            configuration.captureMicrophone = true
+            configuration.microphoneCaptureDeviceID = microphoneID
+        }
+
         let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: outputQueue)
+        if microphoneID != nil {
+            try stream.addStreamOutput(self, type: .microphone, sampleHandlerQueue: audioQueue)
+        }
         try await stream.startCapture()
         self.stream = stream
 
-        Logger.shared.log("Captura iniciada: \(display.name), \(configuration.width)x\(configuration.height) a 30 fps, excluyendo \(ownApplications.count) app(s) propia(s)")
+        Logger.shared.log("Captura iniciada: \(display.name), \(configuration.width)x\(configuration.height) a 30 fps, excluyendo \(ownApplications.count) app(s) propia(s), micrófono: \(microphoneID == nil ? "no" : "sí")")
     }
 
     func stop() async {
@@ -92,7 +110,14 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     // MARK: - SCStreamOutput
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard type == .screen, sampleBuffer.isValid else { return }
+        guard sampleBuffer.isValid else { return }
+
+        if type == .microphone {
+            onMicrophone?(sampleBuffer)
+            return
+        }
+
+        guard type == .screen else { return }
 
         // ScreenCaptureKit manda frames "sin novedad" cuando la pantalla no
         // cambió. Escribirlos igual mantiene el ritmo del archivo; los que no

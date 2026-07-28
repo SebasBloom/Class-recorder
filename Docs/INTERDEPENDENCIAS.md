@@ -123,11 +123,25 @@ Hasta la Fase 9 cada fase usa atajos fijos temporales, que se migran acá cuando
 
 ## Enumeración de dispositivos
 
-**Fases 3 y 6. Pendiente.** Carpetas previstas: `Audio/` y `Camara/`.
+**Fase 3 hecha (audio), Fase 6 pendiente (cámara).** `Audio/AudioDeviceEnumerator.swift`; falta `Camara/`.
 
-Patrón común para micrófonos (Fase 3) y cámaras (Fase 6): listas dinámicas que se actualizan en vivo al conectar o desconectar, con la resiliencia de la sección 5 del plan.
+Listas dinámicas que se actualizan en vivo al conectar o desconectar, más el permiso del dispositivo y la resiliencia de la sección 5 del plan.
 
-Aunque son dos módulos, comparten patrón: si cambia el manejo de desconexión en uno, se revisa el otro.
+Consumidores actuales: `ControlWindow` para la lista, `RecordingController` para el permiso y para detectar la desconexión a mitad de grabación.
+
+**La enumeración de cámaras de la Fase 6 sigue este mismo patrón.** Si cambia el manejo de desconexión acá, hay que replicarlo allá, y viceversa. Las dos se apoyan en las notificaciones `wasConnected` y `wasDisconnected` de `AVCaptureDevice`.
+
+## Audio del micrófono
+
+**Fase 3. Existe.** `Captura/ScreenCapture.swift` (captura) y `Audio/AudioLevelMeter.swift` (medidor).
+
+El micrófono entra por el **mismo** `SCStream` que la pantalla, con `captureMicrophone`. Es la razón por la que el proyecto exige macOS 15.
+
+Consumidores actuales: `RecordingController`, que enchufa el audio directo al escritor.
+
+Consumidores previstos: la mezcla de la Fase 5, que va a sumar estas muestras con las del audio del sistema antes de escribirlas.
+
+Cuidado al tocarlo: el medidor de nivel y la grabación **no pueden tener el micrófono a la vez**. El medidor se apaga al empezar a grabar y se vuelve a encender al terminar.
 
 ## Configuración central
 

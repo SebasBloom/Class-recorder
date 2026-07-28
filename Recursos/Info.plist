@@ -8,6 +8,8 @@
 	<string>Grabador Bloomind</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.bloomind.grabador</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>GrabadorBloomind</string>
 	<key>CFBundlePackageType</key>

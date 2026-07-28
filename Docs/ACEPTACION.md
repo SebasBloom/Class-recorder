@@ -95,6 +95,44 @@ Esta fase toca el pipeline de frames, así que la prueba de memoria es más larg
 3. **Memoria, 10 minutos:** 68 muestras. Arrancó en 49 MB, meseta de 62 a 63 entre el minuto 2 y medio y el 5 y medio, y bajó a 36 terminando alrededor de 46. Minuto 2 contra el final: 50 contra 47 MB. Subió y volvió a bajar, que es lo contrario de una fuga.
 4. **Video:** 368 MB, duración igual al reloj del log al décimo de segundo, sin errores.
 
-### Fase 3 — PENDIENTE
+## Fase 3. Micrófono — VALIDADA el 2026-07-28
 
-Micrófono: enumeración dinámica de dispositivos, captura y escritura sincronizada con el video, indicador de nivel, y resiliencia a desconexión a mitad de grabación.
+Necesitás los AirPods y el iPhone con el DJI a mano.
+
+En el control de grabación ahora hay un selector de micrófono y una barra de nivel debajo. La barra se mueve cuando hablás, **antes** de grabar. Durante la grabación se queda quieta a propósito: ahí el micrófono lo tiene la captura.
+
+La primera vez macOS va a pedir permiso de micrófono. Dáselo.
+
+### 1. Cinco minutos con los AirPods
+
+Elegí los AirPods en el selector, verificá que la barra se mueve al hablar, y grabá **5 minutos** hablando.
+
+**Tiene que:** escucharse la voz clara, y estar sincronizada con la imagen **tanto al principio como al final**. Para comprobarlo fácil: al arrancar dale una palmada frente a la pantalla, y otra antes de detener. En el video, las dos palmadas tienen que sonar exactamente cuando se ven.
+
+### 2. El iPhone con el DJI
+
+Con la grabación detenida, conectá el iPhone (cerca y desbloqueado).
+
+**Tiene que:** aparecer solo en la lista de micrófonos, sin tocar nada ni reabrir la ventana.
+
+Elegilo, verificá que la barra se mueve al hablarle al DJI, y grabá **un minuto**.
+
+**Tiene que:** escucharse el DJI en el archivo.
+
+### 3. Desconexión a mitad de grabación
+
+Grabá con los AirPods puestos, y al minuto **guardalos en el estuche** sin detener la grabación.
+
+**Tiene que:** salir un aviso visible diciendo que se desconectó el micrófono, **la grabación tiene que seguir corriendo**, y el archivo final tiene que reproducir bien, con audio hasta el momento de la desconexión y sin audio después.
+
+Lo que no puede pasar: que la app se caiga, o que siga grabando sin avisarte.
+
+### Resultados medidos
+
+1. **Micrófonos y barra de nivel:** la lista se refresca sola al conectar y desconectar; el iPhone con el DJI aparece solo. La barra responde al hablar.
+2. **Desconexión a mitad de grabación:** grabación con AirPods desde las 08:59:30; a las 09:00:46 se guardaron en el estuche. Quedó registrado el aviso, la grabación siguió 25 segundos más y se detuvo normal. Ni caída ni silencio sin avisar.
+3. **Calidad de audio:** se comparó el mismo micrófono grabado por `AVCaptureSession` (camino clásico de macOS) contra ScreenCaptureKit, con codificación idéntica. Nuestro camino salió mejor: mismo nivel de voz (−24.1 dBFS), ruido de fondo 6 dB más bajo (−59.3 contra −53.5), espectros equivalentes y cero recorte. Ver decisión 37.
+
+### Fase 4 — PENDIENTE
+
+Audio del sistema como modo independiente: grabar 2 minutos con música sonando y sin hablar, y que el archivo tenga el audio del sistema limpio y sincronizado.
