@@ -161,6 +161,26 @@ Grabación de 2m12 en modo Audio del sistema: pico −0.9 dBFS, promedio −18.1
 
 **Hallazgo colateral sobre los AirPods como micrófono:** en la grabación con AirPods, el 99% de la energía queda **bajo 8.5 kHz**, contra 12.9 kHz del DJI por iPhone y 13.5 kHz del micrófono del Mac. Eso es la firma del perfil de manos libres de Bluetooth: al usar unos audífonos inalámbricos como entrada, el enlace baja a calidad de teléfono. No es un problema del grabador y no se puede arreglar por software. **Los AirPods sirven para escuchar, no para grabar una clase.**
 
-### Fase 5 — PENDIENTE
+## Fase 5. Mezcla y pausa real — VALIDADA el 2026-07-31
 
-Mezcla de micrófono y sistema en una sola pista, el modo "Micrófono + sistema" en el selector, y la pausa real con desplazamiento de timestamps.
+El selector de audio ahora tiene el cuarto modo: **Micrófono + sistema**. Y durante la grabación aparece un botón **Pausar** al lado de Detener.
+
+### 1. Las dos fuentes en una sola pista
+
+Elegí "Micrófono + sistema", poné música sonando, y grabá 2 minutos **hablando encima de la música**.
+
+**Tiene que:** escucharse tu voz y la música al mismo tiempo, las dos claras, sin que se saturen ni suenen distorsionadas cuando coinciden fuerte.
+
+### 2. Los cuatro modos
+
+Cuatro grabaciones cortas, una por modo.
+
+**Tiene que:** Sin audio muda, Micrófono con tu voz, Audio del sistema con el computador, y Micrófono + sistema con las dos.
+
+### 3. La pausa
+
+Grabá **3 minutos**: al minuto 1 tocá **Pausar**, esperá **30 segundos**, y tocá **Reanudar**. Seguí hasta completar y detené.
+
+**Tiene que:** el archivo durar **2 minutos y medio**, no 3. En el punto donde pausaste no puede haber ni un hueco de silencio ni un salto de imagen, y después de reanudar el audio tiene que seguir sincronizado con la imagen.
+
+El cronómetro de la ventana también se congela mientras está pausado: eso es a propósito, muestra tiempo grabado y no tiempo transcurrido.

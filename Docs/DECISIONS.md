@@ -181,3 +181,18 @@ Se activa `excludesCurrentProcessAudio`.
 Razón: es la decisión 3 llevada al audio. Así como ninguna ventana propia sale en el video, ningún sonido propio sale en la pista. Sin esto, un aviso del Grabador quedaría grabado dentro de la clase.
 El audio del sistema no pide un permiso aparte: viaja con el de grabación de pantalla, que ya se verifica antes de arrancar.
 
+**42. 2026-07-28 — La mezcla suma sobre una línea de tiempo común, no fuente contra fuente.**
+`AudioMixer` mantiene un búfer circular donde cada bloque se escribe en la posición **absoluta** que le corresponde según su timestamp, sumándose a lo que ya esté ahí. Un tramo se da por cerrado y se emite cuando pasó el margen de latencia (0.25 s).
+Razón: las dos fuentes llegan por separado, con bloques de distinto tamaño y en momentos distintos. Sumar "lo último de cada una" produce eco y desfase. Como mezclar es sumar, escribir en posiciones absolutas hace que las dos se acumulen solas sin necesidad de sincronizarlas entre sí.
+Formatos: todo se lleva antes a 48 kHz estéreo flotante con `AVAudioConverter`, con mapa de canales para que un micrófono mono vaya a los dos canales y no quede uno mudo.
+Saturación: limitador suave con curva `tanh` a partir de 0.7 en vez de recorte duro. Verificado aislado: dos fuentes a 0.6 (que sumadas darían 1.2) salen con pico 0.98.
+
+**43. 2026-07-28 — Al pausar, el corte se marca después del último buffer, no encima.**
+`pauseStartedAt` se fija en `último timestamp + duración de ese buffer`.
+Razón: **bug real encontrado por la prueba aislada de la Fase 5.** Marcándolo en el mismo instante del último buffer, el primer frame tras reanudar caía en un timestamp ya usado, el `AVAssetWriter` pasaba a estado fallido y se perdía la grabación entera. A ojo se habría visto como "la grabación se corta al reanudar", sin ninguna pista del porqué.
+Es la razón por la que el protocolo del plan manda aislar esta fase antes de integrarla.
+
+**44. 2026-07-28 — El punto de reanudación lo fija el primer buffer que llegue, no el botón.**
+`resume()` solo marca la intención; el descuento se cierra cuando entra el siguiente buffer, sea de video o de audio.
+Razón: al soltar el botón todavía no se sabe cuánto duró la pausa en la línea de tiempo de la captura. Usar el reloj del sistema introduciría deriva contra el reloj de los buffers, que es el que manda en el archivo.
+

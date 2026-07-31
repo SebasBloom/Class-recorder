@@ -18,6 +18,9 @@ final class RecordingController {
     private let mouseTracker = MouseTracker()
     private var writer: RecordingWriter?
     private var pipeline: FramePipeline?
+    private var mixer: AudioMixer?
+
+    var isPaused: Bool { writer?.isPaused ?? false }
 
     /// Micrófono en uso. Se pone en nil si el dispositivo se desconecta a mitad
     /// de grabación, para no avisar dos veces por lo mismo.
@@ -95,15 +98,27 @@ final class RecordingController {
                 }
             }
 
-            // En la Fase 4 solo una de las dos fuentes está activa a la vez, así
-            // que ambas escriben directo en la pista. La suma de las dos llega en
-            // la Fase 5 y se mete en el medio de acá.
-            capture.onMicrophone = { [writer] buffer in
-                autoreleasepool { writer.appendAudio(buffer) }
-            }
-
-            capture.onSystemAudio = { [writer] buffer in
-                autoreleasepool { writer.appendAudio(buffer) }
+            // Con una sola fuente el audio va directo a la pista. Con las dos,
+            // pasa por el mezclador, que las suma sobre una línea de tiempo
+            // común y entrega bloques ya combinados.
+            if audioMode == .mixed {
+                let mixer = AudioMixer { [writer] mixed in
+                    writer.appendAudio(mixed)
+                }
+                self.mixer = mixer
+                capture.onMicrophone = { [mixer] buffer in
+                    autoreleasepool { mixer.add(buffer, from: .microphone) }
+                }
+                capture.onSystemAudio = { [mixer] buffer in
+                    autoreleasepool { mixer.add(buffer, from: .system) }
+                }
+            } else {
+                capture.onMicrophone = { [writer] buffer in
+                    autoreleasepool { writer.appendAudio(buffer) }
+                }
+                capture.onSystemAudio = { [writer] buffer in
+                    autoreleasepool { writer.appendAudio(buffer) }
+                }
             }
 
             capture.onStop = { [weak self] error in
@@ -125,6 +140,7 @@ final class RecordingController {
             mouseTracker.stop()
             capture.onMicrophone = nil
             capture.onSystemAudio = nil
+            self.mixer = nil
             self.writer = nil
             self.pipeline = nil
             showError("No se pudo iniciar la grabación", detail: error.localizedDescription)
@@ -140,6 +156,9 @@ final class RecordingController {
         capture.onFrame = nil
         capture.onMicrophone = nil
         capture.onSystemAudio = nil
+        // Lo que quede en el mezclador se vuelca antes de cerrar la pista.
+        mixer?.flush()
+        mixer = nil
         mouseTracker.stop()
         stopObservingDeviceDisconnection()
         activeMicrophoneID = nil
@@ -163,6 +182,14 @@ final class RecordingController {
         if let url = writer?.outputURL {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
+    }
+
+    /// Pausa o reanuda. Congela todas las pistas de forma coherente y, al
+    /// reanudar, corre los timestamps para que el archivo no quede con un hueco.
+    func togglePause() {
+        guard isRecording, let writer else { return }
+        if writer.isPaused { writer.resume() } else { writer.pause() }
+        onStateChange?()
     }
 
     // MARK: - Interno

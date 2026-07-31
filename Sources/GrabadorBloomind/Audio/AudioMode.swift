@@ -8,8 +8,7 @@ enum AudioMode: String, CaseIterable {
     case none = "sin-audio"
     case microphone = "microfono"
     case system = "sistema"
-    /// Micrófono y sistema sumados en una sola pista. Llega en la Fase 5, que es
-    /// la que trae la mezcla; hasta entonces no se ofrece en la interfaz.
+    /// Micrófono y sistema sumados en una sola pista (Fase 5).
     case mixed = "ambos"
 
     var label: String {
@@ -21,8 +20,7 @@ enum AudioMode: String, CaseIterable {
         }
     }
 
-    /// Modos que la interfaz ofrece hoy.
-    static var available: [AudioMode] { [.none, .microphone, .system] }
+    static var available: [AudioMode] { [.none, .microphone, .system, .mixed] }
 
     var capturesMicrophone: Bool { self == .microphone || self == .mixed }
     var capturesSystem: Bool { self == .system || self == .mixed }

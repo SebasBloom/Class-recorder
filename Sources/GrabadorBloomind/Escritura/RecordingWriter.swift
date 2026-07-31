@@ -47,6 +47,13 @@ final class RecordingWriter {
     /// tiempo del video final, que es el que ve VideoFlow.
     private(set) var pausedTotal: CMTime = .zero
     private var pauseStartedAt: CMTime?
+    /// Al reanudar no se sabe todavía el instante exacto: lo fija el primer
+    /// buffer que llegue después, sea de video o de audio.
+    private var isResuming = false
+    private var lastPresentationTime: CMTime = .zero
+    /// Duración del último buffer visto. Hace falta para que el primer frame
+    /// tras reanudar caiga **después** del último escrito y no encima.
+    private var lastDuration = CMTime(value: 1, timescale: 30)
 
     /// - Parameter withAudio: si es falso no se crea la pista de audio. Las
     ///   pistas hay que declararlas antes de empezar a escribir, así que esto se
@@ -103,7 +110,7 @@ final class RecordingWriter {
             throw WriterError.cannotCreateWriter(writer.error?.localizedDescription ?? "razón desconocida")
         }
 
-        Logger.shared.log("Escritor listo: \(Int(pixelSize.width))x\(Int(pixelSize.height)), \(bitRate / 1_000_000) Mbps, fragmentos cada \(Int(Self.fragmentInterval.seconds))s, audio: \(withAudio ? "sí" : "no")")
+        Logger.shared.log("Escritor listo: \(Int(pixelSize.width))x\(Int(pixelSize.height)), \(String(format: "%.1f", Double(bitRate) / 1_000_000)) Mbps, fragmentos cada \(Int(Self.fragmentInterval.seconds))s, audio: \(withAudio ? "sí" : "no")")
     }
 
     /// Agrega un frame de video. Descarta en silencio mientras está en pausa o si
@@ -130,11 +137,24 @@ final class RecordingWriter {
         guard writer.status == .writing else { return }
 
         let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        lastPresentationTime = presentationTime
+        let duration = CMSampleBufferGetDuration(sampleBuffer)
+        if duration.isValid, duration.value > 0 { lastDuration = duration }
 
         if !didStartSession {
             writer.startSession(atSourceTime: presentationTime)
             didStartSession = true
             Logger.shared.log("Sesión de escritura iniciada")
+        }
+
+        // El primer buffer tras reanudar cierra la cuenta de la pausa. De ahí en
+        // adelante todo se corre hacia atrás por ese total, y el archivo queda
+        // sin hueco.
+        if isResuming, let start = pauseStartedAt {
+            pausedTotal = CMTimeAdd(pausedTotal, CMTimeSubtract(presentationTime, start))
+            pauseStartedAt = nil
+            isResuming = false
+            Logger.shared.log("Grabación reanudada; pausa acumulada \(String(format: "%.1f", pausedTotal.seconds))s")
         }
 
         guard !isPaused, input.isReadyForMoreMediaData else { return }
@@ -146,19 +166,26 @@ final class RecordingWriter {
         }
     }
 
-    func pause(at time: CMTime) {
+    /// Congela todas las pistas. El reloj del archivo deja de avanzar.
+    func pause() {
         guard !isPaused else { return }
         isPaused = true
-        pauseStartedAt = time
+        isResuming = false
+
+        // El corte se marca justo DESPUÉS de que termina el último buffer
+        // escrito, no en su mismo instante. Si se marcara encima, el primer
+        // buffer tras reanudar caería en un timestamp ya usado y el escritor
+        // aborta la grabación entera.
+        pauseStartedAt = CMTimeAdd(lastPresentationTime, lastDuration)
         Logger.shared.log("Grabación pausada")
     }
 
-    func resume(at time: CMTime) {
-        guard isPaused, let start = pauseStartedAt else { return }
-        pausedTotal = CMTimeAdd(pausedTotal, CMTimeSubtract(time, start))
-        pauseStartedAt = nil
+    /// Reanuda. El descuento del tiempo pausado lo cierra el primer buffer que
+    /// llegue, no este método: acá todavía no se sabe cuánto duró la pausa.
+    func resume() {
+        guard isPaused else { return }
         isPaused = false
-        Logger.shared.log("Grabación reanudada; pausa acumulada \(String(format: "%.1f", pausedTotal.seconds))s")
+        isResuming = true
     }
 
     func finish(completion: @escaping () -> Void) {

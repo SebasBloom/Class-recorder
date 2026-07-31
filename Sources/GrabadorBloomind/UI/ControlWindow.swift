@@ -21,6 +21,7 @@ final class ControlWindow: NSWindowController {
     private let microphonePopUp = NSPopUpButton()
     private let levelBar = LevelBar()
     private let actionButton = BloomindButton(title: "Iniciar grabación")
+    private let pauseButton = BloomindButton(title: "Pausar", kind: .ghost)
     private let statusLabel = NSTextField(labelWithString: "")
     private let titleLabel = NSTextField(labelWithString: "Grabador")
     private let eyebrowLabel = NSTextField(labelWithString: "")
@@ -29,6 +30,9 @@ final class ControlWindow: NSWindowController {
 
     private var timer: Timer?
     private var startedAt: Date?
+    /// Segundos ya grabados antes de la pausa en curso. El cronómetro muestra
+    /// tiempo grabado, no tiempo transcurrido: durante la pausa no avanza.
+    private var accumulated: TimeInterval = 0
 
     init() {
         // Sin fullSizeContentView a propósito: con la barra de título transparente
@@ -150,7 +154,16 @@ final class ControlWindow: NSWindowController {
         header.alignment = .leading
         header.spacing = 2
 
-        let stack = NSStackView(views: [header, card, actionButton, statusLabel])
+        pauseButton.target = self
+        pauseButton.action = #selector(togglePause)
+        pauseButton.isHidden = true
+
+        let buttons = NSStackView(views: [actionButton, pauseButton])
+        buttons.orientation = .horizontal
+        buttons.spacing = BloomindStyle.Space.tight
+        buttons.distribution = .fillEqually
+
+        let stack = NSStackView(views: [header, card, buttons, statusLabel])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = BloomindStyle.Space.loose
@@ -162,7 +175,7 @@ final class ControlWindow: NSWindowController {
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -BloomindStyle.Space.card),
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: BloomindStyle.Space.card),
             card.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            actionButton.widthAnchor.constraint(equalTo: stack.widthAnchor)
+            buttons.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
 
         actionButton.target = self
@@ -193,6 +206,10 @@ final class ControlWindow: NSWindowController {
             Logger.shared.log("ERROR listando pantallas: \(error.localizedDescription)")
             _ = ScreenRecordingPermission.ensureGranted()
         }
+    }
+
+    @objc private func togglePause() {
+        recorder.togglePause()
     }
 
     @objc private func toggleRecording() {
@@ -288,11 +305,25 @@ final class ControlWindow: NSWindowController {
         if !recorder.isRecording { audioModeChanged() }
         statusLabel.textColor = BloomindStyle.muted
 
+        pauseButton.isHidden = !recorder.isRecording
+        pauseButton.title = recorder.isPaused ? "Reanudar" : "Pausar"
+
         if recorder.isRecording {
             actionButton.title = "Detener"
-            startedAt = Date()
-            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.tick() }
+
+            if recorder.isPaused {
+                // Congelar el cronómetro: lo corrido hasta acá se guarda y no
+                // sigue sumando mientras dure la pausa.
+                if let startedAt { accumulated += Date().timeIntervalSince(startedAt) }
+                startedAt = nil
+            } else if startedAt == nil {
+                startedAt = Date()
+            }
+
+            if timer == nil {
+                timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                    Task { @MainActor in self?.tick() }
+                }
             }
             tick()
         } else {
@@ -300,15 +331,23 @@ final class ControlWindow: NSWindowController {
             timer?.invalidate()
             timer = nil
             startedAt = nil
+            accumulated = 0
             statusLabel.stringValue = "Listo"
         }
     }
 
     private func tick() {
-        guard let startedAt else { return }
-        let seconds = Int(Date().timeIntervalSince(startedAt))
-        statusLabel.stringValue = String(format: "● Grabando   %02d:%02d", seconds / 60, seconds % 60)
-        // El turquesa es exclusivo del éxito; grabar en curso va en lab.
-        statusLabel.textColor = BloomindStyle.lab
+        let running = startedAt.map { Date().timeIntervalSince($0) } ?? 0
+        let seconds = Int(accumulated + running)
+        let texto = String(format: "%02d:%02d", seconds / 60, seconds % 60)
+
+        if recorder.isPaused {
+            statusLabel.stringValue = "❚❚ Pausado   \(texto)"
+            statusLabel.textColor = BloomindStyle.muted
+        } else {
+            statusLabel.stringValue = "● Grabando   \(texto)"
+            // El turquesa es exclusivo del éxito; grabar en curso va en lab.
+            statusLabel.textColor = BloomindStyle.lab
+        }
     }
 }
