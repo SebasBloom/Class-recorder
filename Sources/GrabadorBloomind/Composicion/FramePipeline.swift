@@ -15,11 +15,12 @@ final class FramePipeline {
     private let tracker: MouseTracker
     private let writer: RecordingWriter
     private let camera: CameraCapture?
+    private let whiteboard: DrawingSurface
 
     /// Timestamp del primer frame. Todo lo demás se mide desde acá.
     private var sessionStart: CMTime?
 
-    // MARK: - Reloj propio para el modo cámara
+    // MARK: - Reloj propio para los modos que no son pantalla
     //
     // ScreenCaptureKit deja de mandar cuadros cuando la pantalla no cambia, y los
     // cuadros "sin novedad" que manda en cambio no traen imagen: no hay nada que
@@ -30,9 +31,13 @@ final class FramePipeline {
     // así que la cara queda congelada mientras el audio sigue. Pasó de verdad en
     // la prueba de la Fase 6: 41 segundos congelados.
     //
-    // Por eso, y **solo** en modo cámara, un reloj propio emite cuadros cuando la
-    // captura se queda callada. En modo pantalla no corre: ahí el cuadro repetido
-    // es la respuesta correcta y no hay nada que arreglar.
+    // Por eso, en los modos cuyo fondo no es la pantalla capturada (cámara y
+    // tablero), un reloj propio emite cuadros cuando la captura se queda callada.
+    // En modo pantalla no corre: ahí el cuadro repetido es la respuesta correcta
+    // y no hay nada que arreglar.
+    //
+    // En tablero hace falta por la burbuja, que sí se compone ahí según la matriz
+    // 8.4: sin reloj, la cara quedaría congelada sobre un lienzo quieto.
 
     /// Cada cuánto emite el reloj propio, y cuánto silencio de la captura hace
     /// falta para que entre a trabajar.
@@ -71,15 +76,17 @@ final class FramePipeline {
          cursorTrack: CursorTrackWriter,
          tracker: MouseTracker,
          writer: RecordingWriter,
-         camera: CameraCapture?) {
+         camera: CameraCapture?,
+         whiteboard: DrawingSurface) {
         self.converter = converter
         self.compositor = compositor
         self.cursorTrack = cursorTrack
         self.tracker = tracker
         self.writer = writer
         self.camera = camera
+        self.whiteboard = whiteboard
 
-        if camera != nil { startClock() }
+        startClock()
     }
 
     /// Cambia el modo de fuente. Se llama desde el hilo principal (atajo o
@@ -161,6 +168,7 @@ final class FramePipeline {
                         newClicks: clicks,
                         camera: camera?.latestImage,
                         bubbleRect: bubbleRect,
+                        whiteboard: whiteboard,
                         time: time)
         cursorTrack.record(cursor: cursor, clicks: clicks, time: time)
 
@@ -172,7 +180,7 @@ final class FramePipeline {
         clockTimer?.cancel()
         clockTimer = nil
         if syntheticFrames > 0 {
-            Logger.shared.log("Cuadros escritos: \(realFrames) de la captura, \(syntheticFrames) del reloj propio con la pantalla quieta en modo cámara")
+            Logger.shared.log("Cuadros escritos: \(realFrames) de la captura, \(syntheticFrames) del reloj propio con la pantalla quieta")
         }
         cursorTrack.finish()
     }
@@ -202,9 +210,21 @@ final class FramePipeline {
         guard !writer.isPaused, let start = sessionStart else { return }
 
         lock.lock()
+        let bubbleRect = _bubbleRect
+        lock.unlock()
+
+        lock.lock()
         let mode = _mode
         lock.unlock()
-        guard mode == .camara, let image = camera?.latestImage else { return }
+
+        // El reloj cubre los modos cuyo fondo **no** es la pantalla capturada.
+        // En modo pantalla no corre: ahí repetir el último cuadro de una pantalla
+        // quieta es la respuesta correcta, no un defecto.
+        switch mode {
+        case .pantalla: return
+        case .camara: guard camera?.latestImage != nil else { return }
+        case .tablero: break
+        }
 
         let now = CMClockGetTime(CMClockGetHostTimeClock())
         guard lastRealFrameAt.isValid,
@@ -216,14 +236,17 @@ final class FramePipeline {
 
         let elapsed = CMTimeSubtract(CMTimeSubtract(now, start), writer.pausedTotal)
 
-        // En modo cámara la imagen tapa el cuadro entero, así que no hace falta
+        // En estos modos el fondo tapa el cuadro entero, así que no hace falta
         // arrastrar el último contenido de pantalla: el búfer se pinta completo.
+        // El cursor no va: en cámara no se dibuja, y en tablero su posición la
+        // pone la captura, que justamente no está mandando nada.
         compositor.draw(into: buffer,
                         mode: mode,
                         cursor: nil,
                         newClicks: [],
-                        camera: image,
-                        bubbleRect: nil,
+                        camera: camera?.latestImage,
+                        bubbleRect: bubbleRect,
+                        whiteboard: whiteboard,
                         time: max(0, elapsed.seconds))
 
         guard let sample = sampleBuffer(from: buffer, at: now) else { return }

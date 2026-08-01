@@ -241,3 +241,31 @@ Detalle crítico: al volver la captura, sus primeros cuadros pueden traer un tim
 Opción Comando 1 y 2 se registran con el código de la fila de números y con el del numérico.
 Razón: probado por Sebas el 2026-07-31. Con el teclado USB los atajos no respondían y con el del Mac sí; la causa era que estaba usando los números de la derecha, que son códigos de tecla distintos. El Mac no tiene numérico, así que el problema no aparece nunca probando en el portátil.
 Cuando llegue el registro reasignable de la Fase 9 hay que conservar esta equivalencia: quien asigna "Comando 1" espera que le sirvan los dos unos del teclado.
+
+**54. 2026-07-31 — Clic seco crea cuadro de texto; arrastrar dibuja.**
+Decidido con Sebas el 2026-07-31. Apretar y soltar sin mover más de 3 puntos abre un cuadro de texto; apretar y arrastrar dibuja un trazo. Un trazo de un solo punto se descarta en el modelo.
+Razón: el plan pide trazo con el mouse y cuadro de texto con un clic, sin decir cómo distinguirlos. Resolverlo por el gesto evita una tecla más que recordar en vivo, que es lo que cuenta dando clase.
+Alternativa descartada: un atajo que cambia de herramienta. Más predecible, pero suma una tecla a un modo que ya tiene cinco.
+
+**55. 2026-07-31 — El tablero se borra al iniciar cada grabación.**
+Decidido con Sebas el 2026-07-31. Cambiar de modo **no** borra nada (lo pide el plan en 8.4); lo que limpia es empezar una toma nueva.
+Razón: que los dibujos de una clase aparezcan en la siguiente es peor que perderlos al repetir una toma.
+Ojo con la Fase 11: reiniciar toma llama a iniciar grabación, así que el tablero se va a limpiar también ahí. Es coherente con esta decisión, pero hay que decirlo en su criterio de aceptación para que no sorprenda.
+
+**56. 2026-07-31 — Lo dibujado se guarda normalizado, no en píxeles.**
+Los puntos de los trazos y el origen de los cuadros de texto van de 0 a 1 sobre el ancho y el alto de la superficie.
+Razón: el mismo modelo lo dibujan la ventana espejo, que está en puntos de pantalla, y el compositor, que está en píxeles del video. Con coordenadas normalizadas los dos usan el mismo renderizador sin ninguna conversión, y no hay forma de que se desfasen entre sí. Es también la razón por la que el motor de dibujo **no** consume el módulo de conversión de coordenadas, al revés de lo que preveía `INTERDEPENDENCIAS.md`.
+
+**57. 2026-07-31 — El compositor cachea lo terminado del tablero.**
+Lo ya dibujado se pinta una vez en una imagen y se reusa mientras la versión del modelo no cambie; el trazo en curso se pinta en vivo.
+Razón: una clase con doscientos trazos obligaría a repintarlos treinta veces por segundo. El compositor se atrasaría justo cuando más contenido hay, o sea al final de la clase, y los frames descartados no vuelven.
+Por eso `DrawingSurface.version` cambia al terminar un trazo, deshacer o borrar, pero **no** mientras se arrastra el mouse.
+
+**58. 2026-07-31 — El reloj propio cubre también el modo tablero.**
+La condición de la decisión 52 pasa de "modo cámara" a "cualquier modo cuyo fondo no sea la pantalla capturada".
+Razón: en modo tablero la burbuja de cámara sí se compone según la matriz 8.4. Con el lienzo quieto y la pantalla de atrás quieta, la captura se calla y la cara de la burbuja quedaría congelada igual que en la Fase 6. El lienzo en sí puede congelarse sin problema, la burbuja no.
+
+**59. 2026-07-31 — El texto se corta en el borde y sigue en la línea de abajo.**
+Los cuadros de texto se dibujan con `CTFramesetter` dentro del rectángulo que va desde su origen hasta el borde de la superficie, en vez de con una línea suelta.
+Razón: **encontrado en el video de la prueba de la Fase 7.** Una frase larga se salía de la pantalla por la derecha y lo escrito de más se perdía, sin ningún aviso: en el espejo tampoco se veía, así que Sebas habría seguido tipeando creyendo que quedaba grabado.
+El cursor de escritura pasa a calcularse desde la última línea, no desde el ancho total del texto.

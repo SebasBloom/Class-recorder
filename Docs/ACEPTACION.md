@@ -244,3 +244,73 @@ Grabá **10 minutos** con la cámara prendida y varios cambios de modo. Abrí el
 ### Pendiente de verificar
 
 Los atajos de modo en el **teclado numérico**. Se agregaron los códigos (decisión 53) pero no se probaron todavía: cuando se confirmó la causa, Sebas ya no tenía el teclado USB a mano. Los de la fila de números están probados y funcionan.
+
+## Fase 7. Tablero — VALIDADA el 2026-07-31
+
+Aparece un modo nuevo: **Tablero**, con **Opción + Comando + 3**. Al entrar, la pantalla que estás grabando se cubre con un lienzo blanco donde dibujás. Ese lienzo es una ventana de la app, así que **no sale en el video**: lo que se graba es el mismo dibujo compuesto en el archivo.
+
+Los atajos del modo, todos con Opción + Comando (y todos funcionan igual con los números de la fila de arriba o los del teclado numérico):
+
+| Acción | Atajo |
+|---|---|
+| Modo pantalla | 1 |
+| Modo cámara completa | 2 |
+| Modo tablero | 3 |
+| Rotar color del marcador | 0 |
+| Deshacer último trazo | Z |
+| Borrar el tablero | Suprimir |
+
+Para dibujar: **arrastrá** el mouse. Para escribir: **un clic seco**, sin mover, abre un cuadro de texto y tipeás; Esc o Enter lo cierra, y también se cierra solo si hacés clic en otro lado.
+
+### 1. Dibujar, escribir, deshacer y borrar
+
+Grabá **2 minutos** con cámara elegida. Durante la grabación:
+
+- Pasá al tablero con **Opción + Comando + 3**
+- Dibujá tres o cuatro trazos
+- Cambiá de color con **Opción + Comando + 0** entre trazo y trazo, y fijate que el renglón de estado del control te dice qué color está activo
+- Hacé un clic seco y escribí una palabra; cerrá con Esc
+- Deshacé el último trazo con **Opción + Comando + Z**
+- Borrá todo con **Opción + Comando + Suprimir** y dibujá algo nuevo
+- Volvé a modo pantalla con **Opción + Comando + 1** y seguí usando la app de abajo con normalidad
+- Detené
+
+**Tiene que:** en el video verse el tablero blanco con todo lo que dibujaste y escribiste, en los colores que elegiste. El deshacer y el borrado tienen que verse en el momento en que los hiciste. **La ventana del lienzo no puede aparecer en el video**, y al volver a modo pantalla la app de abajo tiene que responder al mouse como siempre.
+
+### 2. Lo dibujado sobrevive al cambio de modo
+
+En una grabación: dibujá algo en el tablero, pasá a modo pantalla, hacé algo, y volvé al tablero.
+
+**Tiene que:** al volver, estar todo lo que habías dibujado. Cambiar de modo nunca borra.
+
+### 3. La burbuja sobre el tablero
+
+Con cámara elegida, entrá al tablero y **quedate quieto 30 segundos hablándole a la cámara**, sin dibujar ni tocar nada.
+
+**Tiene que:** verse la burbuja de la cámara sobre el lienzo blanco, y **moviéndose normal**, no congelada. El lienzo sí puede quedarse quieto, es un lienzo. Si la cara se congela, avisame.
+
+### 4. Cada toma arranca limpia
+
+Dibujá algo en el tablero, detené la grabación, y arrancá una toma nueva.
+
+**Tiene que:** el tablero de la toma nueva estar en blanco. Es a propósito: los dibujos de una clase no tienen por qué aparecer en la siguiente.
+
+### 5. La censura y las anotaciones no salen en el tablero
+
+Todavía no existen esas dos capas (llegan en las fases 8 y 10), así que este punto no se puede probar aún. Queda anotado para cerrarlo cuando existan.
+
+### 6. Memoria
+
+Grabá **10 minutos** dibujando bastante en el tablero, con muchos trazos acumulados. Decime cuando arranques y yo mido.
+
+**Tiene que:** mantenerse estable la memoria, y el video no empezar a saltar a medida que se acumulan trazos.
+
+### Resultados medidos
+
+1. **Composición del tablero:** confirmado en video. Lienzo blanco con los trazos en los cinco colores, la burbuja de cámara y el círculo del cursor encima, tal como manda la matriz 8.4. La ventana espejo no aparece en ningún cuadro, y al volver a modo pantalla el escritorio real vuelve limpio.
+2. **Persistencia al cambiar de modo:** salió a pantalla en el segundo 42 y volvió al tablero en el 52; el cuadro del segundo 55 es idéntico al del 40, trazo por trazo. El color activo también sobrevive: los trazos rojos de un tramo posterior corresponden a la rotación anterior a haber salido.
+3. **Deshacer:** entre los segundos 300 y 302 el tablero pasó de lleno a vacío **sin ninguna línea de "Tablero borrado" en el log**, o sea con deshacer repetido y no con el atajo de borrar.
+4. **Borrar:** confirmado, lienzo limpio con la burbuja todavía compuesta.
+5. **Memoria, 10 minutos dibujando:** 63 muestras. Minuto 2: 243 MB. Minuto 10: 186 MB. Cerró en 168. Sin tendencia creciente. El piso es más alto que en la Fase 6 porque la caché del tablero es una imagen del tamaño de la pantalla (unos 24 MB en la Retina interna); es un costo fijo que no crece con la cantidad de trazos.
+6. **Video de esa prueba:** 11m09, 19507 cuadros, 29.1 fps, hueco máximo entre cuadros de 0.050 segundos, audio continuo, ningún congelamiento.
+7. **Texto que se salía de la pantalla, encontrado y corregido:** una frase larga se cortaba en el borde derecho y lo escrito de más se perdía sin aviso. Corregido con corte de línea (decisión 59). **Falta verlo funcionando en video con una frase larga.**

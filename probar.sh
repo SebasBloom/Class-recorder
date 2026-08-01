@@ -32,7 +32,13 @@ correr coordenadas \
 
 correr camara \
 	"$FUENTES/Composicion/FrameCompositor.swift" \
+	"$FUENTES/Dibujo/DrawingSurface.swift" \
+	"$FUENTES/Dibujo/DrawingRenderer.swift" \
 	Pruebas/camara/main.swift
+
+correr dibujo \
+	"$FUENTES/Dibujo/DrawingSurface.swift" \
+	Pruebas/dibujo/main.swift
 
 correr mezcla \
 	"$FUENTES/Audio/AudioMixer.swift" \

@@ -497,10 +497,12 @@ final class ControlWindow: NSWindowController {
         let running = startedAt.map { Date().timeIntervalSince($0) } ?? 0
         let seconds = Int(accumulated + running)
         var texto = String(format: "%02d:%02d", seconds / 60, seconds % 60)
-        // Mientras hay cámara, el modo activo se ve en el mismo renglón: es la
-        // única señal de en qué modo está hasta que llegue el widget (Fase 11).
-        if camera != nil {
-            texto += recorder.mode == .camara ? "   Cámara completa" : "   Pantalla"
+        // El modo activo y el color del marcador van en el mismo renglón: son la
+        // única señal de en qué estado está hasta que llegue el widget (Fase 11).
+        switch recorder.mode {
+        case .pantalla: if camera != nil { texto += "   Pantalla" }
+        case .camara:   texto += "   Cámara completa"
+        case .tablero:  texto += "   Tablero · marcador \(recorder.markerColor.label)"
         }
 
         if recorder.isPaused {

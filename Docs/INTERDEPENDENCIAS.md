@@ -14,7 +14,7 @@ Es la pieza más compartida del proyecto y se escribe una sola vez.
 
 Consumidores actuales: `FramePipeline`, que la usa para el círculo, los clics, el JSON y la burbuja de cámara.
 
-Consumidores previstos: capa de dibujo, tablero, censura y selector de rectángulo.
+Consumidores previstos: censura y selector de rectángulo. El motor de dibujo **no** la usa: guarda todo normalizado (decisión 56).
 
 Tiene dos conversiones, no una: `pixelPoint(fromGlobal:)` para el cursor y `pixelRect(fromGlobal:)` para el marco de una ventana espejo. La de rectángulos **no** exige que entre entero en la pantalla, porque la burbuja se puede arrastrar a medias fuera del borde y en el video se ve la parte que quedó adentro.
 
@@ -38,13 +38,22 @@ Cuidado al tocarlo: la posición se guarda desde el hilo principal y se lee desd
 
 ## Motor de dibujo
 
-**Fase 7. Pendiente.** Carpeta prevista: `Dibujo/`.
+**Fase 7. Existe.** `Dibujo/DrawingSurface.swift` (el modelo), `Dibujo/DrawingRenderer.swift` (el dibujo) y `Dibujo/WhiteboardWindow.swift` (el espejo del tablero).
 
 Trazos a mano alzada, cuadros de texto, paleta de colores, deshacer, borrar.
 
-Consumidores: tablero (Fase 7) y capa de anotación sobre pantalla (Fase 8).
+**Motor único, contenidos separados por superficie:** `DrawingSurface` es el motor y cada superficie es una instancia. Hoy existe la del tablero; la capa de anotación de la Fase 8 es otra instancia de la misma clase. Borrar una nunca toca la otra.
 
-Regla: motor único, contenidos separados por superficie. Borrar una superficie nunca toca la otra.
+Consumidores actuales: `WhiteboardWindow` para mostrar y editar, `FrameCompositor` para componerlo en el video, `RecordingController` para los atajos y para limpiarlo al iniciar cada toma.
+
+Consumidores previstos: la capa de anotación (Fase 8) y el widget (Fase 11, que muestra el color activo).
+
+Cuidado al tocarlo:
+
+- **`DrawingRenderer` es uno solo para el espejo y para el video, a propósito.** Si se dibujara distinto en cada lado, la diferencia aparecería recién al revisar el video.
+- **`version` cambia solo cuando cambia lo terminado**, no mientras se arrastra el mouse. De eso depende la caché del compositor (decisión 57): si dejara de cambiar cuando debe, lo dibujado no saldría en el video.
+- Las coordenadas van normalizadas, no en píxeles (decisión 56). Por eso esta pieza **no** consume el módulo de conversión de coordenadas.
+- El modelo lo escribe el hilo principal y lo lee la cola de captura: todo pasa por el candado interno.
 
 ## Identidad visual
 
@@ -84,7 +93,7 @@ Cuidado al tocarlo: el filtro excluye la **aplicación entera**, no ventanas sue
 
 `FrameCompositor` dibuja las capas; `FramePipeline` une todo lo que le pasa a un frame entre la captura y el archivo.
 
-La matriz de visibilidad de la sección 8.4 está implementada tal cual en la función `isVisible(_:in:)`. Hoy existen las capas del círculo, el clic y la burbuja de cámara, y los modos `pantalla` y `camara`; la matriz completa ya está escrita: cada fase que agregue una capa solo tiene que dibujarla, no decidir cuándo se ve.
+La matriz de visibilidad de la sección 8.4 está implementada tal cual en la función `isVisible(_:in:)`. Hoy existen las capas del círculo, el clic, la burbuja de cámara y el contenido del tablero, y los tres modos; la matriz completa ya está escrita: cada fase que agregue una capa solo tiene que dibujarla, no decidir cuándo se ve.
 
 `fillRect(imageSize:in:)` es el recorte centrado que usan la burbuja y el modo cámara completa. Vive suelta y pura, y tiene prueba automática en `./probar.sh`.
 

@@ -24,6 +24,19 @@ final class RecordingController {
     /// para poder soltarla si se desconecta a mitad de grabación.
     private weak var camera: CameraCapture?
 
+    /// El tablero: su contenido y la ventana espejo donde se dibuja. El contenido
+    /// vive acá y no en la ventana porque el compositor lo necesita aunque el
+    /// espejo esté escondido.
+    private let whiteboard = DrawingSurface()
+    private var whiteboardWindow: WhiteboardWindow?
+    /// Repinta el espejo mientras el tablero está a la vista. El modelo cambia
+    /// desde el mouse y el teclado, y el espejo tiene que mostrar lo mismo que
+    /// está entrando al video.
+    private var whiteboardRefresh: Timer?
+    /// La pantalla que se está grabando. El espejo del tablero tiene que cubrir
+    /// esa y no la principal.
+    private var recordingDisplay: CaptureDisplay?
+
     /// Atajos fijos de la Fase 6 para cambiar de modo. Se registran solo mientras
     /// se graba, para no robarle combinaciones al sistema el resto del tiempo
     /// (punto delicado 7). El registro reasignable llega en la Fase 9.
@@ -78,6 +91,10 @@ final class RecordingController {
         // El audio del sistema no necesita permiso propio: viaja con el de
         // grabación de pantalla, que ya se verificó arriba.
 
+        // Cada toma arranca con el tablero limpio: los dibujos de la clase
+        // anterior no tienen por qué aparecer en la siguiente (decisión 55).
+        whiteboard.clear()
+
         let url = Self.makeOutputURL(sessionName: "Prueba")
         Logger.shared.openLog(named: url.deletingPathExtension().lastPathComponent)
 
@@ -105,7 +122,8 @@ final class RecordingController {
                 cursorTrack: CursorTrackWriter(videoURL: url, pixelSize: display.pixelSize, fps: 30),
                 tracker: mouseTracker,
                 writer: writer,
-                camera: camera
+                camera: camera,
+                whiteboard: whiteboard
             )
             self.pipeline = pipeline
             pipeline.setBubbleFrame(bubbleFrame)
@@ -157,7 +175,7 @@ final class RecordingController {
             activeCameraID = camera?.device.uniqueID
             self.camera = camera
             observeDeviceDisconnection()
-            registerModeHotKeys(enabled: camera != nil)
+            registerModeHotKeys(display: display, hasCamera: camera != nil)
 
             isRecording = true
             onStateChange?()
@@ -192,6 +210,8 @@ final class RecordingController {
         activeMicrophoneID = nil
         activeCameraID = nil
         setMode(.pantalla)
+        closeWhiteboardWindow()
+        recordingDisplay = nil
 
         let writer = self.writer
         let pipeline = self.pipeline
@@ -229,6 +249,7 @@ final class RecordingController {
         mode = newMode
         pipeline?.setMode(newMode)
         if isRecording { Logger.shared.log("Modo de fuente: \(newMode.rawValue)") }
+        updateWhiteboardWindow(for: newMode)
         onModeChange?(newMode)
     }
 
@@ -253,22 +274,26 @@ final class RecordingController {
 
     // MARK: - Interno
 
-    /// Atajos fijos temporales de la Fase 6: Opción Comando 1 vuelve a pantalla y
-    /// Opción Comando 2 pasa a cámara completa. Son los defaults de la sección
-    /// 8.8; en la Fase 9 se vuelven reasignables.
+    /// Atajos fijos temporales: los defaults de la sección 8.8 del plan. En la
+    /// Fase 9 se vuelven reasignables.
     ///
     /// Cada modo se registra **dos veces**, con el número de la fila de arriba y
     /// con el del teclado numérico: son códigos de tecla distintos, y en un
     /// teclado completo el numérico es el que queda más a mano (decisión 53).
-    private func registerModeHotKeys(enabled: Bool) {
+    ///
+    /// El de cámara completa solo se registra si hay cámara: sin ella el modo no
+    /// tendría nada que mostrar.
+    private func registerModeHotKeys(display: CaptureDisplay, hasCamera: Bool) {
         hotKeys.removeAll()
-        guard enabled else { return }
 
         let modifiers = optionKey | cmdKey
-        let bindings: [(keys: [Int], mode: CaptureMode)] = [
+        var bindings: [(keys: [Int], mode: CaptureMode)] = [
             ([kVK_ANSI_1, kVK_ANSI_Keypad1], .pantalla),
-            ([kVK_ANSI_2, kVK_ANSI_Keypad2], .camara)
+            ([kVK_ANSI_3, kVK_ANSI_Keypad3], .tablero)
         ]
+        if hasCamera {
+            bindings.append(([kVK_ANSI_2, kVK_ANSI_Keypad2], .camara))
+        }
 
         hotKeys = bindings.flatMap { binding in
             binding.keys.map { key in
@@ -277,7 +302,80 @@ final class RecordingController {
                 }
             }
         }
+
+        // Atajos de dibujo. Solo tienen efecto sobre la superficie activa, que
+        // en esta fase es el tablero; la capa de anotación llega en la Fase 8.
+        hotKeys.append(HotKey(keyCode: kVK_ANSI_0, modifiers: modifiers) { [weak self] in
+            Task { @MainActor in self?.rotateMarkerColor() }
+        })
+        hotKeys.append(HotKey(keyCode: kVK_ANSI_Z, modifiers: modifiers) { [weak self] in
+            Task { @MainActor in self?.undoDrawing() }
+        })
+        hotKeys.append(HotKey(keyCode: kVK_Delete, modifiers: modifiers) { [weak self] in
+            Task { @MainActor in self?.clearDrawing() }
+        })
+
+        self.recordingDisplay = display
     }
+
+    // MARK: - Tablero
+
+    /// Muestra o esconde el espejo del tablero según el modo. El contenido no se
+    /// toca: cambiar de modo nunca borra lo dibujado (plan, 8.4).
+    private func updateWhiteboardWindow(for mode: CaptureMode) {
+        guard mode == .tablero, isRecording else {
+            closeWhiteboardWindow()
+            return
+        }
+
+        if whiteboardWindow == nil, let display = recordingDisplay {
+            // Cubre exactamente la pantalla que se graba, no la principal: el
+            // tablero del video y el de la mano tienen que ser el mismo.
+            let frame = NSScreen.screens.first {
+                ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+                    == display.scDisplay.displayID
+            }?.frame ?? NSScreen.main?.frame ?? .zero
+
+            whiteboardWindow = WhiteboardWindow(surface: whiteboard, screenFrame: frame)
+        }
+
+        whiteboardWindow?.present()
+        whiteboardRefresh?.invalidate()
+        whiteboardRefresh = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.whiteboardWindow?.refresh() }
+        }
+    }
+
+    private func closeWhiteboardWindow() {
+        whiteboardRefresh?.invalidate()
+        whiteboardRefresh = nil
+        whiteboardWindow?.hide()
+        whiteboardWindow = nil
+    }
+
+    private func rotateMarkerColor() {
+        let color = whiteboard.rotateColor()
+        Logger.shared.log("Color del marcador: \(color.label)")
+        onStateChange?()
+    }
+
+    private func undoDrawing() {
+        guard mode == .tablero else { return }
+        whiteboardWindow?.closeTextBox()
+        whiteboard.undo()
+        whiteboardWindow?.refresh()
+    }
+
+    /// Borra **solo** la superficie activa. Nunca las dos (plan, 8.7).
+    private func clearDrawing() {
+        guard mode == .tablero else { return }
+        whiteboardWindow?.closeTextBox()
+        whiteboard.clear()
+        whiteboardWindow?.refresh()
+        Logger.shared.log("Tablero borrado")
+    }
+
+    var markerColor: MarkerColor { whiteboard.color }
 
     private func handleUnexpectedStop(_ error: Error) {
         guard isRecording else { return }
