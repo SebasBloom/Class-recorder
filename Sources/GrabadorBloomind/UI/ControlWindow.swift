@@ -20,6 +20,16 @@ final class ControlWindow: NSWindowController {
     private var microphones: [AudioDevice] = []
     private let microphonePopUp = NSPopUpButton()
     private let levelBar = LevelBar()
+
+    private let cameraEnumerator = CameraDeviceEnumerator()
+    private var cameras: [CameraDevice] = []
+    private let cameraPopUp = NSPopUpButton()
+    /// Cámara encendida, con su ventana espejo. Existen desde que se elige una
+    /// cámara en la lista, no desde que se graba: así Sebas se encuadra antes de
+    /// arrancar.
+    private var camera: CameraCapture?
+    private var mirror: CameraMirrorWindow?
+
     private let actionButton = BloomindButton(title: "Iniciar grabación")
     private let pauseButton = BloomindButton(title: "Pausar", kind: .ghost)
     private let statusLabel = NSTextField(labelWithString: "")
@@ -40,7 +50,7 @@ final class ControlWindow: NSWindowController {
         // queda debajo de los botones de cerrar.
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 420, height: 400),
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
@@ -63,8 +73,37 @@ final class ControlWindow: NSWindowController {
             // iPhone por Continuity con el DJI, micrófonos USB.
             self?.loadMicrophones()
         }
+        cameraEnumerator.onChange = { [weak self] in
+            self?.loadCameras()
+        }
+        recorder.onModeChange = { [weak self] mode in
+            // En cámara completa la burbuja no se compone (matriz 8.4): el
+            // espejo se esconde para que la pantalla diga la verdad.
+            self?.mirror?.setVisible(mode != .camara)
+            self?.tick()
+        }
         Task { await loadDisplays() }
         loadMicrophones()
+        loadCameras()
+        sizeWindowToFit()
+    }
+
+    /// Ajusta la ventana al alto exacto de su contenido y le prohíbe encogerse
+    /// por debajo. Se llama cada vez que aparece o desaparece una fila.
+    ///
+    /// Es la red de seguridad contra el error de agregar un control y no darse
+    /// cuenta de que empujó los botones fuera de la vista.
+    private func sizeWindowToFit() {
+        guard let window, let contentView = window.contentView else { return }
+
+        contentView.layoutSubtreeIfNeeded()
+        let fitting = contentView.fittingSize
+        guard fitting.height > 0 else { return }
+
+        window.contentMinSize = fitting
+        if window.contentView!.frame.height < fitting.height {
+            window.setContentSize(fitting)
+        }
     }
 
     deinit {
@@ -113,6 +152,15 @@ final class ControlWindow: NSWindowController {
         microphonePopUp.action = #selector(microphoneChanged)
         microphonePopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
+        let cameraLabel = NSTextField(labelWithString: "Cámara")
+        cameraLabel.font = BloomindStyle.ui(12)
+        cameraLabel.textColor = BloomindStyle.muted
+
+        cameraPopUp.font = BloomindStyle.ui(13)
+        cameraPopUp.target = self
+        cameraPopUp.action = #selector(cameraChanged)
+        cameraPopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
         statusLabel.font = BloomindStyle.mono(12)
         statusLabel.textColor = BloomindStyle.muted
         statusLabel.stringValue = "Buscando pantallas…"
@@ -128,13 +176,15 @@ final class ControlWindow: NSWindowController {
         let cardStack = NSStackView(views: [
             displayLabel, displayPopUp,
             audioModeLabel, audioModePopUp,
-            microphoneLabel, microphonePopUp, levelBar
+            microphoneLabel, microphonePopUp, levelBar,
+            cameraLabel, cameraPopUp
         ])
         cardStack.orientation = .vertical
         cardStack.alignment = .leading
         cardStack.spacing = BloomindStyle.Space.tight
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: displayPopUp)
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: audioModePopUp)
+        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: levelBar)
         self.microphoneLabel = microphoneLabel
         cardStack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(cardStack)
@@ -146,7 +196,8 @@ final class ControlWindow: NSWindowController {
             displayPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             audioModePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             microphonePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            levelBar.widthAnchor.constraint(equalTo: cardStack.widthAnchor)
+            levelBar.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            cameraPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor)
         ])
 
         let header = NSStackView(views: [eyebrowLabel, titleLabel])
@@ -174,6 +225,11 @@ final class ControlWindow: NSWindowController {
             stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: BloomindStyle.Space.card),
             stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -BloomindStyle.Space.card),
             stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: BloomindStyle.Space.card),
+            // El borde de abajo también, para que la ventana **se mida sola** por
+            // su contenido. Sin esto el alto queda clavado en el que se le puso
+            // al crearla, y cada fila nueva empuja los botones fuera de la vista:
+            // fue exactamente lo que pasó al agregar el selector de cámara.
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -BloomindStyle.Space.card),
             card.widthAnchor.constraint(equalTo: stack.widthAnchor),
             buttons.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
@@ -226,6 +282,7 @@ final class ControlWindow: NSWindowController {
                 $0.lastDisplayID = display.scDisplay.displayID
                 $0.lastAudioMode = audioMode.rawValue
                 $0.lastMicrophoneID = microphone?.uniqueID
+                $0.lastCameraID = camera?.device.uniqueID
             }
 
             // El medidor suelta el micrófono antes de que lo tome la captura.
@@ -233,7 +290,8 @@ final class ControlWindow: NSWindowController {
             levelBar.level = 0
 
             actionButton.isEnabled = false
-            Task { await recorder.start(display: display, audioMode: audioMode, microphoneID: microphone?.uniqueID) }
+            Task { await recorder.start(display: display, audioMode: audioMode,
+                                        microphoneID: microphone?.uniqueID, camera: camera) }
         }
     }
 
@@ -254,6 +312,7 @@ final class ControlWindow: NSWindowController {
         microphoneLabel?.isHidden = !usesMicrophone
         microphonePopUp.isHidden = !usesMicrophone
         levelBar.isHidden = !usesMicrophone
+        sizeWindowToFit()
         microphoneChanged()
     }
 
@@ -273,6 +332,103 @@ final class ControlWindow: NSWindowController {
 
         Logger.shared.log("Micrófonos detectados: \(microphones.count)")
         if !recorder.isRecording { audioModeChanged() }
+    }
+
+    /// La lista arranca con "Sin cámara": grabar solo la pantalla es un caso
+    /// legítimo y frecuente, no una falla.
+    private func loadCameras() {
+        let previous = selectedCamera()?.uniqueID ?? ConfigurationStore.shared.current.lastCameraID
+
+        cameras = CameraDeviceEnumerator.available()
+        cameraPopUp.removeAllItems()
+        cameraPopUp.addItem(withTitle: "Sin cámara")
+        for camera in cameras {
+            cameraPopUp.addItem(withTitle: camera.name)
+        }
+
+        // Memoria pegajosa: vuelve a la última cámara usada si sigue conectada.
+        if let previous, let index = cameras.firstIndex(where: { $0.uniqueID == previous }) {
+            cameraPopUp.selectItem(at: index + 1)
+        }
+
+        Logger.shared.log("Cámaras detectadas: \(cameras.count)")
+
+        // Si lo que quedó seleccionado no es lo que está encendido, se reconcilia:
+        // cubre tanto "se conectó la cámara que se venía usando" como "la que
+        // estaba prendida se desconectó y hay que soltarla".
+        if !recorder.isRecording, selectedCamera()?.uniqueID != camera?.device.uniqueID {
+            cameraChanged()
+        }
+    }
+
+    /// El índice 0 es "Sin cámara"; de ahí en adelante van los dispositivos.
+    private func selectedCamera() -> CameraDevice? {
+        let index = cameraPopUp.indexOfSelectedItem - 1
+        return cameras.indices.contains(index) ? cameras[index] : nil
+    }
+
+    /// Enciende o apaga la cámara y su ventana espejo. Pasa apenas se elige en la
+    /// lista, sin esperar a grabar: así se encuadra antes de arrancar.
+    @objc private func cameraChanged() {
+        closeCamera()
+
+        guard let device = selectedCamera() else {
+            ConfigurationStore.shared.update { $0.lastCameraID = nil }
+            return
+        }
+
+        Task {
+            guard await CameraDeviceEnumerator.requestPermission() else {
+                showCameraPermissionAlert()
+                cameraPopUp.selectItem(at: 0)
+                return
+            }
+
+            guard let capture = CameraCapture(device: device) else {
+                statusLabel.stringValue = "No se pudo abrir la cámara"
+                statusLabel.textColor = BloomindStyle.signal
+                cameraPopUp.selectItem(at: 0)
+                return
+            }
+
+            capture.onInterruption = { [weak self] in
+                self?.recorder.reportCameraInterruption(device.name)
+            }
+            capture.start()
+            camera = capture
+
+            let mirror = CameraMirrorWindow(previewLayer: capture.makePreviewLayer(),
+                                            aspectRatio: capture.aspectRatio)
+            mirror.onFrameChange = { [weak self] rect in
+                self?.recorder.setBubbleFrame(rect)
+            }
+            mirror.setVisible(true)
+            self.mirror = mirror
+
+            ConfigurationStore.shared.update { $0.lastCameraID = device.uniqueID }
+        }
+    }
+
+    private func closeCamera() {
+        mirror?.setVisible(false)
+        mirror = nil
+        camera?.stop()
+        camera = nil
+        recorder.setBubbleFrame(nil)
+    }
+
+    private func showCameraPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Falta el permiso de cámara"
+        alert.informativeText = "Para usar la burbuja, activá el Grabador Bloomind en Configuración del Sistema, Privacidad y seguridad, Cámara."
+        alert.addButton(withTitle: "Abrir Configuración del Sistema")
+        alert.addButton(withTitle: "Seguir sin cámara")
+        alert.alertStyle = .warning
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn {
+            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")!
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc private func microphoneChanged() {
@@ -300,6 +456,7 @@ final class ControlWindow: NSWindowController {
         displayPopUp.isEnabled = !recorder.isRecording
         audioModePopUp.isEnabled = !recorder.isRecording
         microphonePopUp.isEnabled = !recorder.isRecording
+        cameraPopUp.isEnabled = !recorder.isRecording
         // Durante la grabación el micrófono lo tiene la captura, así que el
         // medidor no puede leerlo: la barra se queda quieta a propósito.
         if !recorder.isRecording { audioModeChanged() }
@@ -339,7 +496,12 @@ final class ControlWindow: NSWindowController {
     private func tick() {
         let running = startedAt.map { Date().timeIntervalSince($0) } ?? 0
         let seconds = Int(accumulated + running)
-        let texto = String(format: "%02d:%02d", seconds / 60, seconds % 60)
+        var texto = String(format: "%02d:%02d", seconds / 60, seconds % 60)
+        // Mientras hay cámara, el modo activo se ve en el mismo renglón: es la
+        // única señal de en qué modo está hasta que llegue el widget (Fase 11).
+        if camera != nil {
+            texto += recorder.mode == .camara ? "   Cámara completa" : "   Pantalla"
+        }
 
         if recorder.isPaused {
             statusLabel.stringValue = "❚❚ Pausado   \(texto)"

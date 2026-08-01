@@ -67,4 +67,24 @@ struct CoordinateConverter {
 
         return CGPoint(x: localX * scale, y: localYFromTop * scale)
     }
+
+    /// Convierte un rectángulo global (el marco de una ventana espejo) a píxeles
+    /// del frame, con origen arriba a la izquierda.
+    ///
+    /// A diferencia del punto del cursor, acá **no** se exige que entre entero en
+    /// la pantalla: la burbuja se puede arrastrar hasta salirse a medias por un
+    /// borde, y en el video se ve la parte que quedó adentro. Devuelve nil solo
+    /// si el rectángulo no toca la pantalla grabada en absoluto, que es "la
+    /// burbuja se fue al otro monitor" y ahí no se compone nada.
+    func pixelRect(fromGlobal rect: CGRect) -> CGRect? {
+        guard displayFrame.intersects(rect) else { return nil }
+
+        let localX = rect.minX - displayFrame.minX
+        // El borde de arriba del rectángulo (maxY con origen abajo) es el que
+        // marca la fila inicial cuando se numera desde arriba.
+        let localTop = displayFrame.height - (rect.maxY - displayFrame.minY)
+
+        return CGRect(x: localX * scale, y: localTop * scale,
+                      width: rect.width * scale, height: rect.height * scale)
+    }
 }

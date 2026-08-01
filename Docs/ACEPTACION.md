@@ -184,3 +184,63 @@ Grabá **3 minutos**: al minuto 1 tocá **Pausar**, esperá **30 segundos**, y t
 **Tiene que:** el archivo durar **2 minutos y medio**, no 3. En el punto donde pausaste no puede haber ni un hueco de silencio ni un salto de imagen, y después de reanudar el audio tiene que seguir sincronizado con la imagen.
 
 El cronómetro de la ventana también se congela mientras está pausado: eso es a propósito, muestra tiempo grabado y no tiempo transcurrido.
+
+## Fase 6. Cámara: burbuja y modo cámara completa — VALIDADA el 2026-07-31
+
+En el control de grabación hay un selector nuevo de **Cámara**, que arranca en "Sin cámara". Al elegir una, aparece de inmediato la **burbuja** en tu pantalla: una ventana chiquita con tu cara, esquinas redondeadas, que flota encima de todo. La arrastrás desde adentro y la redimensionás desde los bordes.
+
+La primera vez macOS va a pedirte permiso de cámara.
+
+### 1. La burbuja queda donde la dejaste
+
+Elegí tu cámara. Movela a donde quieras y ponele el tamaño que quieras. Grabá **1 minuto**, y durante la grabación **arrastrala a otra esquina y hacela más grande**.
+
+**Tiene que:** en el video verse la burbuja exactamente donde estaba en tu pantalla y del mismo tamaño, incluida la mudanza y el cambio de tamaño en vivo. La ventana espejo, esa que arrastraste, **no puede aparecer en el video**: lo único que se ve es la burbuja compuesta.
+
+Cerrá la app y volvé a abrirla: la burbuja tiene que volver a aparecer en el último lugar y tamaño que le dejaste.
+
+### 2. El atajo de cámara completa
+
+Con la cámara elegida, grabá **2 minutos**. Durante la grabación apretá **Opción + Comando + 2** para pasar a cámara completa, y **Opción + Comando + 1** para volver a pantalla. Hacelo **cuatro o cinco veces**, algunas rápidas seguidas.
+
+**Tiene que:** el cambio ser un corte instantáneo, sin congelones, sin pantalla negra y **sin ningún salto ni corte en el audio**. En modo cámara completa se ve solo tu cámara llenando el cuadro, sin el círculo del cursor y sin la burbuja. Al volver a pantalla, todo vuelve.
+
+El renglón de estado del control te dice en qué modo estás.
+
+Probá el atajo con otra app adelante (el navegador, por ejemplo): tiene que funcionar igual sin que el Grabador te robe el foco.
+
+**Y esto es lo que más quiero que mires:** en modo cámara completa, quedate **quince segundos quieto hablándole a la cámara, sin tocar el mouse ni el teclado**. Después mirá ese tramo en el video.
+
+**Tiene que:** verse tu imagen moviéndose normal. Si en cambio se congela en un cuadro y sigue el audio, avisame: significa que macOS deja de mandar cuadros cuando la pantalla de atrás no cambia, y hay que ponerle un reloj propio a la grabación. Es el único punto de esta fase que no pude verificar sin usar la app.
+
+### 3. El iPhone por Continuity
+
+Repetí una grabación corta con la **cámara del iPhone** elegida en la lista.
+
+**Tiene que:** aparecer sola en la lista al acercar el teléfono, verse nítida en la burbuja, y funcionar igual el cambio a cámara completa.
+
+### 4. La cámara se cae a mitad de grabación
+
+Grabando con el iPhone, **bloqueá el teléfono** o alejalo (o desconectá la webcam USB si estás con una).
+
+**Tiene que:** aparecer un aviso visible diciendo que se desconectó la cámara, la grabación **seguir corriendo**, y el archivo final tener todo lo grabado. Si estabas en cámara completa, vuelve solo a modo pantalla en vez de quedarse congelado en el último cuadro.
+
+Lo que no puede pasar: que la app se caiga, que se quede congelada la imagen de la cámara, o que siga como si nada sin avisar.
+
+### 5. Memoria
+
+Grabá **10 minutos** con la cámara prendida y varios cambios de modo. Abrí el Monitor de Actividad, buscá "Grabador Bloomind" y anotá la memoria en el minuto 2 y otra vez al final.
+
+**Tiene que:** quedarse parecida. Si creció sin parar, la fase está mal aunque el video haya salido bien.
+
+### Resultados medidos
+
+1. **Burbuja y espejo:** confirmado por Sebas. La burbuja queda en el video donde está en pantalla, el arrastre y el cambio de tamaño en vivo se reflejan, y la ventana espejo no aparece en el archivo.
+2. **Desconexión de cámara:** grabación con el iPhone desde las 11:59:57; la cámara se cayó a las 12:00:09.9. Quedó el aviso registrado, la grabación siguió 10 segundos más y cerró normal. Archivo de 21.6 segundos, 632 cuadros, video y audio completos.
+3. **Memoria, 10 minutos:** 59 muestras cada 10 segundos. Minuto 2: 115 MB. Minuto 9: 64 MB. Bajó sostenido en vez de subir. El pico de 160 MB del último instante es el cierre del archivo.
+4. **Congelamiento en modo cámara, encontrado y corregido:** en la grabación de 10 minutos el video se congeló **41 segundos** (t=537.5 a 578.4) con el audio continuo. Causa: ScreenCaptureKit deja de mandar cuadros con la pantalla quieta, y en modo cámara el espejo se esconde, así que nada la mantiene cambiando. El tramo coincide con el instante en que Chrome soltó sus bloqueos de video. Corregido con el reloj propio de la decisión 52. **Verificado después:** grabación de 67 segundos en modo cámara, cero congelamientos detectados automáticamente, hueco máximo entre cuadros de 0.083 segundos, 29 fps parejos, audio sin huecos. Con la pantalla quieta el sistema manda un cuadro por segundo y los otros 29 los pone el reloj propio.
+5. **Círculo del cursor trabado, encontrado y corregido:** el `.cursor.json` de una grabación de 21 segundos salió con **un solo evento**. Los monitores globales de AppKit no ven los eventos que van a las ventanas de la propia app, así que el círculo se quedaba clavado mientras el mouse pasaba por el control. Corregido con monitores locales (decisión 51). Verificado: la grabación siguiente, de 10 minutos, salió con **3490 eventos**.
+
+### Pendiente de verificar
+
+Los atajos de modo en el **teclado numérico**. Se agregaron los códigos (decisión 53) pero no se probaron todavía: cuando se confirmó la causa, Sebas ya no tenía el teclado USB a mano. Los de la fila de números están probados y funcionan.

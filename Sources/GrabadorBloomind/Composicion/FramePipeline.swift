@@ -4,9 +4,9 @@ import AVFoundation
 /// archivo: se ubica el cursor, se componen las capas y se registra el evento
 /// para VideoFlow.
 ///
-/// Vive entero en la cola de captura. Nadie más lo toca, así que no necesita
-/// candados propios: el único dato compartido con el hilo principal es la
-/// posición del mouse, y de eso se encarga `MouseTracker`.
+/// Vive en la cola de captura. Lo único que le llega desde el hilo principal es
+/// el modo activo y dónde quedó la burbuja, y eso pasa por un candado: son dos
+/// valores chiquitos que se leen una vez por frame.
 final class FramePipeline {
 
     private let converter: CoordinateConverter
@@ -14,33 +14,119 @@ final class FramePipeline {
     private let cursorTrack: CursorTrackWriter
     private let tracker: MouseTracker
     private let writer: RecordingWriter
+    private let camera: CameraCapture?
 
     /// Timestamp del primer frame. Todo lo demás se mide desde acá.
     private var sessionStart: CMTime?
 
-    /// Modo activo. Fijo en pantalla hasta la Fase 6.
-    private var mode: CaptureMode = .pantalla
+    // MARK: - Reloj propio para el modo cámara
+    //
+    // ScreenCaptureKit deja de mandar cuadros cuando la pantalla no cambia, y los
+    // cuadros "sin novedad" que manda en cambio no traen imagen: no hay nada que
+    // escribir con ellos. Grabando la pantalla eso no se nota, porque repetir el
+    // último cuadro de una pantalla quieta es exactamente lo correcto.
+    //
+    // En modo cámara completa sí se nota, y feo: el fondo del video es la cámara,
+    // así que la cara queda congelada mientras el audio sigue. Pasó de verdad en
+    // la prueba de la Fase 6: 41 segundos congelados.
+    //
+    // Por eso, y **solo** en modo cámara, un reloj propio emite cuadros cuando la
+    // captura se queda callada. En modo pantalla no corre: ahí el cuadro repetido
+    // es la respuesta correcta y no hay nada que arreglar.
+
+    /// Cada cuánto emite el reloj propio, y cuánto silencio de la captura hace
+    /// falta para que entre a trabajar.
+    private static let syntheticInterval: Double = 1.0 / 30
+    private static let stallThreshold: Double = 0.06
+
+    private let clockQueue = DispatchQueue(label: "com.bloomind.grabador.reloj")
+    private var clockTimer: DispatchSourceTimer?
+    private var scratchBuffer: CVPixelBuffer?
+    private var scratchFormat: CMVideoFormatDescription?
+
+    /// Serializa composición y escritura entre la cola de captura y el reloj.
+    private let frameLock = NSLock()
+
+    private var lastRealFrameAt: CMTime = .invalid
+    private var lastAppendedAt: CMTime = .invalid
+
+    /// Cuántos cuadros puso cada fuente. Van al log **una sola vez, al cerrar**:
+    /// con la pantalla quieta la captura se calla y vuelve varias veces por
+    /// segundo, y anotar cada transición llenaría el log de una clase de una hora
+    /// con miles de líneas que no dicen nada.
+    private var realFrames = 0
+    private var syntheticFrames = 0
+
+    private let lock = NSLock()
+    private var _mode: CaptureMode = .pantalla
+    /// Marco de la burbuja en píxeles del frame, origen arriba. Nil si no hay
+    /// cámara o si la burbuja se arrastró fuera de la pantalla que se graba.
+    private var _bubbleRect: CGRect?
+    /// Cambio de modo pendiente de anotar en el JSON. Se anota con el tiempo del
+    /// próximo frame y no con el del clic: el JSON habla en tiempo de video.
+    private var _pendingModeChange: CaptureMode?
 
     init(converter: CoordinateConverter,
          compositor: FrameCompositor,
          cursorTrack: CursorTrackWriter,
          tracker: MouseTracker,
-         writer: RecordingWriter) {
+         writer: RecordingWriter,
+         camera: CameraCapture?) {
         self.converter = converter
         self.compositor = compositor
         self.cursorTrack = cursorTrack
         self.tracker = tracker
         self.writer = writer
+        self.camera = camera
+
+        if camera != nil { startClock() }
+    }
+
+    /// Cambia el modo de fuente. Se llama desde el hilo principal (atajo o
+    /// botón); el corte se ve en el frame siguiente, que a 30 fps es instantáneo.
+    func setMode(_ mode: CaptureMode) {
+        lock.lock()
+        if _mode != mode {
+            _mode = mode
+            _pendingModeChange = mode
+        }
+        lock.unlock()
+    }
+
+    var mode: CaptureMode {
+        lock.lock()
+        defer { lock.unlock() }
+        return _mode
+    }
+
+    /// Ubica la burbuja a partir del marco global de la ventana espejo.
+    func setBubbleFrame(_ globalRect: CGRect?) {
+        let pixels = globalRect.flatMap { converter.pixelRect(fromGlobal: $0) }
+        lock.lock()
+        _bubbleRect = pixels
+        lock.unlock()
     }
 
     func process(_ sampleBuffer: CMSampleBuffer) {
+        frameLock.lock()
+        defer { frameLock.unlock() }
+
+        let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        lastRealFrameAt = presentationTime
+
         // En pausa no se compone ni se registra nada: el video final no tiene
         // ese tramo, así que tampoco debe tenerlo el JSON.
         guard !writer.isPaused else { return }
 
-        let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+        // Después de un tramo cubierto por el reloj propio, los primeros cuadros
+        // reales pueden traer un timestamp anterior al último ya escrito. Meterlos
+        // rompería el orden y con él la grabación entera (decisión 43).
+        if lastAppendedAt.isValid, presentationTime <= lastAppendedAt { return }
+
         if sessionStart == nil { sessionStart = presentationTime }
         guard let start = sessionStart else { return }
+        lastAppendedAt = presentationTime
+        realFrames += 1
 
         // Tiempo del video final: desde el primer frame y descontando pausas.
         let elapsed = CMTimeSubtract(CMTimeSubtract(presentationTime, start), writer.pausedTotal)
@@ -51,6 +137,17 @@ final class FramePipeline {
             return
         }
 
+        lock.lock()
+        let mode = _mode
+        let bubbleRect = _bubbleRect
+        let modeChange = _pendingModeChange
+        _pendingModeChange = nil
+        lock.unlock()
+
+        if let modeChange {
+            cursorTrack.recordModeChange(to: modeChange, time: time)
+        }
+
         let cursor = converter.pixelPoint(fromGlobal: tracker.location)
         // Un clic en la pantalla que no se está grabando no va al video ni al
         // JSON: no existe en el material final.
@@ -58,7 +155,13 @@ final class FramePipeline {
             converter.pixelPoint(fromGlobal: $0.location)
         }
 
-        compositor.draw(into: pixelBuffer, mode: mode, cursor: cursor, newClicks: clicks, time: time)
+        compositor.draw(into: pixelBuffer,
+                        mode: mode,
+                        cursor: cursor,
+                        newClicks: clicks,
+                        camera: camera?.latestImage,
+                        bubbleRect: bubbleRect,
+                        time: time)
         cursorTrack.record(cursor: cursor, clicks: clicks, time: time)
 
         writer.append(sampleBuffer)
@@ -66,6 +169,110 @@ final class FramePipeline {
 
     /// Cierra el archivo de cursor. El video lo cierra el escritor por su lado.
     func finish() {
+        clockTimer?.cancel()
+        clockTimer = nil
+        if syntheticFrames > 0 {
+            Logger.shared.log("Cuadros escritos: \(realFrames) de la captura, \(syntheticFrames) del reloj propio con la pantalla quieta en modo cámara")
+        }
         cursorTrack.finish()
+    }
+
+    // MARK: - Reloj propio
+
+    private func startClock() {
+        let timer = DispatchSource.makeTimerSource(queue: clockQueue)
+        timer.schedule(deadline: .now() + Self.syntheticInterval,
+                       repeating: Self.syntheticInterval,
+                       leeway: .milliseconds(4))
+        timer.setEventHandler { [weak self] in
+            autoreleasepool { self?.tick() }
+        }
+        timer.resume()
+        clockTimer = timer
+    }
+
+    /// Emite un cuadro si la captura lleva callada más de lo tolerable y el fondo
+    /// del video es la cámara. El reloj es el mismo que usa ScreenCaptureKit para
+    /// sus timestamps, así que los cuadros propios y los de la captura caen en la
+    /// misma línea de tiempo sin corrección de deriva.
+    private func tick() {
+        frameLock.lock()
+        defer { frameLock.unlock() }
+
+        guard !writer.isPaused, let start = sessionStart else { return }
+
+        lock.lock()
+        let mode = _mode
+        lock.unlock()
+        guard mode == .camara, let image = camera?.latestImage else { return }
+
+        let now = CMClockGetTime(CMClockGetHostTimeClock())
+        guard lastRealFrameAt.isValid,
+              CMTimeGetSeconds(CMTimeSubtract(now, lastRealFrameAt)) > Self.stallThreshold else { return }
+        if lastAppendedAt.isValid,
+           CMTimeGetSeconds(CMTimeSubtract(now, lastAppendedAt)) < Self.syntheticInterval * 0.95 { return }
+
+        guard let buffer = scratch() else { return }
+
+        let elapsed = CMTimeSubtract(CMTimeSubtract(now, start), writer.pausedTotal)
+
+        // En modo cámara la imagen tapa el cuadro entero, así que no hace falta
+        // arrastrar el último contenido de pantalla: el búfer se pinta completo.
+        compositor.draw(into: buffer,
+                        mode: mode,
+                        cursor: nil,
+                        newClicks: [],
+                        camera: image,
+                        bubbleRect: nil,
+                        time: max(0, elapsed.seconds))
+
+        guard let sample = sampleBuffer(from: buffer, at: now) else { return }
+        lastAppendedAt = now
+        syntheticFrames += 1
+        writer.append(sample)
+    }
+
+    /// Búfer propio donde se pinta el cuadro emitido por el reloj. Se crea una
+    /// sola vez y se reusa: uno por grabación, no uno por cuadro.
+    private func scratch() -> CVPixelBuffer? {
+        if let scratchBuffer { return scratchBuffer }
+
+        let size = converter.pixelSize
+        var buffer: CVPixelBuffer?
+        let attributes: [CFString: Any] = [
+            // Respaldado por IOSurface, que es lo que espera el codificador por
+            // hardware. Sin esto la escritura cuesta una copia extra por cuadro.
+            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary
+        ]
+        guard CVPixelBufferCreate(kCFAllocatorDefault, Int(size.width), Int(size.height),
+                                  kCVPixelFormatType_32BGRA, attributes as CFDictionary,
+                                  &buffer) == kCVReturnSuccess else {
+            Logger.shared.log("ERROR: no se pudo crear el búfer del reloj propio")
+            return nil
+        }
+        scratchBuffer = buffer
+        return buffer
+    }
+
+    private func sampleBuffer(from pixelBuffer: CVPixelBuffer, at time: CMTime) -> CMSampleBuffer? {
+        if scratchFormat == nil {
+            CMVideoFormatDescriptionCreateForImageBuffer(allocator: kCFAllocatorDefault,
+                                                         imageBuffer: pixelBuffer,
+                                                         formatDescriptionOut: &scratchFormat)
+        }
+        guard let format = scratchFormat else { return nil }
+
+        var timing = CMSampleTimingInfo(
+            duration: CMTime(value: 1, timescale: 30),
+            presentationTimeStamp: time,
+            decodeTimeStamp: .invalid
+        )
+        var sample: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(allocator: kCFAllocatorDefault,
+                                                       imageBuffer: pixelBuffer,
+                                                       formatDescription: format,
+                                                       sampleTiming: &timing,
+                                                       sampleBufferOut: &sample) == noErr else { return nil }
+        return sample
     }
 }

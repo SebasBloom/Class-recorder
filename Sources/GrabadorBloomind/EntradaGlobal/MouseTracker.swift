@@ -49,6 +49,25 @@ final class MouseTracker {
             monitors.append(monitor)
         }
 
+        // Los monitores globales **no** ven los eventos que van a nuestras propias
+        // ventanas. Sin estos dos locales, el círculo se quedaba clavado en el
+        // último punto de afuera mientras el mouse pasaba por el control, la
+        // burbuja o el widget, y en el video se veía como un círculo trabado.
+        // El evento se devuelve tal cual: mirar no es interceptar.
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: moves, handler: { [weak self] event in
+            self?.updateLocation()
+            return event
+        }) {
+            monitors.append(monitor)
+        }
+
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: clicks, handler: { [weak self] event in
+            self?.registerClick()
+            return event
+        }) {
+            monitors.append(monitor)
+        }
+
         Logger.shared.log("Seguimiento del mouse iniciado")
     }
 

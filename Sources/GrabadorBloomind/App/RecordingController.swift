@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import Carbon.HIToolbox
 
 /// Coordina una grabación: pide el permiso, arranca la captura, arma el
 /// escritor y conecta uno con otro.
@@ -19,12 +20,33 @@ final class RecordingController {
     private var writer: RecordingWriter?
     private var pipeline: FramePipeline?
     private var mixer: AudioMixer?
+    /// La cámara la enciende y la apaga la ventana de control; acá se guarda solo
+    /// para poder soltarla si se desconecta a mitad de grabación.
+    private weak var camera: CameraCapture?
+
+    /// Atajos fijos de la Fase 6 para cambiar de modo. Se registran solo mientras
+    /// se graba, para no robarle combinaciones al sistema el resto del tiempo
+    /// (punto delicado 7). El registro reasignable llega en la Fase 9.
+    private var hotKeys: [HotKey] = []
 
     var isPaused: Bool { writer?.isPaused ?? false }
 
-    /// Micrófono en uso. Se pone en nil si el dispositivo se desconecta a mitad
-    /// de grabación, para no avisar dos veces por lo mismo.
+    /// Modo de fuente activo. Fuera de grabación siempre vuelve a pantalla.
+    private(set) var mode: CaptureMode = .pantalla
+
+    /// Se avisa cuando cambia el modo, para esconder o mostrar el espejo de la
+    /// burbuja: en cámara completa la burbuja no se compone (matriz 8.4) y dejar
+    /// el espejo en pantalla confundiría.
+    var onModeChange: ((CaptureMode) -> Void)?
+
+    /// Último marco global de la ventana espejo. Se guarda acá porque puede
+    /// llegar antes de que exista el pipeline.
+    private var bubbleFrame: CGRect?
+
+    /// Micrófono y cámara en uso. Se ponen en nil si el dispositivo se desconecta
+    /// a mitad de grabación, para no avisar dos veces por lo mismo.
     private var activeMicrophoneID: String?
+    private var activeCameraID: String?
     private var disconnectObserver: NSObjectProtocol?
 
     /// Se avisa cuando el estado cambia, para que la UI se actualice.
@@ -34,7 +56,7 @@ final class RecordingController {
         try await ScreenCapture.availableDisplays()
     }
 
-    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?) async {
+    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?, camera: CameraCapture?) async {
         guard !isRecording else { return }
 
         // Avisar del estado igual al salir por acá: si no, la UI se queda con el
@@ -64,7 +86,7 @@ final class RecordingController {
         let microphoneName = microphoneID.flatMap { id in
             AudioDeviceEnumerator.device(withID: id)?.name
         } ?? "ninguno"
-        Logger.shared.log("Iniciando grabación en \(display.name), audio: \(audioMode.label), micrófono: \(microphoneName)")
+        Logger.shared.log("Iniciando grabación en \(display.name), audio: \(audioMode.label), micrófono: \(microphoneName), cámara: \(camera?.device.name ?? "ninguna")")
 
         guard let converter = CoordinateConverter(displayID: display.scDisplay.displayID) else {
             Logger.shared.log("ERROR: la pantalla elegida ya no está conectada")
@@ -82,9 +104,11 @@ final class RecordingController {
                 compositor: FrameCompositor(pixelSize: display.pixelSize),
                 cursorTrack: CursorTrackWriter(videoURL: url, pixelSize: display.pixelSize, fps: 30),
                 tracker: mouseTracker,
-                writer: writer
+                writer: writer,
+                camera: camera
             )
             self.pipeline = pipeline
+            pipeline.setBubbleFrame(bubbleFrame)
             mouseTracker.start()
 
             // El frame llega en la cola de captura y se procesa ahí mismo. El
@@ -130,7 +154,10 @@ final class RecordingController {
             try await capture.start(display: display, audioMode: audioMode, microphoneID: microphoneID)
 
             activeMicrophoneID = audioMode.capturesMicrophone ? microphoneID : nil
+            activeCameraID = camera?.device.uniqueID
+            self.camera = camera
             observeDeviceDisconnection()
+            registerModeHotKeys(enabled: camera != nil)
 
             isRecording = true
             onStateChange?()
@@ -161,7 +188,10 @@ final class RecordingController {
         mixer = nil
         mouseTracker.stop()
         stopObservingDeviceDisconnection()
+        hotKeys.removeAll()
         activeMicrophoneID = nil
+        activeCameraID = nil
+        setMode(.pantalla)
 
         let writer = self.writer
         let pipeline = self.pipeline
@@ -192,7 +222,62 @@ final class RecordingController {
         onStateChange?()
     }
 
+    /// Cambia el modo de fuente. El corte se ve en el frame siguiente y el
+    /// cambio queda anotado en el JSON de cursor para VideoFlow.
+    func setMode(_ newMode: CaptureMode) {
+        guard newMode != mode else { return }
+        mode = newMode
+        pipeline?.setMode(newMode)
+        if isRecording { Logger.shared.log("Modo de fuente: \(newMode.rawValue)") }
+        onModeChange?(newMode)
+    }
+
+    /// Recibe el marco de la ventana espejo, en coordenadas globales. Nil apaga
+    /// la burbuja.
+    func setBubbleFrame(_ globalRect: CGRect?) {
+        bubbleFrame = globalRect
+        pipeline?.setBubbleFrame(globalRect)
+    }
+
+    /// Avisa que la cámara se cayó sola (el iPhone se bloqueó, se durmió la
+    /// webcam). La grabación sigue; lo que se pierde es la imagen de la cámara.
+    func reportCameraInterruption(_ name: String) {
+        guard isRecording, activeCameraID != nil else { return }
+        activeCameraID = nil
+        Logger.shared.log("AVISO: se interrumpió la cámara (\(name)); la grabación continúa sin ella")
+        showError(
+            "Se interrumpió la cámara",
+            detail: "\(name) dejó de entregar imagen.\n\nLa grabación sigue corriendo y el video no se pierde, pero de acá en adelante queda sin cámara."
+        )
+    }
+
     // MARK: - Interno
+
+    /// Atajos fijos temporales de la Fase 6: Opción Comando 1 vuelve a pantalla y
+    /// Opción Comando 2 pasa a cámara completa. Son los defaults de la sección
+    /// 8.8; en la Fase 9 se vuelven reasignables.
+    ///
+    /// Cada modo se registra **dos veces**, con el número de la fila de arriba y
+    /// con el del teclado numérico: son códigos de tecla distintos, y en un
+    /// teclado completo el numérico es el que queda más a mano (decisión 53).
+    private func registerModeHotKeys(enabled: Bool) {
+        hotKeys.removeAll()
+        guard enabled else { return }
+
+        let modifiers = optionKey | cmdKey
+        let bindings: [(keys: [Int], mode: CaptureMode)] = [
+            ([kVK_ANSI_1, kVK_ANSI_Keypad1], .pantalla),
+            ([kVK_ANSI_2, kVK_ANSI_Keypad2], .camara)
+        ]
+
+        hotKeys = bindings.flatMap { binding in
+            binding.keys.map { key in
+                HotKey(keyCode: key, modifiers: modifiers) { [weak self] in
+                    Task { @MainActor in self?.setMode(binding.mode) }
+                }
+            }
+        }
+    }
 
     private func handleUnexpectedStop(_ error: Error) {
         guard isRecording else { return }
@@ -217,14 +302,31 @@ final class RecordingController {
             let id = device.uniqueID
 
             Task { @MainActor [weak self] in
-                guard let self, id == self.activeMicrophoneID else { return }
+                guard let self else { return }
 
-                self.activeMicrophoneID = nil
-                Logger.shared.log("AVISO: se desconectó el micrófono (\(name)); la grabación continúa sin audio")
-                self.showError(
-                    "Se desconectó el micrófono",
-                    detail: "\(name) dejó de estar disponible.\n\nLa grabación sigue corriendo y el video no se pierde, pero de acá en adelante queda sin audio."
-                )
+                if id == self.activeMicrophoneID {
+                    self.activeMicrophoneID = nil
+                    Logger.shared.log("AVISO: se desconectó el micrófono (\(name)); la grabación continúa sin audio")
+                    self.showError(
+                        "Se desconectó el micrófono",
+                        detail: "\(name) dejó de estar disponible.\n\nLa grabación sigue corriendo y el video no se pierde, pero de acá en adelante queda sin audio."
+                    )
+                }
+
+                if id == self.activeCameraID {
+                    // Si estaba en cámara completa, el fondo se congelaría en el
+                    // último frame: se vuelve a pantalla, que es lo único que
+                    // queda vivo, y se suelta la última imagen para que la
+                    // burbuja tampoco quede congelada.
+                    self.setMode(.pantalla)
+                    self.camera?.stop()
+                    self.activeCameraID = nil
+                    Logger.shared.log("AVISO: se desconectó la cámara (\(name)); la grabación continúa sin ella")
+                    self.showError(
+                        "Se desconectó la cámara",
+                        detail: "\(name) dejó de estar disponible.\n\nLa grabación sigue corriendo y el video no se pierde, pero de acá en adelante queda sin cámara."
+                    )
+                }
             }
         }
     }

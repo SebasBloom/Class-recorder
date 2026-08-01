@@ -143,8 +143,10 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         // traen imagen sí se descartan.
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let raw = attachments.first?[.status] as? Int,
-              let status = SCFrameStatus(rawValue: raw),
-              status == .complete else { return }
+              let status = SCFrameStatus(rawValue: raw)
+        else { return }
+
+        guard status == .complete else { return }
 
         onFrame?(sampleBuffer)
     }

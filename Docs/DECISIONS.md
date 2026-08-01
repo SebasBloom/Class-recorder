@@ -196,3 +196,48 @@ Es la razón por la que el protocolo del plan manda aislar esta fase antes de in
 `resume()` solo marca la intención; el descuento se cierra cuando entra el siguiente buffer, sea de video o de audio.
 Razón: al soltar el botón todavía no se sabe cuánto duró la pausa en la línea de tiempo de la captura. Usar el reloj del sistema introduciría deriva contra el reloj de los buffers, que es el que manda en el archivo.
 
+
+**45. 2026-07-31 — Los atajos globales se registran con Carbon, no con un monitor de eventos.**
+`HotKey` usa `RegisterEventHotKey` de Carbon (HIToolbox).
+Razón: un monitor global de teclado (`NSEvent.addGlobalMonitorForEvents`) exige permiso de Accesibilidad, porque el sistema lo trata como capaz de leer todo lo que se teclea. `RegisterEventHotKey` registra una combinación puntual con el sistema y no pide permiso. La app pide tres permisos en vez de cuatro y ninguna función queda esperando que el usuario acierte un panel de Configuración.
+Alternativa descartada: pedir Accesibilidad en la Fase 6. Se descartó porque el permiso solo haría falta para leer teclas que no son nuestras, cosa que la app no necesita hacer nunca.
+Nota para la Fase 9: el registro reasignable se construye encima de esta pieza; lo que falta es la traducción de una combinación tecleada por el usuario a código de tecla y máscara de Carbon.
+
+**46. 2026-07-31 — La cámara se convierte a imagen en su propia cola, no en la del compositor.**
+`CameraCapture` recibe el frame de la cámara, lo pasa a `CGImage` ahí mismo y guarda solo el último bajo candado. El compositor lee esa imagen ya lista.
+Razón: la cola de captura de pantalla es la que no se puede atrasar (un atraso ahí descarta frames del video). La conversión sale de esa cola, y de paso ningún `CVPixelBuffer` de la cámara se retiene más allá de su procesamiento: en memoria vive una sola imagen a la vez, se llame la cámara 30 o 60 veces por segundo.
+Alternativa descartada: pasar el `CVPixelBuffer` de la cámara al compositor y convertirlo por frame de pantalla. Se descartó porque obliga a mantener vivo un buffer de la cámara mientras lo lee otra cola, que es exactamente la clase de retención que revienta las grabaciones largas.
+
+**47. 2026-07-31 — La burbuja es un rectángulo de esquinas redondeadas, no un círculo.**
+Decidido con Sebas el 2026-07-31. El redondeo se calcula como fracción del lado corto (8%) para que la ventana espejo y la burbuja del video tengan la misma forma en cualquier tamaño.
+Razón: el círculo desperdicia el encuadre de una cámara apaisada. El rectángulo muestra la escena completa que la cámara está viendo.
+
+**48. 2026-07-31 — La ventana espejo existe desde que se elige la cámara, no desde que se graba.**
+Decidido con Sebas el 2026-07-31. Elegir una cámara en la lista enciende la sesión y abre el espejo.
+Razón: encuadrarse es parte de la preparación, no de la grabación. Si el espejo apareciera al arrancar, el primer minuto de cada clase se iría acomodando la burbuja con la grabación ya corriendo.
+Es un `NSPanel` que no activa la app: mover la burbuja no le roba el foco a la aplicación que se está mostrando en clase.
+
+**49. 2026-07-31 — En modo cámara completa el espejo se esconde.**
+La matriz de visibilidad de la sección 8.4 dice que la burbuja no se compone en modo cámara completa; la ventana espejo se esconde con ella y vuelve al volver a pantalla.
+Razón: el espejo es un espejo. Si se quedara en pantalla mostrando una burbuja que el video no tiene, mentiría sobre lo que se está grabando, que es justo lo que la decisión 3 busca evitar.
+
+**50. 2026-07-31 — La Desk View del iPhone no aparece en la lista de cámaras.**
+Se saca `.deskViewCamera` de la enumeración.
+Razón: probada por Sebas el 2026-07-31. Entrega la imagen deformada en ojo de pescado porque está pensada para apuntar al escritorio, no a la cara. Como opción de burbuja o de cámara completa no sirve, y en la lista solo se presta a elegirla por error.
+
+**51. 2026-07-31 — El seguimiento del mouse también escucha eventos locales.**
+`MouseTracker` suma dos monitores locales a los dos globales.
+Razón: **bug real encontrado revisando el video de la prueba 4 de la Fase 6.** Los monitores globales de AppKit no ven los eventos que van a las ventanas de la propia app. Con el mouse parado sobre el control, el círculo se quedaba clavado en el último punto de afuera mientras el puntero se movía por la pantalla, y el `.cursor.json` de esa grabación de 21 segundos salió con **un solo evento**. En el video se ve como un círculo amarillo trabado, sin ninguna pista del porqué.
+Importa más con cada fase: el widget flotante de la Fase 11 va a estar en pantalla toda la grabación.
+
+**52. 2026-07-31 — En modo cámara el video lo sostiene un reloj propio.**
+`FramePipeline` corre un temporizador a 30 por segundo que, **solo en modo cámara completa**, emite un cuadro cuando la captura lleva más de 60 ms callada. Usa `CMClockGetHostTimeClock`, el mismo reloj del que salen los timestamps de ScreenCaptureKit, así que los cuadros propios y los de la captura caen en una sola línea de tiempo sin corrección de deriva.
+Razón: **medido en la prueba de la Fase 6.** ScreenCaptureKit deja de mandar cuadros cuando la pantalla no cambia. Grabando la pantalla eso es correcto: repetir el último cuadro de una pantalla quieta es exactamente lo que corresponde, y por eso el reloj no corre en modo pantalla. En modo cámara el fondo del video **es** la cámara, así que la cara queda congelada mientras el audio sigue. En la grabación de 10 minutos fueron **41 segundos congelados** (t=537.5 a 578.4), con el audio continuo sin un solo hueco. El tramo coincide exactamente con el momento en que Chrome soltó sus assertions de video: mientras hubo algo animado en pantalla la captura entregó 29 fps parejos, y siete segundos después de que eso paró, se cortó.
+Alternativa descartada: aceptar los cuadros marcados "sin novedad" que manda ScreenCaptureKit. **Medido y descartado:** el diagnóstico mostró "sin novedad: 8 (con imagen 0)". No traen imagen, no hay nada que escribir con ellos.
+Alternativa descartada: dejar el espejo de la burbuja visible en modo cámara para que su video mantenga la pantalla cambiando. Se descartó porque es apoyarse en un efecto colateral y además contradice la decisión 49.
+Detalle crítico: al volver la captura, sus primeros cuadros pueden traer un timestamp anterior al último ya escrito. Entran a un archivo desordenado y el escritor aborta la grabación entera, que es la falla de la decisión 43. Por eso el pipeline descarta todo cuadro cuyo timestamp no sea posterior al último escrito. Tiene prueba aislada en `./probar.sh`.
+
+**53. 2026-07-31 — Cada atajo de modo se registra también en el teclado numérico.**
+Opción Comando 1 y 2 se registran con el código de la fila de números y con el del numérico.
+Razón: probado por Sebas el 2026-07-31. Con el teclado USB los atajos no respondían y con el del Mac sí; la causa era que estaba usando los números de la derecha, que son códigos de tecla distintos. El Mac no tiene numérico, así que el problema no aparece nunca probando en el portátil.
+Cuando llegue el registro reasignable de la Fase 9 hay que conservar esta equivalencia: quien asigna "Comando 1" espera que le sirvan los dos unos del teclado.

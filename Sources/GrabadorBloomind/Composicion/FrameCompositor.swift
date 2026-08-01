@@ -58,6 +58,11 @@ final class FrameCompositor {
     private static let rippleDuration: Double = 0.35
     private static let rippleMaxScale: CGFloat = 2.4
 
+    /// Redondeo de la burbuja como fracción de su lado corto. Calza con las 14
+    /// esquinas en puntos de la ventana espejo, para que lo que se ve en pantalla
+    /// y lo que queda en el video tengan la misma forma.
+    private static let bubbleCornerRatio: CGFloat = 0.08
+
     private let pixelSize: CGSize
     private let circleDiameter: CGFloat
 
@@ -75,11 +80,16 @@ final class FrameCompositor {
     ///   - cursor: posición del cursor en píxeles del frame, o nil si el mouse
     ///     está en otra pantalla (ahí no se dibuja nada).
     ///   - newClicks: clics ocurridos desde el frame anterior, ya convertidos.
+    ///   - camera: última imagen de la cámara, o nil si no hay cámara elegida.
+    ///   - bubbleRect: dónde va la burbuja, en píxeles del frame y con origen
+    ///     arriba. Nil si la burbuja está apagada o se arrastró a otro monitor.
     ///   - time: segundos transcurridos del video final.
     func draw(into pixelBuffer: CVPixelBuffer,
               mode: CaptureMode,
               cursor: CGPoint?,
               newClicks: [CGPoint],
+              camera: CGImage?,
+              bubbleRect: CGRect?,
               time: Double) {
 
         if isVisible(.clickEffect, in: mode) {
@@ -90,7 +100,12 @@ final class FrameCompositor {
         ripples.removeAll { time - $0.startTime > Self.rippleDuration }
 
         let drawCursor = isVisible(.cursorCircle, in: mode) && cursor != nil
-        guard drawCursor || !ripples.isEmpty else { return }
+        let drawBubble = isVisible(.cameraBubble, in: mode) && camera != nil && bubbleRect != nil
+        // En modo cámara completa la cámara **es** el fondo, así que se dibuja
+        // aunque no haya ninguna otra capa encima.
+        let drawFullCamera = mode == .camara && camera != nil
+
+        guard drawCursor || drawBubble || drawFullCamera || !ripples.isEmpty else { return }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
@@ -109,6 +124,14 @@ final class FrameCompositor {
 
         context.setShouldAntialias(true)
 
+        // El fondo va primero: en modo cámara completa la imagen de la cámara
+        // tapa la pantalla capturada, recortada al centro para llenar el cuadro.
+        if drawFullCamera, let camera {
+            context.interpolationQuality = .low
+            context.draw(camera, in: Self.fillRect(imageSize: CGSize(width: camera.width, height: camera.height),
+                                                   in: CGRect(origin: .zero, size: pixelSize)))
+        }
+
         // Las ondas van debajo del círculo fijo, para que el círculo siempre se
         // lea claro aunque coincidan.
         for ripple in ripples {
@@ -117,6 +140,10 @@ final class FrameCompositor {
 
         if drawCursor, let cursor {
             drawCursorCircle(at: cursor, in: context)
+        }
+
+        if drawBubble, let camera, let bubbleRect {
+            drawCameraBubble(camera, in: bubbleRect, context: context)
         }
     }
 
@@ -165,6 +192,50 @@ final class FrameCompositor {
         context.setStrokeColor(gold(0.9 * (1 - progress)))
         context.setLineWidth(max(1, circleDiameter * 0.10 * (1 - progress * 0.5)))
         context.strokeEllipse(in: rect)
+    }
+
+    /// Burbuja de cámara: rectángulo de esquinas redondeadas con la imagen
+    /// dentro y una línea fina alrededor, igual que el espejo que Sebas ve.
+    ///
+    /// `rect` llega en píxeles con origen arriba, como todo lo que sale del
+    /// conversor de coordenadas; acá se pasa al origen abajo del contexto. La
+    /// imagen en sí no se voltea: `CGContext.draw` ya pone la primera fila de la
+    /// imagen en la parte de arriba del rectángulo.
+    private func drawCameraBubble(_ image: CGImage, in rect: CGRect, context: CGContext) {
+        let target = CGRect(x: rect.minX, y: pixelSize.height - rect.maxY,
+                            width: rect.width, height: rect.height)
+        let radius = min(target.width, target.height) * Self.bubbleCornerRatio
+        let path = CGPath(roundedRect: target, cornerWidth: radius, cornerHeight: radius, transform: nil)
+
+        context.saveGState()
+        context.addPath(path)
+        context.clip()
+        context.interpolationQuality = .medium
+        context.draw(image, in: Self.fillRect(imageSize: CGSize(width: image.width, height: image.height),
+                                              in: target))
+        context.restoreGState()
+
+        context.addPath(path)
+        context.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.25))
+        context.setLineWidth(max(1, target.height * 0.008))
+        context.strokePath()
+    }
+
+    /// Rectángulo donde dibujar una imagen para que **llene** el destino sin
+    /// deformarse: se escala por el lado que falte y lo que sobra del otro se
+    /// sale por los dos costados iguales, o sea recorte centrado.
+    ///
+    /// Es la fórmula del modo cámara completa de la sección 8.4 y de la burbuja.
+    /// Vive suelta y pura para poder probarla sin cámara (`./probar.sh`).
+    static func fillRect(imageSize: CGSize, in target: CGRect) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0 else { return target }
+
+        let scale = max(target.width / imageSize.width, target.height / imageSize.height)
+        let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+
+        return CGRect(x: target.midX - size.width / 2,
+                      y: target.midY - size.height / 2,
+                      width: size.width, height: size.height)
     }
 
     /// #FFD700 con la opacidad pedida.

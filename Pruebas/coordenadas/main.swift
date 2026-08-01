@@ -69,5 +69,33 @@ let esquinas = CoordinateConverter(displayFrame: CGRect(x: 0, y: 0, width: 1000,
 comprobar("esquina de abajo va a la última fila", esquinas.pixelPoint(fromGlobal: CGPoint(x: 0, y: 0))?.y, 1600)
 comprobar("borde de arriba va a la fila 0", esquinas.pixelPoint(fromGlobal: CGPoint(x: 0, y: 799.9))?.y, 0.2)
 
+// Rectángulos: es como se ubica la burbuja de cámara a partir del marco de su
+// ventana espejo. Un error acá pone la burbuja del video en otro lado que la que
+// se ve en pantalla, que es exactamente el síntoma difuso de "no me queda donde
+// la dejé".
+print("\nRectángulos (burbuja)")
+
+// Ventana de 300x200 puntos, con su esquina de abajo a 100 del piso: en píxeles
+// Retina el borde de arriba queda a (800 - 100 - 200) * 2.
+let burbuja = retina.pixelRect(fromGlobal: CGRect(x: 50, y: 100, width: 300, height: 200))
+comprobar("burbuja, horizontal por escala", burbuja?.minX, 100)
+comprobar("burbuja, borde de arriba invertido", burbuja?.minY, 1200)
+comprobar("burbuja, ancho por escala", burbuja?.width, 600)
+comprobar("burbuja, alto por escala", burbuja?.height, 400)
+
+// A medio salir por el borde de abajo: se compone la parte que quedó adentro, no
+// se descarta entera.
+let mitad = simple.pixelRect(fromGlobal: CGRect(x: 10, y: -50, width: 100, height: 100))
+comprobar("burbuja a medio salir, sigue existiendo", mitad?.width, 100)
+comprobar("burbuja a medio salir, se pasa del borde", mitad?.maxY, 850)
+
+// En el otro monitor: no se compone nada.
+if simple.pixelRect(fromGlobal: CGRect(x: 2000, y: 100, width: 100, height: 100)) == nil {
+    print("  ✓ burbuja en el otro monitor")
+} else {
+    print("  ✗ burbuja en el otro monitor: se esperaba nil")
+    fallos += 1
+}
+
 print(fallos == 0 ? "\nTodo bien, 0 fallos" : "\nFALLÓ: \(fallos) comprobaciones")
 exit(fallos == 0 ? 0 : 1)

@@ -30,10 +30,19 @@ correr coordenadas \
 	"$FUENTES/Coordenadas/CoordinateConverter.swift" \
 	Pruebas/coordenadas/main.swift
 
+correr camara \
+	"$FUENTES/Composicion/FrameCompositor.swift" \
+	Pruebas/camara/main.swift
+
 correr mezcla \
 	"$FUENTES/Audio/AudioMixer.swift" \
 	"$FUENTES/Registro/Logger.swift" \
 	Pruebas/mezcla/main.swift
+
+correr reloj \
+	"$FUENTES/Escritura/RecordingWriter.swift" \
+	"$FUENTES/Registro/Logger.swift" \
+	Pruebas/reloj/main.swift
 
 correr pausa \
 	"$FUENTES/Escritura/RecordingWriter.swift" \

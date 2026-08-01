@@ -12,11 +12,13 @@ Mapa de las piezas compartidas del proyecto, organizado por pieza y no por featu
 
 Es la pieza más compartida del proyecto y se escribe una sola vez.
 
-Consumidores actuales: `FramePipeline`, que la usa para el círculo, los clics y el JSON.
+Consumidores actuales: `FramePipeline`, que la usa para el círculo, los clics, el JSON y la burbuja de cámara.
 
-Consumidores previstos: capa de dibujo, tablero, censura, selector de rectángulo y burbuja de cámara.
+Consumidores previstos: capa de dibujo, tablero, censura y selector de rectángulo.
 
-**Tiene la única prueba automática del proyecto** (`./probar.sh`), incluida la configuración de dos monitores con escalas distintas, que a mano es impráctica de verificar. Si se toca esta pieza, correr esa prueba antes de nada.
+Tiene dos conversiones, no una: `pixelPoint(fromGlobal:)` para el cursor y `pixelRect(fromGlobal:)` para el marco de una ventana espejo. La de rectángulos **no** exige que entre entero en la pantalla, porque la burbuja se puede arrastrar a medias fuera del borde y en el video se ve la parte que quedó adentro.
+
+**Tiene prueba automática** (`./probar.sh`), incluida la configuración de dos monitores con escalas distintas, que a mano es impráctica de verificar. Si se toca esta pieza, correr esa prueba antes de nada.
 
 Detalle crítico: origen abajo izquierda en eventos de mouse contra arriba izquierda en píxeles del frame; factor de escala Retina por display; con dos monitores cada display tiene su propio espacio de coordenadas y su propio factor de escala.
 
@@ -82,9 +84,11 @@ Cuidado al tocarlo: el filtro excluye la **aplicación entera**, no ventanas sue
 
 `FrameCompositor` dibuja las capas; `FramePipeline` une todo lo que le pasa a un frame entre la captura y el archivo.
 
-La matriz de visibilidad de la sección 8.4 está implementada tal cual en la función `isVisible(_:in:)`. Hoy solo existen las capas del círculo y el clic, y el modo siempre es `pantalla`, pero la matriz completa ya está escrita: cada fase que agregue una capa solo tiene que dibujarla, no decidir cuándo se ve.
+La matriz de visibilidad de la sección 8.4 está implementada tal cual en la función `isVisible(_:in:)`. Hoy existen las capas del círculo, el clic y la burbuja de cámara, y los modos `pantalla` y `camara`; la matriz completa ya está escrita: cada fase que agregue una capa solo tiene que dibujarla, no decidir cuándo se ve.
 
-Consume: conversión de coordenadas y tracking de mouse.
+`fillRect(imageSize:in:)` es el recorte centrado que usan la burbuja y el modo cámara completa. Vive suelta y pura, y tiene prueba automática en `./probar.sh`.
+
+Consume: conversión de coordenadas, tracking de mouse y la cámara.
 Alimenta: el escritor de video y el escritor del JSON de cursor.
 
 Cuidado al tocarlo: dibuja dentro del mismo buffer de la captura, sin crear uno nuevo por frame. No cambiar eso sin leer la decisión 28.
@@ -97,7 +101,9 @@ Escribe el `<mismo nombre>.cursor.json` que VideoFlow usa para el zoom automáti
 
 Consumidores actuales: `FramePipeline`.
 
-Cuidado al tocarlo: las coordenadas van en píxeles del video final y los tiempos en segundos del video final, descontando pausas. VideoFlow no sabe nada de macOS, ni de escalas, ni de pausas, y así tiene que seguir. Ya tiene el método para los eventos de cambio de modo, que se empieza a usar en la Fase 6.
+Cuidado al tocarlo: las coordenadas van en píxeles del video final y los tiempos en segundos del video final, descontando pausas. VideoFlow no sabe nada de macOS, ni de escalas, ni de pausas, y así tiene que seguir.
+
+Desde la Fase 6 escribe también los eventos de cambio de modo (`{"tipo": "modo", "valor": "camara"}`). El cambio se anota con el tiempo del frame siguiente y no con el del atajo: el JSON habla en tiempo de video, no en tiempo de reloj.
 
 ## Escritor de video y audio
 
@@ -113,17 +119,43 @@ Cuidado al tocarlo: `shouldOptimizeForNetworkUse` tiene que quedar apagado y `mo
 
 La pista de audio todavía no existe: cuando llegue, el `startSession` tiene que seguir disparándose con el primer buffer que llegue de cualquier pista, no solo de video.
 
+## Atajos globales
+
+**Fase 6. Existe.** `EntradaGlobal/HotKey.swift`.
+
+Registra una combinación con el sistema vía Carbon (`RegisterEventHotKey`), sin permiso de Accesibilidad (decisión 45).
+
+Consumidores actuales: `RecordingController`, con los dos atajos fijos de modo (Opción Comando 1 y 2), registrados solo mientras se graba.
+
+Consumidores previstos: el registro central de la Fase 9, y con él todos los features operables con teclado.
+
+Cuidado al tocarlo: el manejador de Carbon es uno solo para toda la app y reparte por identificador. La instancia hay que retenerla: al soltarla se desregistra el atajo, que es justamente cómo se apagan al detener la grabación.
+
 ## Registro de acciones y atajos
 
 **Fase 9. Pendiente.** Carpeta prevista: `EntradaGlobal/`.
+
+El registro reasignable con su pantalla de preferencias y la detección de conflictos. Se construye encima de `HotKey`; lo que falta es traducir una combinación tecleada por el usuario a código de tecla y máscara de Carbon.
 
 Consumidores: todos los features operables con teclado, la pantalla de preferencias y la tarjeta de recordatorio.
 
 Hasta la Fase 9 cada fase usa atajos fijos temporales, que se migran acá cuando la pieza nace.
 
+## Cámara
+
+**Fase 6. Existe.** `Camara/CameraCapture.swift` y `Camara/CameraMirrorWindow.swift`.
+
+`CameraCapture` corre la sesión a resolución completa y entrega dos cosas: la capa de previsualización para el espejo y la última imagen ya convertida para el compositor (decisión 46). `CameraMirrorWindow` es la ventana que se arrastra y se redimensiona.
+
+Consumidores actuales: `ControlWindow`, que la enciende al elegir cámara; `FramePipeline`, que lee la imagen; `RecordingController`, que la suelta si se desconecta.
+
+Consumidores previstos: el widget de la Fase 11 (botón de burbuja on/off) y el modo cámara completa de los atajos de la Fase 9.
+
+Cuidado al tocarlo: la sesión vive mientras haya una cámara elegida, no solo mientras se graba. Y la proporción de la ventana espejo está clavada a la de la cámara a propósito: es lo que hace que lo que se ve en pantalla sea exactamente lo que queda en el video.
+
 ## Enumeración de dispositivos
 
-**Fase 3 hecha (audio), Fase 6 pendiente (cámara).** `Audio/AudioDeviceEnumerator.swift`; falta `Camara/`.
+**Fase 3 (audio) y Fase 6 (cámara). Existen.** `Audio/AudioDeviceEnumerator.swift` y `Camara/CameraDeviceEnumerator.swift`.
 
 Listas dinámicas que se actualizan en vivo al conectar o desconectar, más el permiso del dispositivo y la resiliencia de la sección 5 del plan.
 
