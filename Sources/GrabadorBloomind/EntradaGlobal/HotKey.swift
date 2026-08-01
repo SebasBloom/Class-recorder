@@ -14,6 +14,9 @@ final class HotKey {
 
     /// Se llama en el hilo principal cuando se presiona la combinación.
     private let action: () -> Void
+    /// Se llama al soltarla. Lo usa la tarjeta de atajos, que se muestra mientras
+    /// la combinación se mantiene apretada.
+    private let release: (() -> Void)?
 
     private var reference: EventHotKeyRef?
     private let id: UInt32
@@ -36,8 +39,9 @@ final class HotKey {
     /// - Parameters:
     ///   - keyCode: código virtual de la tecla (`kVK_ANSI_1`, etc.).
     ///   - modifiers: máscara de Carbon (`optionKey`, `cmdKey`…).
-    init(keyCode: Int, modifiers: Int, action: @escaping () -> Void) {
+    init(keyCode: Int, modifiers: Int, action: @escaping () -> Void, release: (() -> Void)? = nil) {
         self.action = action
+        self.release = release
         self.id = Self.nextID
         Self.nextID += 1
 
@@ -63,8 +67,10 @@ final class HotKey {
     private static func installHandlerIfNeeded() {
         guard handler == nil else { return }
 
-        var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard),
-                                      eventKind: UInt32(kEventHotKeyPressed))
+        var eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
 
         InstallEventHandler(GetApplicationEventTarget(), { _, event, _ -> OSStatus in
             var hotKeyID = EventHotKeyID()
@@ -74,8 +80,13 @@ final class HotKey {
             guard status == noErr else { return status }
 
             // El manejador de Carbon ya corre en el hilo principal.
-            HotKey.registry[hotKeyID.id]?.hotKey?.action()
+            let hotKey = HotKey.registry[hotKeyID.id]?.hotKey
+            if GetEventKind(event) == UInt32(kEventHotKeyReleased) {
+                hotKey?.release?()
+            } else {
+                hotKey?.action()
+            }
             return noErr
-        }, 1, &eventType, nil, &handler)
+        }, 2, &eventTypes, nil, &handler)
     }
 }

@@ -9,7 +9,7 @@ import AppKit
 @MainActor
 final class ControlWindow: NSWindowController {
 
-    private let recorder = RecordingController()
+    let recorder = RecordingController()
 
     private var displays: [CaptureDisplay] = []
     private let displayPopUp = NSPopUpButton()
@@ -272,6 +272,11 @@ final class ControlWindow: NSWindowController {
 
     @objc private func togglePause() {
         recorder.togglePause()
+    }
+
+    /// Lo llama el atajo global de iniciar/detener.
+    func toggleRecordingFromShortcut() {
+        toggleRecording()
     }
 
     @objc private func toggleRecording() {

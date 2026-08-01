@@ -373,3 +373,79 @@ Con la capa prendida y con contenido, pasá a **cámara completa** y al **tabler
 3. **Borrar tocaba las dos superficies** (decisión 65). Borrar el tablero se llevaba también la capa de anotación. **Es el bug que este criterio de aceptación existía para encontrar**, y lo encontró.
 4. **La capa se mostraba en modo cámara**, donde no se compone: una ventana invisible comiéndose el mouse sin dejar rastro en el video.
 5. **La ventana de control se veía a través de la capa**, porque activar la app la traía adelante y la capa es transparente. Ahora se esconde mientras hay una superficie de dibujo a la vista.
+
+## Fase 9. Sistema de atajos y tarjeta de recordatorio — PARCIALMENTE VALIDADA el 2026-08-01
+
+Los diez atajos sueltos de las fases anteriores ahora son un registro único, reasignable y persistente. En el menú de la barra hay una entrada nueva: **Atajos…**
+
+Y hay dos cosas nuevas que no existían:
+
+- **Iniciar y detener con el teclado:** **Control + Opción + Comando + G**, y funciona **siempre**, incluso sin la ventana de control abierta. Es el único atajo activo fuera de grabación
+- **La tarjeta de recordatorio:** mantené apretado **Opción + Comando + H** y aparece una tarjeta translúcida con todos los atajos activos y sus teclas. Al soltar, desaparece. Es una ventana de la app, así que no sale en el video
+
+### 1. La lista y una reasignación
+
+Abrí **Atajos…** desde la barra de menú.
+
+**Tiene que:** verse la lista completa de acciones con su combinación al lado.
+
+Tocá la combinación de **Modo tablero** y tecleá una nueva, por ejemplo Opción + Comando + T.
+
+**Tiene que:** quedar guardada al instante y verse en la lista.
+
+### 2. Detección de conflictos
+
+Tocá la combinación de **Modo pantalla** y tecleá una que ya esté usada, por ejemplo la de modo cámara.
+
+**Tiene que:** avisarte cuál acción ya la usa y **no** guardarla.
+
+Probá también una combinación sin modificadores, una letra sola.
+
+**Tiene que:** rechazarla diciéndote que hace falta Comando, Opción o Control.
+
+### 3. La reasignación funciona de verdad
+
+Grabá un minuto y usá la combinación nueva que le pusiste al tablero.
+
+**Tiene que:** entrar al tablero con la nueva, y la vieja ya no hacer nada.
+
+### 4. La tarjeta
+
+Durante esa grabación, mantené apretado **Opción + Comando + H**.
+
+**Tiene que:** aparecer la tarjeta con la lista, **mostrando la combinación nueva** del tablero y no la vieja. Al soltar desaparece. Y no puede salir en el video.
+
+Probá también la tarjeta **sin estar grabando**: tiene que mostrar solo el atajo de iniciar/detener, porque los demás no están activos.
+
+### 5. Fuera de grabación, el sistema manda
+
+Con la app abierta y **sin grabar**, andá al Finder y apretá **Opción + Comando + 1**.
+
+**Tiene que:** comportarse como siempre en Finder, sin que el Grabador se meta. Fuera de grabación la app no le roba ninguna combinación al sistema salvo la de iniciar.
+
+### 6. Iniciar y detener sin mouse
+
+Cerrá la ventana de control. Apretá **Control + Opción + Comando + G**.
+
+**Tiene que:** arrancar la grabación con la última configuración que usaste. Apretá de nuevo y tiene que detenerla y abrirte la carpeta con el archivo.
+
+### 7. Restaurar
+
+En la pantalla de atajos, tocá **Restaurar por defecto**.
+
+**Tiene que:** volver todo a las combinaciones originales, incluida la del tablero.
+
+### Resultados medidos
+
+1. **La tarjeta aparece y se esconde:** confirmado por Sebas.
+2. **Atajo de la tarjeta, corregido:** el default era Opción Comando barra diagonal y **no funcionaba en el teclado latinoamericano de Sebas**, donde la barra es Shift+7. Los atajos se registran por posición física de la tecla, no por el carácter. Pasó a Opción Comando H y quedó la regla de no usar símbolos en los defaults (decisión 70).
+
+### Sin ejercitar todavía
+
+Los pasos 1, 2, 3, 5, 6 y 7 no dejaron rastro en los logs ni en `config.json` (los atajos reasignados siguen vacíos). Faltan por probar:
+
+- Reasignar un atajo desde la pantalla de preferencias, y que la combinación nueva funcione en una grabación
+- La detección de conflictos y el rechazo de combinaciones sin modificador
+- Que fuera de grabación Opción Comando 1 siga funcionando normal en Finder
+- Iniciar y detener con Control Opción Comando G sin abrir la ventana de control
+- Restaurar por defecto

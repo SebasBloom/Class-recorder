@@ -43,10 +43,11 @@ final class RecordingController {
     /// esa y no la principal.
     private var recordingDisplay: CaptureDisplay?
 
-    /// Atajos fijos de la Fase 6 para cambiar de modo. Se registran solo mientras
-    /// se graba, para no robarle combinaciones al sistema el resto del tiempo
-    /// (punto delicado 7). El registro reasignable llega en la Fase 9.
-    private var hotKeys: [HotKey] = []
+    /// Registro central de atajos (Fase 9). Reemplaza los atajos fijos que las
+    /// Fases 6, 7 y 8 fueron dejando sueltos.
+    private weak var registry: ShortcutRegistry?
+
+
 
     var isPaused: Bool { writer?.isPaused ?? false }
 
@@ -196,7 +197,8 @@ final class RecordingController {
             activeCameraID = camera?.device.uniqueID
             self.camera = camera
             observeDeviceDisconnection()
-            registerModeHotKeys(display: display, hasCamera: camera != nil)
+            recordingDisplay = display
+            registry?.setRecording(true)
 
             isRecording = true
             onStateChange?()
@@ -227,7 +229,7 @@ final class RecordingController {
         mixer = nil
         mouseTracker.stop()
         stopObservingDeviceDisconnection()
-        hotKeys.removeAll()
+        registry?.setRecording(false)
         activeMicrophoneID = nil
         activeCameraID = nil
         setMode(.pantalla)
@@ -296,59 +298,28 @@ final class RecordingController {
 
     // MARK: - Interno
 
-    /// Atajos fijos temporales: los defaults de la sección 8.8 del plan. En la
-    /// Fase 9 se vuelven reasignables.
-    ///
-    /// Cada modo se registra **dos veces**, con el número de la fila de arriba y
-    /// con el del teclado numérico: son códigos de tecla distintos, y en un
-    /// teclado completo el numérico es el que queda más a mano (decisión 53).
-    ///
-    /// El de cámara completa solo se registra si hay cámara: sin ella el modo no
-    /// tendría nada que mostrar.
-    private func registerModeHotKeys(display: CaptureDisplay, hasCamera: Bool) {
-        hotKeys.removeAll()
+    /// Conecta el registro central de atajos. El dueño es la barra de menú,
+    /// porque el de iniciar/detener tiene que funcionar aunque no haya grabación
+    /// en curso ni ventana de control abierta.
+    func attach(registry: ShortcutRegistry) {
+        self.registry = registry
+    }
 
-        let modifiers = optionKey | cmdKey
-        var bindings: [(keys: [Int], mode: CaptureMode)] = [
-            ([kVK_ANSI_1, kVK_ANSI_Keypad1], .pantalla),
-            ([kVK_ANSI_3, kVK_ANSI_Keypad3], .tablero)
-        ]
-        if hasCamera {
-            bindings.append(([kVK_ANSI_2, kVK_ANSI_Keypad2], .camara))
+    /// Ejecuta la acción de un atajo. Todo lo que se puede hacer con el teclado
+    /// pasa por acá, así que agregar una acción nueva es agregar un caso.
+    func perform(_ action: ShortcutAction) {
+        switch action {
+        case .iniciarDetener, .tarjeta: break   // los maneja la barra de menú
+        case .modoPantalla:   setMode(.pantalla)
+        case .modoCamara:     if camera != nil { setMode(.camara) }
+        case .modoTablero:    setMode(.tablero)
+        case .pausar:         togglePause()
+        case .capaAnotacion:  toggleAnnotation()
+        case .colorMarcador:  rotateMarkerColor()
+        case .colorTablero:   toggleBoardColor()
+        case .deshacer:       undoDrawing()
+        case .borrar:         clearDrawing()
         }
-
-        hotKeys = bindings.flatMap { binding in
-            binding.keys.map { key in
-                HotKey(keyCode: key, modifiers: modifiers) { [weak self] in
-                    Task { @MainActor in self?.setMode(binding.mode) }
-                }
-            }
-        }
-
-        // Atajos de dibujo. Solo tienen efecto sobre la superficie activa, que
-        // en esta fase es el tablero; la capa de anotación llega en la Fase 8.
-        hotKeys.append(HotKey(keyCode: kVK_ANSI_0, modifiers: modifiers) { [weak self] in
-            Task { @MainActor in self?.rotateMarkerColor() }
-        })
-        hotKeys.append(HotKey(keyCode: kVK_ANSI_Z, modifiers: modifiers) { [weak self] in
-            Task { @MainActor in self?.undoDrawing() }
-        })
-        // Las dos teclas de borrar: la grande del Mac (⌫) y la "Supr" de los
-        // teclados de PC, que son códigos distintos. Quien quiere borrar aprieta
-        // la que tiene, no la que el plan nombró.
-        for key in [kVK_Delete, kVK_ForwardDelete] {
-            hotKeys.append(HotKey(keyCode: key, modifiers: modifiers) { [weak self] in
-                Task { @MainActor in self?.clearDrawing() }
-            })
-        }
-        hotKeys.append(HotKey(keyCode: kVK_ANSI_D, modifiers: modifiers) { [weak self] in
-            Task { @MainActor in self?.toggleAnnotation() }
-        })
-        hotKeys.append(HotKey(keyCode: kVK_ANSI_B, modifiers: modifiers) { [weak self] in
-            Task { @MainActor in self?.toggleBoardColor() }
-        })
-
-        self.recordingDisplay = display
     }
 
     // MARK: - Superficies de dibujo

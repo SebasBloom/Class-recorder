@@ -185,7 +185,7 @@ Coordenadas en píxeles del video final (ya convertidas, VideoFlow no necesita s
 
 Sistema central: registro único de acciones, cada una con su combinación. Pantalla de preferencias con la lista completa, clic sobre una combinación y tecleo de la nueva para reasignar, con detección de conflictos entre atajos propios. Todo persiste en la configuración.
 
-Defaults propuestos (todos reasignables; al implementar, verificar que no choquen con atajos del sistema activos):
+Defaults propuestos (todos reasignables; al implementar, verificar que no choquen con atajos del sistema activos). **Solo letras, números y teclas dedicadas: nunca símbolos**, porque cambian de posición entre distribuciones de teclado (decisión 70).
 
 | Acción | Atajo por defecto | Activo |
 |---|---|---|
@@ -202,7 +202,7 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 | Rotar color del marcador | Opción Comando 0 | Durante grabación |
 | Deshacer último trazo | Opción Comando Z | Modos de dibujo |
 | Borrar superficie de dibujo activa | Opción Comando Delete | Modos de dibujo |
-| Tarjeta de atajos (mantener presionado) | Opción Comando barra diagonal | Durante grabación |
+| Tarjeta de atajos (mantener presionado) | Opción Comando H | Durante grabación |
 
 - La tarjeta de atajos: mientras se mantiene presionada la combinación, aparece una tarjeta translúcida en una esquina con la lista de atajos activos y sus teclas. Al soltar desaparece. Es una ventana propia: excluida de la captura, invisible en el video.
 - Fuera de grabación no se registra ningún atajo global salvo iniciar/detener, para no robarle combinaciones al resto del sistema.

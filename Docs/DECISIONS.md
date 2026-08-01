@@ -303,3 +303,22 @@ Cómo llegó ahí: una edición por reemplazo de texto que **no encontró el pat
 Pedido de Sebas el 2026-07-31. **Cambia el plan maestro**, que en la sección 8.4 decía solo "lienzo blanco". Se alterna con Opción Comando B durante la grabación, sin cortar nada, y la elección se recuerda entre sesiones.
 Al rotar la paleta se saltea el color que se confundiría con el fondo: el negro sobre tablero negro, el blanco sobre tablero blanco. Sobre la pantalla real no se saltea ninguno, porque ahí el fondo es lo que haya en pantalla.
 Y al cambiar el fondo, si el marcador activo quedara invisible se rota solo: pasar a tablero negro con el marcador negro dejaría dibujando en la nada sin ningún aviso.
+
+**67. 2026-07-31 — Cada atajo guarda su propia etiqueta.**
+`Shortcut` guarda el código de tecla, los modificadores **y** el texto que se muestra ("⌥⌘3").
+Razón: traducir un código de tecla a la letra que tiene impresa depende de la distribución de teclado activa, y hacerlo mal se ve como una pantalla de preferencias que miente. Esa cuenta se hace bien una sola vez, cuando el usuario aprieta la combinación, y de ahí en adelante se muestra lo que él mismo tecleó. De paso `config.json` queda legible a mano, que es lo que exige la decisión 4.
+
+**68. 2026-07-31 — El registro de atajos vive en la barra de menú, no en el controlador de grabación.**
+`ShortcutRegistry` lo posee `MenuBarController`, que reparte cada acción: iniciar/detener y la tarjeta las atiende él, el resto se las pasa al controlador de grabación.
+Razón: el atajo de iniciar/detener tiene que funcionar aunque no haya ninguna grabación en curso **ni ventana de control abierta**, y el controlador de grabación no existe hasta que esa ventana se crea. Con el atajo, la ventana se crea al vuelo.
+Consecuencia práctica: se puede iniciar y detener una clase sin tocar el mouse, que es justo lo que hacía falta cuando el tablero tapa la pantalla entera.
+
+**69. 2026-07-31 — Las teclas equivalentes se registran junto con la principal.**
+Cada acción declara sus equivalentes (los números del teclado numérico, la "Supr" de los teclados de PC) y se registran todas.
+Razón: son dos tropiezos ya vividos, no una hipótesis. Los códigos son distintos y quien aprieta la tecla que tiene esperando que funcione tiene razón. Los equivalentes solo se aplican mientras la acción conserva su combinación por defecto: si el usuario reasigna, manda lo que él eligió.
+
+**70. 2026-08-01 — Los atajos por defecto nunca usan símbolos, solo letras, números y teclas dedicadas.**
+La tarjeta de atajos pasa de Opción Comando barra diagonal a **Opción Comando H**. **Cambia la tabla 8.8 del plan maestro.**
+Razón: **bug real, encontrado por Sebas.** Un atajo global se registra por **posición física** de la tecla, no por el carácter que produce. En el teclado latinoamericano de Sebas la barra diagonal es Shift+7, así que Opción+Comando+/ nunca coincidía con la tecla registrada y el atajo no existía. Peor: la interfaz mostraba "⌥⌘/" cuando la tecla en esa posición está rotulada "-", o sea que la pantalla de preferencias mentía.
+Las letras y los números están en la misma posición física y con el mismo rótulo en todas las distribuciones QWERTY; los símbolos no. La regla aplica a cualquier default futuro.
+Ojo: esto solo afecta a los **defaults**, que llevan su etiqueta escrita a mano. Los atajos que el usuario reasigna toman la etiqueta de la tecla que él mismo apretó (decisión 67), así que ahí el problema no existe.

@@ -46,8 +46,8 @@ struct Configuration: Codable, Equatable {
     var permanentRedactionRect: StoredRect?
 
     /// Atajos reasignados por el usuario: acción -> combinación. Vacío significa
-    /// "todos en su valor por defecto". Se llena en la Fase 9.
-    var shortcuts: [String: String] = [:]
+    /// "todos en su valor por defecto".
+    var shortcuts: [String: Shortcut] = [:]
 
     static var defaultOutputFolder: String {
         FileManager.default.homeDirectoryForCurrentUser

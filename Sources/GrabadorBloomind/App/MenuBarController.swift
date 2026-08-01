@@ -10,6 +10,13 @@ final class MenuBarController {
 
     private let statusItem: NSStatusItem
     private var controlWindow: ControlWindow?
+    private var shortcutsWindow: ShortcutsWindow?
+
+    /// El registro de atajos vive acá, no en el controlador de grabación: el de
+    /// iniciar y detener tiene que funcionar aunque no haya ninguna grabación en
+    /// curso ni ventana de control abierta.
+    private let registry = ShortcutRegistry()
+    private let card = ShortcutCard()
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -56,15 +63,62 @@ final class MenuBarController {
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
+        let shortcutsItem = NSMenuItem(
+            title: "Atajos…",
+            action: #selector(showShortcutsWindow),
+            keyEquivalent: ""
+        )
+        shortcutsItem.target = self
+        menu.insertItem(shortcutsItem, at: menu.index(of: folderItem) + 1)
+
         statusItem.menu = menu
+
+        registry.onAction = { [weak self] action in self?.handle(action) }
+        registry.onRelease = { [weak self] action in
+            if action == .tarjeta { self?.card.hide() }
+        }
+        // Fuera de grabación solo queda registrado iniciar/detener, para no
+        // robarle combinaciones al resto del sistema (punto delicado 7).
+        registry.refresh()
+    }
+
+    // MARK: - Atajos
+
+    private func handle(_ action: ShortcutAction) {
+        switch action {
+        case .tarjeta:
+            card.show(shortcuts: registry.shortcuts,
+                      recording: controlWindow?.recorder.isRecording ?? false)
+        case .iniciarDetener:
+            ensureControlWindow().toggleRecordingFromShortcut()
+        default:
+            controlWindow?.recorder.perform(action)
+        }
+    }
+
+    /// La ventana de control se crea al vuelo si hace falta: el atajo de iniciar
+    /// puede llegar sin que se haya abierto nunca.
+    @discardableResult
+    private func ensureControlWindow() -> ControlWindow {
+        if let controlWindow { return controlWindow }
+        let window = ControlWindow()
+        window.recorder.attach(registry: registry)
+        controlWindow = window
+        return window
+    }
+
+    @objc private func showShortcutsWindow() {
+        if shortcutsWindow == nil {
+            shortcutsWindow = ShortcutsWindow(registry: registry)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        shortcutsWindow?.showWindow(nil)
     }
 
     @objc private func showControlWindow() {
-        if controlWindow == nil {
-            controlWindow = ControlWindow()
-        }
+        let window = ensureControlWindow()
         NSApp.activate(ignoringOtherApps: true)
-        controlWindow?.showWindow(nil)
+        window.showWindow(nil)
     }
 
     @objc private func openRecordingsFolder() {
