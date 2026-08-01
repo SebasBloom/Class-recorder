@@ -34,6 +34,11 @@ struct Configuration: Codable, Equatable {
     var lastAudioMode: String?          // valor bruto de AudioMode
     var lastMicrophoneID: String?
     var lastCameraID: String?
+    /// Nombre de la sesión, que va en el nombre del archivo.
+    var lastSessionName: String?
+    /// Área personalizada de captura, en coordenadas globales. Nulo significa
+    /// pantalla entera.
+    var customArea: StoredRect?
 
     /// Color del lienzo del tablero: "blanco" o "negro".
     var boardColor: String?

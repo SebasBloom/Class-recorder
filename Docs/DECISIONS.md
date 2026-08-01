@@ -342,3 +342,15 @@ Pedido de Sebas el 2026-08-01: *"no se me ocurre por qué dejar una barra de cen
 Queda un solo atajo (Opción Comando C) y su variante con Shift para redibujar. La zona vive mientras la app esté abierta; al reabrir, se dibuja de nuevo.
 Razón: el permanente existía por un caso hipotético (la barra de direcciones del VPS siempre en el mismo lugar) que el propio Sebas descartó al usarlo. Lo que costaba era real: dos slots, dos atajos más, dos campos en `config.json` y un rectángulo de una zona sensible guardado en disco para siempre.
 De paso es más seguro por defecto: nada de lo que se tapa queda escrito en ningún archivo. Los campos `permanentRedactionRect` y `permanentRedactionStyle` desaparecen de la configuración; un `config.json` viejo que los tenga los ignora al cargar y los suelta en la próxima escritura.
+
+**75. 2026-08-01 — La app no pide permiso de Accesibilidad. Son tres permisos, no cuatro.**
+Corrige la sección 5 del plan maestro y el README de Iván, que anunciaban cuatro.
+Razón: los atajos globales usan Carbon (decisión 45) y los monitores de mouse de AppKit no lo necesitan. El permiso terminó no haciendo falta para nada.
+Importa más de lo que parece: Accesibilidad es el permiso más invasivo de macOS, el que deja leer todo lo que se teclea. No pedirlo es una garantía verificable para quien reciba la app, no una comodidad.
+
+**76. 2026-08-01 — No se crean archivos temporales.**
+El plan pedía "limpieza de temporales verificada" en la Fase 12. Verificado: la app escribe directo al archivo final y no usa el directorio temporal en ningún lado. No hay nada que limpiar y no se agregó código para limpiar nada.
+
+**77. 2026-08-01 — Una grabación que no cerró bien se avisa al arrancar.**
+`RecoveryMarker` deja un archivo con la ruta del video mientras se graba y lo borra al cerrar bien. Si al arrancar sigue ahí, la app avisa y ofrece abrir la carpeta.
+Razón: la resistencia a fallos de la decisión 11 ya dejaba el archivo reproducible, pero nadie te lo decía. El aviso se consume al leerlo, así que aparece una sola vez y no en cada arranque.

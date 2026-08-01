@@ -11,6 +11,9 @@ final class ControlWindow: NSWindowController {
 
     let recorder = RecordingController()
 
+    /// Avisa a la barra de menú para que cambie el estado del ícono.
+    var onRecordingStateChange: ((Bool, Bool) -> Void)?
+
     private var displays: [CaptureDisplay] = []
     private let displayPopUp = NSPopUpButton()
 
@@ -29,6 +32,18 @@ final class ControlWindow: NSWindowController {
     /// arrancar.
     private var camera: CameraCapture?
     private var mirror: CameraMirrorWindow?
+
+    private let areaButton = NSButton()
+    private let areaLabel = NSTextField(labelWithString: "")
+    /// Área personalizada en coordenadas globales. Nil graba la pantalla entera.
+    private var customArea: CGRect?
+
+    private let sessionField = NSTextField()
+    private let folderLabel = NSTextField(labelWithString: "")
+    private let folderButton = NSButton()
+    private let countdownCheck = NSButton(checkboxWithTitle: "Cuenta regresiva 3, 2, 1", target: nil, action: nil)
+
+    private let widget = RecordingWidget()
 
     private let actionButton = BloomindButton(title: "Iniciar grabación")
     private let pauseButton = BloomindButton(title: "Pausar", kind: .ghost)
@@ -65,6 +80,18 @@ final class ControlWindow: NSWindowController {
 
         buildLayout()
         recorder.onStateChange = { [weak self] in self?.refresh() }
+
+        widget.onPause = { [weak self] in self?.recorder.togglePause() }
+        widget.onStop = { [weak self] in
+            self?.actionButton.isEnabled = false
+            Task { await self?.recorder.stop() }
+        }
+        widget.onRestart = { [weak self] in
+            Task { await self?.recorder.restartTake() }
+        }
+        // El atajo pasa por la misma confirmación que el botón del widget.
+        recorder.onRestartRequested = { [weak self] in self?.widget.confirmRestart() }
+        widget.onToggleBubble = { [weak self] in self?.toggleBubble() }
         levelMeter.onLevel = { [weak self] level in
             self?.levelBar.level = CGFloat(level)
         }
@@ -167,6 +194,49 @@ final class ControlWindow: NSWindowController {
         cameraPopUp.action = #selector(cameraChanged)
         cameraPopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
+        areaButton.bezelStyle = .rounded
+        areaButton.font = BloomindStyle.ui(12)
+        areaButton.target = self
+        areaButton.action = #selector(chooseArea)
+
+        areaLabel.font = BloomindStyle.mono(11)
+        areaLabel.textColor = BloomindStyle.muted
+
+        if let guardada = ConfigurationStore.shared.current.customArea {
+            customArea = CGRect(x: guardada.x, y: guardada.y, width: guardada.width, height: guardada.height)
+        }
+        refreshAreaLabels()
+
+        let sessionLabel = NSTextField(labelWithString: "Nombre de la sesión")
+        sessionLabel.font = BloomindStyle.ui(12)
+        sessionLabel.textColor = BloomindStyle.muted
+
+        sessionField.font = BloomindStyle.ui(13)
+        sessionField.placeholderString = "Clase de n8n"
+        sessionField.stringValue = ConfigurationStore.shared.current.lastSessionName ?? ""
+        sessionField.bezelStyle = .roundedBezel
+
+        let folderTitle = NSTextField(labelWithString: "Carpeta de salida")
+        folderTitle.font = BloomindStyle.ui(12)
+        folderTitle.textColor = BloomindStyle.muted
+
+        folderLabel.font = BloomindStyle.mono(11)
+        folderLabel.textColor = BloomindStyle.sky
+        folderLabel.lineBreakMode = .byTruncatingHead
+        folderLabel.stringValue = ConfigurationStore.shared.current.outputFolder
+
+        folderButton.title = "Cambiar…"
+        folderButton.bezelStyle = .rounded
+        folderButton.font = BloomindStyle.ui(12)
+        folderButton.target = self
+        folderButton.action = #selector(chooseFolder)
+
+        countdownCheck.font = BloomindStyle.ui(12)
+        countdownCheck.contentTintColor = BloomindStyle.ink
+        countdownCheck.state = ConfigurationStore.shared.current.countdownEnabled ? .on : .off
+        countdownCheck.target = self
+        countdownCheck.action = #selector(countdownChanged)
+
         statusLabel.font = BloomindStyle.mono(12)
         statusLabel.textColor = BloomindStyle.muted
         statusLabel.stringValue = "Buscando pantallas…"
@@ -180,17 +250,23 @@ final class ControlWindow: NSWindowController {
         card.layer?.borderColor = BloomindStyle.hairline.cgColor
 
         let cardStack = NSStackView(views: [
-            displayLabel, displayPopUp,
+            displayLabel, displayPopUp, areaButton, areaLabel,
             audioModeLabel, audioModePopUp,
             microphoneLabel, microphonePopUp, levelBar,
-            cameraLabel, cameraPopUp
+            cameraLabel, cameraPopUp,
+            sessionLabel, sessionField,
+            folderTitle, folderLabel, folderButton,
+            countdownCheck
         ])
         cardStack.orientation = .vertical
         cardStack.alignment = .leading
         cardStack.spacing = BloomindStyle.Space.tight
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: displayPopUp)
+        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: areaLabel)
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: audioModePopUp)
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: levelBar)
+        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: cameraPopUp)
+        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: sessionField)
+        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: folderButton)
         self.microphoneLabel = microphoneLabel
         cardStack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(cardStack)
@@ -203,7 +279,9 @@ final class ControlWindow: NSWindowController {
             audioModePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             microphonePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             levelBar.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            cameraPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor)
+            cameraPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            sessionField.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            folderLabel.widthAnchor.constraint(equalTo: cardStack.widthAnchor)
         ])
 
         let header = NSStackView(views: [eyebrowLabel, titleLabel])
@@ -289,11 +367,18 @@ final class ControlWindow: NSWindowController {
             let audioMode = selectedAudioMode()
             let microphone = audioMode.capturesMicrophone ? selectedMicrophone() : nil
 
+            let sessionName = sessionField.stringValue
             ConfigurationStore.shared.update {
                 $0.lastDisplayID = display.scDisplay.displayID
                 $0.lastAudioMode = audioMode.rawValue
                 $0.lastMicrophoneID = microphone?.uniqueID
                 $0.lastCameraID = camera?.device.uniqueID
+                $0.lastSessionName = sessionName
+            }
+
+            guard checkDiskBeforeStarting() else {
+                actionButton.isEnabled = true
+                return
             }
 
             // El medidor suelta el micrófono antes de que lo tome la captura.
@@ -301,9 +386,104 @@ final class ControlWindow: NSWindowController {
             levelBar.level = 0
 
             actionButton.isEnabled = false
-            Task { await recorder.start(display: display, audioMode: audioMode,
-                                        microphoneID: microphone?.uniqueID, camera: camera) }
+            let arrancar = { [weak self] in
+                guard let self else { return }
+                Task {
+                    await self.recorder.start(display: display, audioMode: audioMode,
+                                              microphoneID: microphone?.uniqueID,
+                                              camera: self.camera, sessionName: sessionName,
+                                              area: self.customArea)
+                }
+            }
+
+            // El archivo empieza después del conteo, así que el 3, 2, 1 no sale
+            // en el video (plan, 8.9).
+            if countdownCheck.state == .on {
+                CountdownWindow.present(alTerminar: arrancar)
+            } else {
+                arrancar()
+            }
         }
+    }
+
+    // MARK: - Panel
+
+    /// Define o borra el área personalizada. El selector es el mismo que usa la
+    /// censura (pieza compartida, plan sección 6).
+    @objc private func chooseArea() {
+        if customArea != nil {
+            customArea = nil
+            ConfigurationStore.shared.update { $0.customArea = nil }
+            refreshAreaLabels()
+            return
+        }
+
+        guard displays.indices.contains(displayPopUp.indexOfSelectedItem) else { return }
+        let display = displays[displayPopUp.indexOfSelectedItem]
+        let frame = NSScreen.screens.first {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+                == display.scDisplay.displayID
+        }?.frame ?? NSScreen.main?.frame ?? .zero
+
+        RectangleSelector.present(on: frame, titulo: "Elegí el área a grabar") { [weak self] rect in
+            Task { @MainActor in
+                guard let self, let rect else { return }
+                self.customArea = rect
+                ConfigurationStore.shared.update {
+                    $0.customArea = StoredRect(x: rect.minX, y: rect.minY,
+                                               width: rect.width, height: rect.height)
+                }
+                self.refreshAreaLabels()
+            }
+        }
+    }
+
+    private func refreshAreaLabels() {
+        if let area = customArea {
+            areaButton.title = "Grabar pantalla entera"
+            areaLabel.stringValue = "Área: \(Int(area.width)) × \(Int(area.height))"
+        } else {
+            areaButton.title = "Elegir un área…"
+            areaLabel.stringValue = "Se graba la pantalla entera"
+        }
+    }
+
+    @objc private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Usar esta carpeta"
+        panel.directoryURL = URL(fileURLWithPath: ConfigurationStore.shared.current.outputFolder)
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        ConfigurationStore.shared.update { $0.outputFolder = url.path }
+        folderLabel.stringValue = url.path
+        Logger.shared.log("Carpeta de salida cambiada")
+    }
+
+    @objc private func countdownChanged() {
+        let activo = countdownCheck.state == .on
+        ConfigurationStore.shared.update { $0.countdownEnabled = activo }
+    }
+
+    /// Aviso de espacio antes de arrancar (plan, 8.9). Con poco espacio se avisa
+    /// pero se deja grabar: la decisión es de Sebas, no de la app.
+    private func checkDiskBeforeStarting() -> Bool {
+        let carpeta = URL(fileURLWithPath: ConfigurationStore.shared.current.outputFolder)
+        try? FileManager.default.createDirectory(at: carpeta, withIntermediateDirectories: true)
+
+        guard let libre = DiskMonitor.libre(en: carpeta), libre < DiskMonitor.umbralInicio else { return true }
+
+        Logger.shared.log("AVISO antes de arrancar: quedan \(DiskMonitor.gigas(libre)) libres")
+        let alerta = NSAlert()
+        alerta.messageText = "Queda poco espacio en el disco"
+        alerta.informativeText = "Hay \(DiskMonitor.gigas(libre)) libres. Una clase de una hora ocupa cerca de 2 GB.\n\nSi el disco se llena a mitad, la app detiene la grabación sola para no perder lo grabado."
+        alerta.addButton(withTitle: "Grabar igual")
+        alerta.addButton(withTitle: "Cancelar")
+        alerta.alertStyle = .warning
+        NSApp.activate(ignoringOtherApps: true)
+        return alerta.runModal() == .alertFirstButtonReturn
     }
 
     private func selectedAudioMode() -> AudioMode {
@@ -420,6 +600,15 @@ final class ControlWindow: NSWindowController {
         }
     }
 
+    /// Prende y apaga la burbuja desde el widget, sin soltar la cámara: apagarla
+    /// y volver a prenderla en mitad de una clase tiene que ser instantáneo.
+    private func toggleBubble() {
+        guard let mirror else { return }
+        let visible = mirror.isVisible
+        mirror.setVisible(!visible)
+        recorder.setBubbleFrame(visible ? nil : mirror.frame)
+    }
+
     private func closeCamera() {
         mirror?.setVisible(false)
         mirror = nil
@@ -468,6 +657,9 @@ final class ControlWindow: NSWindowController {
         audioModePopUp.isEnabled = !recorder.isRecording
         microphonePopUp.isEnabled = !recorder.isRecording
         cameraPopUp.isEnabled = !recorder.isRecording
+        areaButton.isEnabled = !recorder.isRecording
+        sessionField.isEnabled = !recorder.isRecording
+        folderButton.isEnabled = !recorder.isRecording
         // Durante la grabación el micrófono lo tiene la captura, así que el
         // medidor no puede leerlo: la barra se queda quieta a propósito.
         if !recorder.isRecording { audioModeChanged() }
@@ -475,6 +667,15 @@ final class ControlWindow: NSWindowController {
 
         pauseButton.isHidden = !recorder.isRecording
         pauseButton.title = recorder.isPaused ? "Reanudar" : "Pausar"
+
+        if recorder.isRecording {
+            widget.present()
+            // El panel se va del medio: el widget es lo que se usa en vivo.
+            window?.orderOut(nil)
+        } else {
+            widget.hide()
+        }
+        onRecordingStateChange?(recorder.isRecording, recorder.isPaused)
 
         if recorder.isRecording {
             actionButton.title = "Detener"
@@ -507,6 +708,14 @@ final class ControlWindow: NSWindowController {
     private func tick() {
         let running = startedAt.map { Date().timeIntervalSince($0) } ?? 0
         let seconds = Int(accumulated + running)
+
+        widget.update(segundos: seconds,
+                      pausado: recorder.isPaused,
+                      modo: recorder.mode,
+                      censura: recorder.isRedacting,
+                      anotando: recorder.isAnnotationOn,
+                      color: recorder.markerColor,
+                      hayCamara: camera != nil)
         var texto = String(format: "%02d:%02d", seconds / 60, seconds % 60)
         // El modo activo y el color del marcador van en el mismo renglón: son la
         // única señal de en qué estado está hasta que llegue el widget (Fase 11).

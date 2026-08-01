@@ -9,6 +9,9 @@ struct CaptureDisplay {
     /// Tamaño en píxeles reales, no en puntos: en una Retina son distintos y el
     /// archivo se escribe en píxeles.
     let pixelSize: CGSize
+    /// Píxeles por punto. Hace falta para el área personalizada, que se define en
+    /// puntos y se graba en píxeles.
+    let scale: CGFloat
 }
 
 /// Captura de pantalla con ScreenCaptureKit.
@@ -52,7 +55,8 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
                 scDisplay: display,
                 name: name,
                 pixelSize: CGSize(width: CGFloat(display.width) * scale,
-                                  height: CGFloat(display.height) * scale)
+                                  height: CGFloat(display.height) * scale),
+                scale: scale
             )
         }
     }
@@ -60,7 +64,10 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
     /// - Parameters:
     ///   - audioMode: qué fuentes de audio se capturan.
     ///   - microphoneID: identificador del micrófono, solo si el modo lo usa.
-    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?) async throws {
+    /// - Parameter area: zona de la pantalla a grabar, en coordenadas globales.
+    ///   Nil graba la pantalla entera.
+    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?,
+               area: CGRect? = nil) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
 
         // Excluir la app entera, no ventanas puntuales: así el widget, el espejo
@@ -77,8 +84,18 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         )
 
         let configuration = SCStreamConfiguration()
-        configuration.width = Int(display.pixelSize.width)
-        configuration.height = Int(display.pixelSize.height)
+
+        if let area, let recorte = Self.sourceRect(for: area, on: display) {
+            // sourceRect va en **puntos** de la pantalla con origen arriba, no en
+            // píxeles: es la única parte del proyecto donde ScreenCaptureKit no
+            // habla en píxeles.
+            configuration.sourceRect = recorte
+            configuration.width = Int(recorte.width * display.scale)
+            configuration.height = Int(recorte.height * display.scale)
+        } else {
+            configuration.width = Int(display.pixelSize.width)
+            configuration.height = Int(display.pixelSize.height)
+        }
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
         configuration.showsCursor = true
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
@@ -119,6 +136,27 @@ final class ScreenCapture: NSObject, SCStreamOutput, SCStreamDelegate {
         self.stream = nil
         try? await stream.stopCapture()
         Logger.shared.log("Captura detenida")
+    }
+
+    /// Convierte el área global a la que espera ScreenCaptureKit: puntos de la
+    /// pantalla, origen arriba a la izquierda.
+    static func sourceRect(for area: CGRect, on display: CaptureDisplay) -> CGRect? {
+        guard let screen = NSScreen.screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+                == display.scDisplay.displayID
+        }) else { return nil }
+
+        let marco = screen.frame
+        let recorte = CGRect(x: area.minX - marco.minX,
+                             y: marco.height - (area.maxY - marco.minY),
+                             width: area.width, height: area.height)
+            .intersection(CGRect(origin: .zero, size: marco.size))
+
+        guard !recorte.isNull, recorte.width >= 16, recorte.height >= 16 else { return nil }
+        // Ancho y alto pares: un tamaño impar rompe el codificador de video.
+        return CGRect(x: recorte.minX.rounded(), y: recorte.minY.rounded(),
+                      width: (recorte.width / 2).rounded() * 2,
+                      height: (recorte.height / 2).rounded() * 2)
     }
 
     // MARK: - SCStreamOutput

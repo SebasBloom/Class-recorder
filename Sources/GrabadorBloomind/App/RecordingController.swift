@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import Carbon.HIToolbox
+import UserNotifications
 
 /// Coordina una grabación: pide el permiso, arranca la captura, arma el
 /// escritor y conecta uno con otro.
@@ -43,6 +44,12 @@ final class RecordingController {
     /// La zona censurada. Vive mientras la app esté abierta y se dibuja de nuevo
     /// en cada sesión (decisión 74).
     private let redaction = RedactionSlot()
+    private var diskMonitor: DiskMonitor?
+    /// Cómo arrancó la grabación en curso, para poder repetirla igual al
+    /// reiniciar la toma.
+    private var lastStartOptions: (display: CaptureDisplay, audioMode: AudioMode,
+                                   microphoneID: String?, camera: CameraCapture?,
+                                   sessionName: String, area: CGRect?)?
     private var rectangleSelector: RectangleSelector?
 
     /// Para la UI: si hay algo tapado en este momento.
@@ -66,6 +73,10 @@ final class RecordingController {
     /// burbuja: en cámara completa la burbuja no se compone (matriz 8.4) y dejar
     /// el espejo en pantalla confundiría.
     var onModeChange: ((CaptureMode) -> Void)?
+
+    /// Reiniciar toma pide confirmación, y eso lo muestra quien tenga la interfaz
+    /// a mano: descartar una clase en curso no puede pasar por un tecleo suelto.
+    var onRestartRequested: (() -> Void)?
 
     /// Se avisa cuando aparece o desaparece una superficie de dibujo, para que la
     /// ventana de control se quite del medio: la capa de anotación es
@@ -91,7 +102,8 @@ final class RecordingController {
         try await ScreenCapture.availableDisplays()
     }
 
-    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?, camera: CameraCapture?) async {
+    func start(display: CaptureDisplay, audioMode: AudioMode, microphoneID: String?,
+               camera: CameraCapture?, sessionName: String, area: CGRect? = nil) async {
         guard !isRecording else { return }
 
         // Avisar del estado igual al salir por acá: si no, la UI se queda con el
@@ -123,7 +135,7 @@ final class RecordingController {
             boardColor = saved == "negro" ? .negro : .blanco
         }
 
-        let url = Self.makeOutputURL(sessionName: "Prueba")
+        let url = Self.makeOutputURL(sessionName: sessionName)
         Logger.shared.openLog(named: url.deletingPathExtension().lastPathComponent)
 
         // El nombre del micrófono va al log: sin él, al revisar una grabación
@@ -140,14 +152,21 @@ final class RecordingController {
             return
         }
 
+        // Con área personalizada el archivo mide lo que mide el recorte, no la
+        // pantalla entera.
+        let recorte = area.flatMap { ScreenCapture.sourceRect(for: $0, on: display) }
+        let tamañoSalida = recorte.map {
+            CGSize(width: $0.width * display.scale, height: $0.height * display.scale)
+        } ?? display.pixelSize
+
         do {
-            let writer = try RecordingWriter(outputURL: url, pixelSize: display.pixelSize, withAudio: audioMode.hasAudio)
+            let writer = try RecordingWriter(outputURL: url, pixelSize: tamañoSalida, withAudio: audioMode.hasAudio)
             self.writer = writer
 
             let pipeline = FramePipeline(
                 converter: converter,
-                compositor: FrameCompositor(pixelSize: display.pixelSize),
-                cursorTrack: CursorTrackWriter(videoURL: url, pixelSize: display.pixelSize, fps: 30),
+                compositor: FrameCompositor(pixelSize: tamañoSalida),
+                cursorTrack: CursorTrackWriter(videoURL: url, pixelSize: tamañoSalida, fps: 30),
                 tracker: mouseTracker,
                 writer: writer,
                 camera: camera,
@@ -199,7 +218,8 @@ final class RecordingController {
                 }
             }
 
-            try await capture.start(display: display, audioMode: audioMode, microphoneID: microphoneID)
+            try await capture.start(display: display, audioMode: audioMode,
+                                    microphoneID: microphoneID, area: area)
 
             activeMicrophoneID = audioMode.capturesMicrophone ? microphoneID : nil
             activeCameraID = camera?.device.uniqueID
@@ -207,6 +227,9 @@ final class RecordingController {
             observeDeviceDisconnection()
             recordingDisplay = display
             registry?.setRecording(true)
+            lastStartOptions = (display, audioMode, microphoneID, camera, sessionName, area)
+            startDiskMonitor(for: url)
+            RecoveryMarker.begin(outputURL: url)
 
             isRecording = true
             onStateChange?()
@@ -224,7 +247,9 @@ final class RecordingController {
         }
     }
 
-    func stop() async {
+    /// - Parameter revealInFinder: al reiniciar una toma no se abre el Finder,
+    ///   porque el archivo se va a la Papelera un instante después.
+    func stop(revealInFinder: Bool = true) async {
         guard isRecording else { return }
         isRecording = false
 
@@ -238,6 +263,8 @@ final class RecordingController {
         mouseTracker.stop()
         stopObservingDeviceDisconnection()
         registry?.setRecording(false)
+        diskMonitor?.stop()
+        diskMonitor = nil
         activeMicrophoneID = nil
         activeCameraID = nil
         setMode(.pantalla)
@@ -262,9 +289,12 @@ final class RecordingController {
             writer.finish { continuation.resume() }
         }
 
+        RecoveryMarker.end()
         Logger.shared.log("Grabación terminada")
         onStateChange?()
-        if let url = writer?.outputURL {
+
+        if revealInFinder, let url = writer?.outputURL {
+            notifyFinished(url)
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
@@ -330,8 +360,79 @@ final class RecordingController {
         case .colorTablero:   toggleBoardColor()
         case .deshacer:       undoDrawing()
         case .borrar:         clearDrawing()
+        case .reiniciarToma:    onRestartRequested?()
         case .censura:          toggleRedaction(forceDraw: false)
         case .redibujarCensura: toggleRedaction(forceDraw: true)
+        }
+    }
+
+    // MARK: - Disco, reinicio de toma y notificación
+
+    /// Vigila el espacio libre mientras se graba. Con poco espacio avisa; en el
+    /// umbral crítico detiene la grabación de forma limpia, que es la diferencia
+    /// entre perder los últimos segundos y perder la clase entera.
+    private func startDiskMonitor(for url: URL) {
+        let monitor = DiskMonitor(carpeta: url.deletingLastPathComponent())
+        monitor.onAviso = { [weak self] libre in
+            Task { @MainActor in
+                self?.showError("Queda poco espacio en el disco",
+                                detail: "Quedan \(DiskMonitor.gigas(libre)) libres.\n\nLa grabación sigue, pero si el espacio baja de 2 GB la app la va a detener sola para no perder lo grabado.")
+            }
+        }
+        monitor.onCritico = { [weak self] libre in
+            Task { @MainActor in
+                guard let self else { return }
+                await self.stop()
+                self.showError("Se detuvo la grabación por falta de espacio",
+                               detail: "Quedaban \(DiskMonitor.gigas(libre)) libres.\n\nLo grabado hasta ahora quedó guardado y se puede reproducir.")
+            }
+        }
+        monitor.start()
+        diskMonitor = monitor
+    }
+
+    /// Detiene, manda la toma a la **Papelera** (nunca borrado directo, decisión
+    /// 12) y arranca una toma nueva con la misma configuración.
+    func restartTake() async {
+        guard isRecording, let opciones = lastStartOptions else { return }
+        let descartado = writer?.outputURL
+
+        await stop(revealInFinder: false)
+
+        if let descartado {
+            let cursor = descartado.deletingPathExtension().appendingPathExtension("cursor.json")
+            for archivo in [descartado, cursor] where FileManager.default.fileExists(atPath: archivo.path) {
+                do {
+                    try FileManager.default.trashItem(at: archivo, resultingItemURL: nil)
+                } catch {
+                    Logger.shared.log("ERROR mandando la toma descartada a la Papelera: \(error.localizedDescription)")
+                }
+            }
+            Logger.shared.log("Toma reiniciada; la anterior quedó en la Papelera")
+        }
+
+        await start(display: opciones.display, audioMode: opciones.audioMode,
+                    microphoneID: opciones.microphoneID, camera: opciones.camera,
+                    sessionName: opciones.sessionName, area: opciones.area)
+    }
+
+    /// Notificación al detener, con el nombre del archivo (plan, 8.9).
+    ///
+    /// El permiso se pide la primera vez y **si lo negás no pasa nada**: el
+    /// Finder se abre igual con el archivo seleccionado, que es el acceso directo
+    /// que de verdad importa. No vale la pena bloquear nada por esto.
+    private func notifyFinished(_ url: URL) {
+        let centro = UNUserNotificationCenter.current()
+        centro.requestAuthorization(options: [.alert]) { concedido, _ in
+            guard concedido else { return }
+
+            let contenido = UNMutableNotificationContent()
+            contenido.title = "Grabación lista"
+            contenido.body = url.lastPathComponent
+
+            centro.add(UNNotificationRequest(identifier: UUID().uuidString,
+                                             content: contenido,
+                                             trigger: nil))
         }
     }
 
@@ -639,13 +740,17 @@ final class RecordingController {
     }
 
     /// `AAAA-MM-DD HHhMM - Nombre de sesión.mov`, en la carpeta de salida de la
-    /// configuración. La hora en el nombre evita colisiones entre tomas.
-    private static func makeOutputURL(sessionName: String) -> URL {
+    /// configuración. La hora en el nombre evita colisiones entre tomas, incluso
+    /// al reiniciar una toma sobre la marcha.
+    static func makeOutputURL(sessionName: String) -> URL {
         let folder = URL(fileURLWithPath: ConfigurationStore.shared.current.outputFolder)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH'h'mm"
-        return folder.appendingPathComponent("\(formatter.string(from: Date())) - \(sessionName).mov")
+        // Un nombre vacío no puede dejar el archivo llamándose " - .mov".
+        let limpio = sessionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nombre = limpio.isEmpty ? "Sin nombre" : limpio
+        return folder.appendingPathComponent("\(formatter.string(from: Date())) - \(nombre).mov")
     }
 }

@@ -16,6 +16,7 @@ enum ShortcutAction: String, CaseIterable {
     case colorTablero = "color_tablero"
     case deshacer = "deshacer"
     case borrar = "borrar"
+    case reiniciarToma = "reiniciar_toma"
     case censura = "censura"
     case redibujarCensura = "redibujar_censura"
     case tarjeta = "tarjeta"
@@ -32,6 +33,7 @@ enum ShortcutAction: String, CaseIterable {
         case .colorTablero:   return "Tablero blanco / negro"
         case .deshacer:       return "Deshacer último trazo"
         case .borrar:         return "Borrar la superficie activa"
+        case .reiniciarToma:        return "Reiniciar toma"
         case .censura:              return "Censura on / off"
         case .redibujarCensura:     return "Redibujar la zona censurada"
         case .tarjeta:        return "Tarjeta de atajos (mantener)"
@@ -64,6 +66,7 @@ enum ShortcutAction: String, CaseIterable {
         case .borrar:         return Shortcut(tecla: kVK_Delete, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘⌫")
         // Shift más el atajo fuerza el modo dibujar aunque ya haya zona elegida
         // en esta sesión (plan, 8.6).
+        case .reiniciarToma:    return Shortcut(tecla: kVK_ANSI_R, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘R")
         case .censura:          return Shortcut(tecla: kVK_ANSI_C, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘C")
         case .redibujarCensura: return Shortcut(tecla: kVK_ANSI_C, modificadores: optionKey | cmdKey | shiftKey, etiqueta: "⇧⌥⌘C")
         case .tarjeta:        return Shortcut(tecla: kVK_ANSI_H, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘H")

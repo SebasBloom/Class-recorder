@@ -73,7 +73,7 @@ Aplican a todas las fases sin excepción.
 
 **Resiliencia de hardware.** El equipo usa DJI Mic Mini vía iPhone (Continuity), AirPods, GoPro en modo webcam. Todos se desconectan solos (batería, bloqueo del teléfono, Bluetooth). Regla: si un dispositivo de audio o cámara se cae a mitad de grabación, la grabación continúa con lo que quede disponible, la app muestra un aviso visible y lo registra en el log. Crashear o seguir grabando en silencio sin avisar son ambos inaceptables.
 
-**Permisos con mensajes claros.** La app necesita cuatro permisos: Grabación de pantalla y audio del sistema, Micrófono, Cámara, Accesibilidad. Si falta alguno al intentar usar la función que lo requiere, la app dice exactamente cuál falta y abre el panel correcto de Configuración del Sistema. Nunca fallar en silencio ni cerrarse sola.
+**Permisos con mensajes claros.** La app necesita **tres** permisos: Grabación de pantalla y audio del sistema, Micrófono y Cámara. Accesibilidad terminó no haciendo falta (decisión 75). Si falta alguno al intentar usar la función que lo requiere, la app dice exactamente cuál falta y abre el panel correcto de Configuración del Sistema. Nunca fallar en silencio ni cerrarse sola.
 
 ## 6. Piezas compartidas (semilla de INTERDEPENDENCIAS.md)
 

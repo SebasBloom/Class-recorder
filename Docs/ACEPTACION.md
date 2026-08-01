@@ -509,3 +509,76 @@ El log ahora también anota cada atajo que llega ("Atajo: Censura on / off") y c
 ### Cambio de alcance
 
 Los dos slots del plan se redujeron a **uno solo sin persistencia** a pedido de Sebas (decisión 74). Con eso desaparecieron un atajo, dos campos de `config.json` y el rectángulo de una zona sensible guardado en disco.
+
+## Fase 11. Panel, widget, countdown y flujo completo — PENDIENTE
+
+### 1. El flujo completo, de punta a punta
+
+Sin tocar nada técnico:
+
+- Desde la barra de menú, **Iniciar grabación…**
+- En el panel: elegí pantalla, audio (probá **Micrófono + sistema** con el DJI por iPhone), cámara del iPhone, escribí **"Prueba n8n"** en nombre de la sesión, y revisá la carpeta
+- Dejá la cuenta regresiva activada y arrancá
+- Durante la grabación: pausá y reanudá, cambiá de modo, prendé la censura, dibujá algo
+- Detené
+
+**Tiene que:** salir la cuenta 3, 2, 1 y **no aparecer en el video**; aparecer el widget y el panel irse del medio; al detener, salir una notificación con el nombre y abrirse el Finder con el archivo, llamado `AAAA-MM-DD HHhMM - Prueba n8n.mov`.
+
+### 2. El panel se acuerda de todo
+
+Cerrá la app, abrila y andá a Iniciar grabación.
+
+**Tiene que:** estar todo como lo dejaste, incluido el nombre de la sesión.
+
+### 3. Reiniciar toma
+
+Grabá un minuto y tocá el botón de reiniciar en el widget (o **Opción + Comando + R**).
+
+**Tiene que:** preguntarte antes; al confirmar, arrancar una toma nueva de inmediato con la misma configuración. Abrí la **Papelera**: la toma descartada tiene que estar ahí, junto con su `.cursor.json`. Nunca se borra directo.
+
+### 4. Área personalizada
+
+En el panel, tocá **Elegir un área…** y arrastrá un pedazo de la pantalla. Grabá un minuto.
+
+**Tiene que:** el video tener **solo esa zona**, y medir lo que mide el recorte. Si sale corrido o del tamaño equivocado, avisame: es la parte que más dudas me da, porque es el único lugar donde macOS pide el recorte en puntos y no en píxeles.
+
+Después tocá **Grabar pantalla entera** para volver a lo normal.
+
+### 5. El ícono de la barra cambia
+
+Mirá el ícono mientras grabás y mientras está pausado.
+
+**Tiene que:** tener un punto rojo grabando, gris pausado, y limpio sin grabar. Y el menú tiene que mostrar "Detener grabación" solo cuando hay una en curso.
+
+### 6. Grabación interrumpida
+
+Grabá dos minutos y matá la app a la fuerza desde Monitor de Actividad.
+
+**Tiene que:** al volver a abrirla, avisarte que quedó una grabación sin cerrar y ofrecerte mostrarla en el Finder. El archivo tiene que reproducir hasta segundos antes del corte.
+
+Ese aviso aparece **una sola vez**: si volvés a abrir la app, ya no molesta.
+
+## Fase 12. Endurecimiento y entrega — PENDIENTE
+
+Lo de código ya está (aviso de grabación interrumpida, umbrales de disco, README revisado contra el comportamiento real). Lo que falta es la prueba de fuego, y esa la corrés vos.
+
+### 1. La grabación de 60 minutos
+
+Una clase real, o algo que se le parezca, con **todo activo**: círculo de cursor, burbuja, cambios de modo, censura, anotaciones y audio mezclado.
+
+- **Al arrancar, dá una palmada frente a la cámara.** Y otra antes de detener
+- Avisame cuando empieces y mido la memoria durante toda la hora
+
+**Tiene que:** el archivo reproducir completo; las **dos palmadas** tener el sonido calzado con la imagen (esa es la prueba de sincronía, y la del final es la que importa); la memoria mantenerse estable entre el minuto 5 y el 55.
+
+### 2. Los logs de esa hora
+
+Pasame el log de esa grabación.
+
+**Tiene que:** no tener errores inesperados, y contar la historia completa de lo que pasó.
+
+### 3. La Mac de Iván
+
+Copiale el `.app`, y que **siga el README solo, sin que vos le expliques nada**. Que lo autorice en Gatekeeper, dé los permisos y grabe 5 minutos.
+
+**Tiene que:** lograrlo sin ayuda. Si se traba en algún paso, ese paso está mal escrito en el README y hay que arreglarlo. Es la prueba de verdad del manual.

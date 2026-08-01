@@ -11,12 +11,16 @@ final class MenuBarController {
     private let statusItem: NSStatusItem
     private var controlWindow: ControlWindow?
     private var shortcutsWindow: ShortcutsWindow?
+    private var stopItem: NSMenuItem?
 
     /// El registro de atajos vive acá, no en el controlador de grabación: el de
     /// iniciar y detener tiene que funcionar aunque no haya ninguna grabación en
     /// curso ni ventana de control abierta.
     private let registry = ShortcutRegistry()
     private let card = ShortcutCard()
+
+    /// Ícono base de la barra. Los estados se pintan encima de esta silueta.
+    private var iconoBase: NSImage?
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -29,6 +33,7 @@ final class MenuBarController {
             logo.isTemplate = true
             logo.size = NSSize(width: 18, height: 18)
             statusItem.button?.image = logo
+            iconoBase = logo
         } else {
             statusItem.button?.image = NSImage(
                 systemSymbolName: "record.circle",
@@ -42,12 +47,21 @@ final class MenuBarController {
         menu.addItem(.separator())
 
         let controlItem = NSMenuItem(
-            title: "Abrir control de grabación…",
+            title: "Iniciar grabación…",
             action: #selector(showControlWindow),
             keyEquivalent: ""
         )
         controlItem.target = self
         menu.addItem(controlItem)
+
+        let stopItem = NSMenuItem(
+            title: "Detener grabación",
+            action: #selector(stopRecording),
+            keyEquivalent: ""
+        )
+        stopItem.target = self
+        menu.addItem(stopItem)
+        self.stopItem = stopItem
 
         let folderItem = NSMenuItem(
             title: "Abrir carpeta de grabaciones",
@@ -103,6 +117,9 @@ final class MenuBarController {
         if let controlWindow { return controlWindow }
         let window = ControlWindow()
         window.recorder.attach(registry: registry)
+        window.onRecordingStateChange = { [weak self] grabando, pausado in
+            self?.actualizarIcono(grabando: grabando, pausado: pausado)
+        }
         controlWindow = window
         return window
     }
@@ -119,6 +136,39 @@ final class MenuBarController {
         let window = ensureControlWindow()
         NSApp.activate(ignoringOtherApps: true)
         window.showWindow(nil)
+    }
+
+    @objc private func stopRecording() {
+        guard let controlWindow, controlWindow.recorder.isRecording else { return }
+        Task { await controlWindow.recorder.stop() }
+    }
+
+    /// Tres estados distinguibles (plan, 8.11): inactivo, grabando y pausado.
+    ///
+    /// Se pintan sobre la misma silueta y **dejan de ser imagen de plantilla**
+    /// mientras hay color: si se marcaran como plantilla, macOS aplanaría el
+    /// punto al color de la barra y los tres estados se verían iguales.
+    private func actualizarIcono(grabando: Bool, pausado: Bool) {
+        stopItem?.isHidden = !grabando
+
+        guard let base = iconoBase else { return }
+        guard grabando else {
+            base.isTemplate = true
+            statusItem.button?.image = base
+            return
+        }
+
+        let color = pausado ? NSColor.systemGray : NSColor.systemRed
+        let compuesto = NSImage(size: base.size, flipped: false) { rect in
+            base.draw(in: rect)
+            let radio: CGFloat = 5
+            let punto = NSRect(x: rect.maxX - radio, y: rect.minY, width: radio, height: radio)
+            color.setFill()
+            NSBezierPath(ovalIn: punto).fill()
+            return true
+        }
+        compuesto.isTemplate = false
+        statusItem.button?.image = compuesto
     }
 
     @objc private func openRecordingsFolder() {
