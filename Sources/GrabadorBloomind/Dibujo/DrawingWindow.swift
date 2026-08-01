@@ -1,21 +1,33 @@
 import AppKit
 
-/// Ventana espejo del tablero: cubre entera la pantalla que se está grabando.
+/// Ventana espejo donde se dibuja: cubre entera la pantalla que se está grabando.
+///
+/// **Es la misma ventana para las dos superficies de dibujo**, cambiando solo el
+/// fondo: opaca blanca para el tablero, transparente para la capa de anotación
+/// sobre la pantalla real. El motor, el renderizado y el manejo de mouse y
+/// teclado son idénticos, que es lo que pide el plan al hablar de un motor único.
 ///
 /// Es donde Sebas ve y dibuja; el compositor pinta lo mismo desde el modelo sobre
-/// el lienzo del archivo (decisión 3). Queda fuera de la captura porque el filtro
-/// excluye la aplicación entera, así que en el video nunca aparece: lo que se ve
-/// ahí es el lienzo compuesto, no esta ventana.
+/// el frame del archivo (decisión 3). Queda fuera de la captura porque el filtro
+/// excluye la aplicación entera, así que en el video nunca aparece esta ventana:
+/// lo que se ve es el dibujo compuesto.
 ///
-/// Mientras está arriba, el mouse le pega a ella y no a las apps de abajo, que es
-/// exactamente lo que pide el plan para el modo tablero.
+/// Mientras está arriba, el mouse le pega a ella y no a las apps de abajo.
 @MainActor
-final class WhiteboardWindow: NSWindow {
+final class DrawingWindow: NSWindow {
+
+    /// Qué hay detrás de lo dibujado.
+    enum Background {
+        /// Lienzo blanco: el tablero es una fuente de video en sí misma.
+        case lienzo
+        /// Transparente: la capa de anotación deja ver la pantalla real debajo.
+        case transparente
+    }
 
     private let canvas: DrawingCanvasView
 
-    init(surface: DrawingSurface, screenFrame: NSRect) {
-        canvas = DrawingCanvasView(surface: surface)
+    init(surface: DrawingSurface, background: Background, screenFrame: NSRect) {
+        canvas = DrawingCanvasView(surface: surface, background: background)
 
         super.init(
             contentRect: screenFrame,
@@ -28,8 +40,13 @@ final class WhiteboardWindow: NSWindow {
         // espejo de la burbuja, que tiene que seguir viéndose sobre el tablero.
         level = .floating
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        isOpaque = true
-        backgroundColor = .white
+        isOpaque = background == .lienzo
+        // La capa de anotación **no** puede tener el fondo del todo transparente.
+        // macOS entrega los clics de una ventana no opaca según el alfa de sus
+        // píxeles: sobre los completamente transparentes, el clic se va derecho a
+        // la ventana de abajo y la capa nunca recibe nada. Un alfa mínimo la
+        // vuelve sólida para el mouse y sigue siendo invisible a ojo (decisión 63).
+        backgroundColor = background == .lienzo ? .white : NSColor(white: 0, alpha: 0.002)
         hasShadow = false
         contentView = canvas
         // Sin esto el teclado nunca llega: los cuadros de texto no se podrían
@@ -42,9 +59,17 @@ final class WhiteboardWindow: NSWindow {
     override var canBecomeKey: Bool { true }
 
     func present() {
+        // El Grabador vive en la barra de menú, así que no es la app de adelante
+        // y macOS le da el teclado solo a la que lo está. Sin activar la app, se
+        // puede dibujar (el mouse va a la ventana bajo el puntero) pero lo que se
+        // tipea se lo queda la app de atrás, y el primer cuadro de texto de cada
+        // sesión se pierde en silencio. Activar acá no cuesta nada: el primer
+        // trazo activaría la app de todas formas (decisión 64).
+        NSApp.activate(ignoringOtherApps: true)
         orderFrontRegardless()
         makeKey()
         canvas.window?.makeFirstResponder(canvas)
+        Logger.shared.log("Espejo de dibujo visible: \(Int(frame.width))x\(Int(frame.height)), recibe teclado: \(isKeyWindow)")
     }
 
     func hide() {
@@ -74,6 +99,7 @@ private final class DrawingCanvasView: NSView {
     private static let dragThreshold: CGFloat = 3
 
     private let surface: DrawingSurface
+    private let background: DrawingWindow.Background
     private var mouseDownAt: CGPoint?
     private var isDrawing = false
 
@@ -82,8 +108,9 @@ private final class DrawingCanvasView: NSView {
     /// seguir funcionando siempre (punto delicado 7 del plan).
     private var activeText: String?
 
-    init(surface: DrawingSurface) {
+    init(surface: DrawingSurface, background: DrawingWindow.Background) {
         self.surface = surface
+        self.background = background
         super.init(frame: .zero)
     }
 
@@ -93,7 +120,9 @@ private final class DrawingCanvasView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        DrawingRenderer.fillWhiteboard(context, size: bounds.size)
+        if background == .lienzo {
+            DrawingRenderer.fillWhiteboard(context, size: bounds.size)
+        }
         DrawingRenderer.draw(items: surface.committedItems(),
                              liveStroke: surface.liveStroke(),
                              in: context,

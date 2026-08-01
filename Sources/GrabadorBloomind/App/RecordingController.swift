@@ -28,11 +28,13 @@ final class RecordingController {
     /// vive acá y no en la ventana porque el compositor lo necesita aunque el
     /// espejo esté escondido.
     private let whiteboard = DrawingSurface()
-    private var whiteboardWindow: WhiteboardWindow?
-    /// Repinta el espejo mientras el tablero está a la vista. El modelo cambia
-    /// desde el mouse y el teclado, y el espejo tiene que mostrar lo mismo que
-    /// está entrando al video.
-    private var whiteboardRefresh: Timer?
+    private var whiteboardWindow: DrawingWindow?
+
+    /// La capa de anotación sobre la pantalla real. Es **otra instancia del mismo
+    /// motor**: borrar una nunca toca la otra.
+    private let annotation = DrawingSurface()
+    private var annotationWindow: DrawingWindow?
+    private(set) var isAnnotationOn = false
     /// La pantalla que se está grabando. El espejo del tablero tiene que cubrir
     /// esa y no la principal.
     private var recordingDisplay: CaptureDisplay?
@@ -51,6 +53,13 @@ final class RecordingController {
     /// burbuja: en cámara completa la burbuja no se compone (matriz 8.4) y dejar
     /// el espejo en pantalla confundiría.
     var onModeChange: ((CaptureMode) -> Void)?
+
+    /// Se avisa cuando aparece o desaparece una superficie de dibujo, para que la
+    /// ventana de control se quite del medio: la capa de anotación es
+    /// transparente y cualquier ventana propia que quede detrás se ve a través.
+    var onDrawingMirrorChange: ((Bool) -> Void)?
+
+    private var isDrawingMirrorVisible = false
 
     /// Último marco global de la ventana espejo. Se guarda acá porque puede
     /// llegar antes de que exista el pipeline.
@@ -94,6 +103,7 @@ final class RecordingController {
         // Cada toma arranca con el tablero limpio: los dibujos de la clase
         // anterior no tienen por qué aparecer en la siguiente (decisión 55).
         whiteboard.clear()
+        annotation.clear()
 
         let url = Self.makeOutputURL(sessionName: "Prueba")
         Logger.shared.openLog(named: url.deletingPathExtension().lastPathComponent)
@@ -123,7 +133,8 @@ final class RecordingController {
                 tracker: mouseTracker,
                 writer: writer,
                 camera: camera,
-                whiteboard: whiteboard
+                whiteboard: whiteboard,
+                annotation: annotation
             )
             self.pipeline = pipeline
             pipeline.setBubbleFrame(bubbleFrame)
@@ -211,6 +222,7 @@ final class RecordingController {
         activeCameraID = nil
         setMode(.pantalla)
         closeWhiteboardWindow()
+        setAnnotation(on: false)
         recordingDisplay = nil
 
         let writer = self.writer
@@ -249,7 +261,7 @@ final class RecordingController {
         mode = newMode
         pipeline?.setMode(newMode)
         if isRecording { Logger.shared.log("Modo de fuente: \(newMode.rawValue)") }
-        updateWhiteboardWindow(for: newMode)
+        updateDrawingWindows(for: newMode)
         onModeChange?(newMode)
     }
 
@@ -311,68 +323,164 @@ final class RecordingController {
         hotKeys.append(HotKey(keyCode: kVK_ANSI_Z, modifiers: modifiers) { [weak self] in
             Task { @MainActor in self?.undoDrawing() }
         })
-        hotKeys.append(HotKey(keyCode: kVK_Delete, modifiers: modifiers) { [weak self] in
-            Task { @MainActor in self?.clearDrawing() }
+        // Las dos teclas de borrar: la grande del Mac (⌫) y la "Supr" de los
+        // teclados de PC, que son códigos distintos. Quien quiere borrar aprieta
+        // la que tiene, no la que el plan nombró.
+        for key in [kVK_Delete, kVK_ForwardDelete] {
+            hotKeys.append(HotKey(keyCode: key, modifiers: modifiers) { [weak self] in
+                Task { @MainActor in self?.clearDrawing() }
+            })
+        }
+        hotKeys.append(HotKey(keyCode: kVK_ANSI_D, modifiers: modifiers) { [weak self] in
+            Task { @MainActor in self?.toggleAnnotation() }
         })
 
         self.recordingDisplay = display
     }
 
-    // MARK: - Tablero
+    // MARK: - Superficies de dibujo
 
-    /// Muestra o esconde el espejo del tablero según el modo. El contenido no se
-    /// toca: cambiar de modo nunca borra lo dibujado (plan, 8.4).
-    private func updateWhiteboardWindow(for mode: CaptureMode) {
-        guard mode == .tablero, isRecording else {
+    /// Muestra u oculta cada espejo según el modo. El contenido no se toca nunca:
+    /// cambiar de modo no borra ni apaga nada (plan, 8.4). La capa de anotación
+    /// sigue prendida al pasar al tablero, solo que ahí no se ve ni se compone.
+    private func updateDrawingWindows(for mode: CaptureMode) {
+        guard isRecording else {
             closeWhiteboardWindow()
+            annotationWindow?.hide()
             return
         }
 
-        if whiteboardWindow == nil, let display = recordingDisplay {
-            // Cubre exactamente la pantalla que se graba, no la principal: el
-            // tablero del video y el de la mano tienen que ser el mismo.
-            let frame = NSScreen.screens.first {
-                ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
-                    == display.scDisplay.displayID
-            }?.frame ?? NSScreen.main?.frame ?? .zero
-
-            whiteboardWindow = WhiteboardWindow(surface: whiteboard, screenFrame: frame)
+        if mode == .tablero {
+            if whiteboardWindow == nil, let frame = recordingScreenFrame() {
+                whiteboardWindow = DrawingWindow(surface: whiteboard,
+                                                 background: .lienzo,
+                                                 screenFrame: frame)
+            }
+            annotationWindow?.hide()
+            whiteboardWindow?.present()
+        } else {
+            closeWhiteboardWindow()
+            if mode == .pantalla, isAnnotationOn {
+                annotationWindow?.present()
+            } else {
+                annotationWindow?.hide()
+            }
         }
 
-        whiteboardWindow?.present()
-        whiteboardRefresh?.invalidate()
-        whiteboardRefresh = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.whiteboardWindow?.refresh() }
-        }
+        publishMirrorVisibility()
+    }
+
+    /// El marco de la pantalla que se está grabando, no el de la principal: lo
+    /// que se dibuja y lo que sale en el video tienen que ser el mismo lugar.
+    private func recordingScreenFrame() -> NSRect? {
+        guard let display = recordingDisplay else { return nil }
+        return NSScreen.screens.first {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
+                == display.scDisplay.displayID
+        }?.frame ?? NSScreen.main?.frame
     }
 
     private func closeWhiteboardWindow() {
-        whiteboardRefresh?.invalidate()
-        whiteboardRefresh = nil
         whiteboardWindow?.hide()
         whiteboardWindow = nil
     }
 
+    /// Avisa si hay alguna superficie de dibujo a la vista.
+    private func publishMirrorVisibility() {
+        let visible = mode == .tablero || (isAnnotationOn && mode == .pantalla)
+        guard visible != isDrawingMirrorVisible else { return }
+        isDrawingMirrorVisible = visible
+        onDrawingMirrorChange?(visible)
+    }
+
+    // MARK: - Capa de anotación
+
+    /// Prende y apaga la capa de anotación sobre la pantalla real.
+    ///
+    /// Apagada, la ventana se esconde y el mouse vuelve a la app de abajo, pero
+    /// **el contenido queda guardado** y reaparece al prenderla de nuevo (plan,
+    /// 8.7).
+    private func toggleAnnotation() {
+        guard isRecording else { return }
+        setAnnotation(on: !isAnnotationOn)
+    }
+
+    private func setAnnotation(on: Bool) {
+        guard on != isAnnotationOn else { return }
+        isAnnotationOn = on
+        pipeline?.setAnnotationOn(on)
+
+        if on {
+            if annotationWindow == nil, let frame = recordingScreenFrame() {
+                annotationWindow = DrawingWindow(surface: annotation,
+                                                 background: .transparente,
+                                                 screenFrame: frame)
+            }
+            // Solo se muestra sobre la pantalla real. Prenderla estando en cámara
+            // o en tablero deja el estado prendido, pero la ventana no aparece:
+            // ahí la anotación no se compone (matriz 8.4) y una capa invisible
+            // comiéndose el mouse sin dejar rastro en el video no se entiende de
+            // ninguna manera.
+            if mode == .pantalla {
+                annotationWindow?.present()
+            }
+        } else {
+            annotationWindow?.hide()
+            annotationWindow = nil
+        }
+
+        publishMirrorVisibility()
+        refreshDrawingMirror()
+        Logger.shared.log("Capa de anotación \(on ? "prendida" : "apagada")")
+        onStateChange?()
+    }
+
+    /// La superficie sobre la que actúan deshacer, borrar y el color: el tablero
+    /// si estás en el tablero, la capa de anotación si está prendida. Nunca las
+    /// dos, que es lo que pide el plan en 8.7.
+    private var activeSurface: DrawingSurface? {
+        if mode == .tablero { return whiteboard }
+        if isAnnotationOn, mode == .pantalla { return annotation }
+        return nil
+    }
+
+    private var activeMirror: DrawingWindow? {
+        mode == .tablero ? whiteboardWindow : annotationWindow
+    }
+
+    private func refreshDrawingMirror() {
+        activeMirror?.refresh()
+    }
+
+    /// La paleta es una sola en la interfaz, así que el color se rota en las dos
+    /// superficies a la vez y no depende de cuál esté activa.
     private func rotateMarkerColor() {
         let color = whiteboard.rotateColor()
+        annotation.setColor(color)
         Logger.shared.log("Color del marcador: \(color.label)")
+        refreshDrawingMirror()
         onStateChange?()
     }
 
     private func undoDrawing() {
-        guard mode == .tablero else { return }
-        whiteboardWindow?.closeTextBox()
-        whiteboard.undo()
-        whiteboardWindow?.refresh()
+        guard let surface = activeSurface else { return }
+        activeMirror?.closeTextBox()
+        surface.undo()
+        refreshDrawingMirror()
     }
 
     /// Borra **solo** la superficie activa. Nunca las dos (plan, 8.7).
+    ///
+    /// El `clear()` de la otra superficie acá adentro fue un bug real que borraba
+    /// el tablero y la anotación de un solo golpe (decisión 65). Si alguna vez
+    /// aparece de nuevo una línea que toque la superficie que no está activa, es
+    /// el mismo error volviendo.
     private func clearDrawing() {
-        guard mode == .tablero else { return }
-        whiteboardWindow?.closeTextBox()
-        whiteboard.clear()
-        whiteboardWindow?.refresh()
-        Logger.shared.log("Tablero borrado")
+        guard let surface = activeSurface else { return }
+        activeMirror?.closeTextBox()
+        surface.clear()
+        refreshDrawingMirror()
+        Logger.shared.log(surface === whiteboard ? "Tablero borrado" : "Capa de anotación borrada")
     }
 
     var markerColor: MarkerColor { whiteboard.color }

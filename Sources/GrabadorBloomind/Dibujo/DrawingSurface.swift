@@ -185,6 +185,14 @@ final class DrawingSurface {
         lock.unlock()
     }
 
+    /// Fija el color sin rotar. La paleta es una sola en la interfaz, así que al
+    /// rotarla en una superficie hay que igualar la otra.
+    func setColor(_ color: MarkerColor) {
+        lock.lock()
+        _color = color
+        lock.unlock()
+    }
+
     @discardableResult
     func rotateColor() -> MarkerColor {
         lock.lock(); defer { lock.unlock() }

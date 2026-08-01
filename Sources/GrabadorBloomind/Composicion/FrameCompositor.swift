@@ -69,10 +69,10 @@ final class FrameCompositor {
     /// Ondas de clic en curso, con el momento del video en que empezaron.
     private var ripples: [(center: CGPoint, startTime: Double)] = []
 
-    /// Lo terminado del tablero, ya pintado. Se rehace solo cuando el modelo
-    /// cambia de versión.
-    private var cachedWhiteboard: CGImage?
-    private var cachedWhiteboardVersion = -1
+    /// Lo terminado de cada superficie, ya pintado. Se rehace solo cuando el
+    /// modelo cambia de versión. Una caché por superficie: el tablero y la capa
+    /// de anotación cambian por su cuenta.
+    private var caches: [ObjectIdentifier: (image: CGImage?, version: Int)] = [:]
 
     init(pixelSize: CGSize) {
         self.pixelSize = pixelSize
@@ -89,6 +89,8 @@ final class FrameCompositor {
     ///   - bubbleRect: dónde va la burbuja, en píxeles del frame y con origen
     ///     arriba. Nil si la burbuja está apagada o se arrastró a otro monitor.
     ///   - whiteboard: contenido del tablero. Solo se dibuja en modo tablero.
+    ///   - annotation: contenido de la capa de anotación, o nil si está apagada.
+    ///     Solo se dibuja en modo pantalla.
     ///   - time: segundos transcurridos del video final.
     func draw(into pixelBuffer: CVPixelBuffer,
               mode: CaptureMode,
@@ -97,6 +99,7 @@ final class FrameCompositor {
               camera: CGImage?,
               bubbleRect: CGRect?,
               whiteboard: DrawingSurface? = nil,
+              annotation: DrawingSurface? = nil,
               time: Double) {
 
         if isVisible(.clickEffect, in: mode) {
@@ -114,8 +117,11 @@ final class FrameCompositor {
         // El tablero se dibuja siempre que el modo sea tablero, aunque esté
         // vacío: su fondo blanco **es** la fuente de video.
         let drawWhiteboard = mode == .tablero && isVisible(.whiteboardContent, in: mode)
+        // La capa de anotación solo existe sobre la pantalla real: en cámara y en
+        // tablero no se compone, aunque esté prendida y con contenido.
+        let drawAnnotation = annotation != nil && isVisible(.screenAnnotation, in: mode)
 
-        guard drawCursor || drawBubble || drawFullCamera || drawWhiteboard || !ripples.isEmpty else { return }
+        guard drawCursor || drawBubble || drawFullCamera || drawWhiteboard || drawAnnotation || !ripples.isEmpty else { return }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
@@ -138,7 +144,8 @@ final class FrameCompositor {
         // dibujado encima; en cámara completa, la imagen de la cámara recortada
         // al centro. Los dos tapan la pantalla capturada por completo.
         if drawWhiteboard {
-            drawWhiteboardContent(whiteboard, in: context)
+            DrawingRenderer.fillWhiteboard(context, size: pixelSize)
+            drawSurface(whiteboard, in: context)
         }
 
         if drawFullCamera, let camera {
@@ -159,6 +166,12 @@ final class FrameCompositor {
 
         if drawBubble, let camera, let bubbleRect {
             drawCameraBubble(camera, in: bubbleRect, context: context)
+        }
+
+        // La anotación va arriba de todo: se dibuja sobre la pantalla real y
+        // tiene que leerse por encima del círculo del cursor y de la burbuja.
+        if drawAnnotation {
+            drawSurface(annotation, in: context)
         }
     }
 
@@ -209,24 +222,23 @@ final class FrameCompositor {
         context.strokeEllipse(in: rect)
     }
 
-    /// Tablero: lienzo blanco con lo dibujado encima.
+    /// Dibuja una superficie sobre el frame.
     ///
     /// Lo ya terminado se pinta una vez y se guarda como imagen; mientras nadie
     /// dibuje ni borre, los frames siguientes reusan esa imagen. Sin la caché,
     /// una clase con doscientos trazos obligaría a repintarlos treinta veces por
     /// segundo, y el compositor se atrasaría justo cuando más contenido hay.
     /// El trazo en curso sí se pinta en vivo: es uno solo.
-    private func drawWhiteboardContent(_ surface: DrawingSurface?, in context: CGContext) {
-        DrawingRenderer.fillWhiteboard(context, size: pixelSize)
+    private func drawSurface(_ surface: DrawingSurface?, in context: CGContext) {
         guard let surface else { return }
 
+        let key = ObjectIdentifier(surface)
         let version = surface.version
-        if version != cachedWhiteboardVersion || cachedWhiteboard == nil {
-            cachedWhiteboard = renderWhiteboard(surface.committedItems())
-            cachedWhiteboardVersion = version
+        if caches[key]?.version != version || caches[key]?.image == nil {
+            caches[key] = (renderItems(surface.committedItems()), version)
         }
 
-        if let cached = cachedWhiteboard {
+        if let cached = caches[key]?.image {
             context.draw(cached, in: CGRect(origin: .zero, size: pixelSize))
         }
 
@@ -237,7 +249,7 @@ final class FrameCompositor {
 
     /// Pinta lo terminado en una imagen aparte, con fondo transparente para que
     /// se pueda superponer al lienzo sin taparlo.
-    private func renderWhiteboard(_ items: [DrawingItem]) -> CGImage? {
+    private func renderItems(_ items: [DrawingItem]) -> CGImage? {
         guard let context = CGContext(
             data: nil,
             width: Int(pixelSize.width),

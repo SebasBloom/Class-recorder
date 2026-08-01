@@ -314,3 +314,62 @@ Grabá **10 minutos** dibujando bastante en el tablero, con muchos trazos acumul
 5. **Memoria, 10 minutos dibujando:** 63 muestras. Minuto 2: 243 MB. Minuto 10: 186 MB. Cerró en 168. Sin tendencia creciente. El piso es más alto que en la Fase 6 porque la caché del tablero es una imagen del tamaño de la pantalla (unos 24 MB en la Retina interna); es un costo fijo que no crece con la cantidad de trazos.
 6. **Video de esa prueba:** 11m09, 19507 cuadros, 29.1 fps, hueco máximo entre cuadros de 0.050 segundos, audio continuo, ningún congelamiento.
 7. **Texto que se salía de la pantalla, encontrado y corregido:** una frase larga se cortaba en el borde derecho y lo escrito de más se perdía sin aviso. Corregido con corte de línea (decisión 59). **Falta verlo funcionando en video con una frase larga.**
+
+## Fase 8. Capa de anotación sobre pantalla real — VALIDADA el 2026-07-31
+
+Ahora podés dibujar **encima de la pantalla real**, sin pasar al tablero. Se prende y apaga con **Opción + Comando + D** durante la grabación.
+
+Prendida, la pantalla que estás grabando queda cubierta por una capa transparente: ves todo igual, pero el mouse le pega a la capa y no a las apps de abajo. Se dibuja y se escribe igual que en el tablero (arrastrar dibuja, clic seco abre un cuadro de texto), y el color activo se ve en el círculo de la esquina de arriba a la derecha.
+
+Apagada, la capa desaparece, el mouse vuelve a la app de abajo y **lo dibujado queda guardado** esperando a que la prendas de nuevo.
+
+### 1. Dibujar sobre una app real
+
+Grabá en modo pantalla con alguna app abierta. Durante la grabación:
+
+- Prendé la capa con **Opción + Comando + D**
+- Dibujá una flecha señalando algo de la app
+- Hacé un clic seco al lado y escribí una palabra
+- Apagá la capa con **Opción + Comando + D**
+
+**Tiene que:** en el video verse la flecha y el texto encima de la app real. Y al apagar la capa, **el mouse tiene que volver a controlar la app de abajo**: probá hacerle clic a un botón cualquiera para confirmarlo.
+
+### 2. Lo dibujado sobrevive
+
+Prendé la capa de nuevo.
+
+**Tiene que:** estar todo lo que habías dibujado, tal cual lo dejaste.
+
+### 3. Borrar la capa no toca el tablero
+
+Esta es la prueba central de la fase:
+
+- Con la capa prendida, borrala con **Opción + Comando + Suprimir**
+- Pasá al tablero con **Opción + Comando + 3**
+
+**Tiene que:** el tablero seguir con todo lo que hubieras dibujado ahí antes. Borrar una superficie nunca toca la otra.
+
+Y al revés: dibujá en el tablero, borralo, volvé a pantalla y prendé la capa.
+
+**Tiene que:** la capa seguir con su contenido intacto.
+
+### 4. La capa no aparece en los otros modos
+
+Con la capa prendida y con contenido, pasá a **cámara completa** y al **tablero**.
+
+**Tiene que:** no verse la anotación en ninguno de los dos. Al volver a modo pantalla, reaparece. Es la matriz de visibilidad del plan: la anotación existe solo sobre la pantalla real.
+
+### Resultados medidos
+
+1. **Dibujar y escribir sobre la pantalla real:** confirmado en video. Los trazos y el texto se componen encima de la app real, y al apagar la capa el mouse vuelve a la app de abajo.
+2. **Persistencia:** apagada y prendida de nuevo, el contenido reaparece intacto (segundos 10, 11.7 y 14 de la grabación de las 21:30).
+3. **Independencia de las superficies:** en la grabación de las 21:49, "Capa de anotación borrada" a las 21:49:36 estando en modo pantalla, y el tablero conservó su dibujo al entrar a las 21:49:39. Verificado en el video.
+4. **La capa no aparece en los otros modos:** confirmado en video, ni en tablero ni en cámara completa.
+
+### Bugs encontrados por estos pasos, y corregidos
+
+1. **La capa no recibía el mouse** (decisión 63). Con el fondo completamente transparente, macOS mandaba cada clic a la ventana de abajo. La capa se prendía bien según el log y no dibujaba nada.
+2. **El primer cuadro de texto se perdía** (decisión 64). La app vive en la barra de menú y no recibía el teclado hasta el primer clic; lo tipeado se lo quedaba la app de atrás sin ningún aviso.
+3. **Borrar tocaba las dos superficies** (decisión 65). Borrar el tablero se llevaba también la capa de anotación. **Es el bug que este criterio de aceptación existía para encontrar**, y lo encontró.
+4. **La capa se mostraba en modo cámara**, donde no se compone: una ventana invisible comiéndose el mouse sin dejar rastro en el video.
+5. **La ventana de control se veía a través de la capa**, porque activar la app la traía adelante y la capa es transparente. Ahora se esconde mientras hay una superficie de dibujo a la vista.

@@ -16,6 +16,10 @@ final class FramePipeline {
     private let writer: RecordingWriter
     private let camera: CameraCapture?
     private let whiteboard: DrawingSurface
+    private let annotation: DrawingSurface
+    /// La capa de anotación se prende y se apaga; el tablero no. Cuando está
+    /// apagada no se compone, pero su contenido sigue guardado.
+    private var _annotationOn = false
 
     /// Timestamp del primer frame. Todo lo demás se mide desde acá.
     private var sessionStart: CMTime?
@@ -77,7 +81,8 @@ final class FramePipeline {
          tracker: MouseTracker,
          writer: RecordingWriter,
          camera: CameraCapture?,
-         whiteboard: DrawingSurface) {
+         whiteboard: DrawingSurface,
+         annotation: DrawingSurface) {
         self.converter = converter
         self.compositor = compositor
         self.cursorTrack = cursorTrack
@@ -85,6 +90,7 @@ final class FramePipeline {
         self.writer = writer
         self.camera = camera
         self.whiteboard = whiteboard
+        self.annotation = annotation
 
         startClock()
     }
@@ -104,6 +110,12 @@ final class FramePipeline {
         lock.lock()
         defer { lock.unlock() }
         return _mode
+    }
+
+    func setAnnotationOn(_ on: Bool) {
+        lock.lock()
+        _annotationOn = on
+        lock.unlock()
     }
 
     /// Ubica la burbuja a partir del marco global de la ventana espejo.
@@ -147,6 +159,7 @@ final class FramePipeline {
         lock.lock()
         let mode = _mode
         let bubbleRect = _bubbleRect
+        let annotationOn = _annotationOn
         let modeChange = _pendingModeChange
         _pendingModeChange = nil
         lock.unlock()
@@ -169,6 +182,7 @@ final class FramePipeline {
                         camera: camera?.latestImage,
                         bubbleRect: bubbleRect,
                         whiteboard: whiteboard,
+                        annotation: annotationOn ? annotation : nil,
                         time: time)
         cursorTrack.record(cursor: cursor, clicks: clicks, time: time)
 

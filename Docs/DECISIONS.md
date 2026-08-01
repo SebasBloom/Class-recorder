@@ -269,3 +269,32 @@ Razón: en modo tablero la burbuja de cámara sí se compone según la matriz 8.
 Los cuadros de texto se dibujan con `CTFramesetter` dentro del rectángulo que va desde su origen hasta el borde de la superficie, en vez de con una línea suelta.
 Razón: **encontrado en el video de la prueba de la Fase 7.** Una frase larga se salía de la pantalla por la derecha y lo escrito de más se perdía, sin ningún aviso: en el espejo tampoco se veía, así que Sebas habría seguido tipeando creyendo que quedaba grabado.
 El cursor de escritura pasa a calcularse desde la última línea, no desde el ancho total del texto.
+
+**60. 2026-07-31 — Una sola ventana de dibujo para las dos superficies.**
+`WhiteboardWindow` pasa a llamarse `DrawingWindow` y recibe el fondo como parámetro: lienzo blanco opaco para el tablero, transparente para la capa de anotación. El motor, el renderizado, el mouse y el teclado son idénticos.
+Razón: es el "motor único" del plan llevado hasta el final. Dos ventanas casi iguales se habrían separado con el tiempo, y el primer síntoma sería que el texto se comporta distinto en el tablero que en la anotación.
+
+**61. 2026-07-31 — Deshacer, borrar y el color actúan sobre la superficie activa.**
+La superficie activa es el tablero si el modo es tablero, y la capa de anotación si está prendida y el modo es pantalla. Nunca las dos.
+Razón: lo pide el plan en 8.7. La consecuencia práctica es que borrar la anotación no toca el tablero y viceversa, que es justo lo que verifica el criterio de aceptación de esta fase.
+El color es la excepción: la paleta es una sola en la interfaz, así que rotarlo cambia las dos superficies a la vez.
+
+**62. 2026-07-31 — Los espejos se repintan por evento, no por temporizador.**
+Se sacó el temporizador a 30 por segundo que repintaba el espejo del tablero. La vista se repinta sola con el mouse y el teclado, y los atajos llaman al repintado explícitamente.
+Razón: repintar una vista a pantalla completa treinta veces por segundo cuesta CPU todo el tiempo para no cambiar nada la mayor parte del tiempo. Es la clase de gasto que no se nota en una prueba de dos minutos y sí en una clase de una hora.
+
+**63. 2026-07-31 — La capa de anotación no puede tener el fondo del todo transparente.**
+El fondo de la ventana de anotación es negro con alfa 0.002 en vez de `.clear`.
+Razón: **bug real de la primera prueba de la Fase 8.** macOS decide a qué ventana le entrega un clic según el alfa de los píxeles de la ventana no opaca: sobre un píxel completamente transparente el clic pasa de largo a la ventana de abajo. Con `.clear`, la capa se prendía y se apagaba bien según el log, pero **nunca recibía un solo evento de mouse**, así que no se dibujaba nada y en el video no aparecía nada. A ojo se veía como "la capa no funciona", sin ninguna pista de por qué.
+Un alfa mínimo la vuelve sólida para el mouse y sigue siendo invisible. Y como la ventana está excluida de la captura, ese tinte no llega al video de ninguna manera.
+
+**64. 2026-07-31 — Al mostrar un espejo de dibujo, la app se pone adelante.**
+`DrawingWindow.present()` llama a `NSApp.activate`.
+Razón: **medido en la prueba de la Fase 8.** El log mostró `recibe teclado: false` la primera vez que se prendió la capa y `true` en todas las siguientes. La app vive en la barra de menú, así que no es la app de adelante, y macOS le entrega el teclado solo a la que lo está. Se podía dibujar, porque el mouse va a la ventana bajo el puntero, pero lo tipeado en el primer cuadro de texto se lo quedaba la app de atrás **sin ningún aviso**.
+Activar no agrega ningún efecto visible que no fuera a pasar igual: el primer trazo activa la app de todas formas, y con él la app de abajo ya se ve desactivada en el video. Lo único que cambia es que el texto deja de fallar la primera vez.
+
+**65. 2026-07-31 — Borrar tocaba las dos superficies. Bug real, encontrado por el criterio de aceptación.**
+`clearDrawing()` tenía un `annotation.clear()` de más: borrar el tablero se llevaba también la capa de anotación. Corregido para que actúe solo sobre la superficie activa.
+Cómo se encontró: revisando el video de la prueba de la Fase 8. En el segundo 40 la anotación estaba sobre la pantalla; en el 45, después de haber borrado el **tablero**, había desaparecido. El log no mostraba nada raro porque la línea que se escribía era "Tablero borrado", que era cierta y a la vez incompleta.
+**Por qué importa más allá del bug:** es exactamente lo que el plan maestro mandó verificar en esta fase ("comprobar que borrar la capa no tocó el contenido del tablero y viceversa"). Sin ese paso escrito de antemano, esto se descubría en una clase real, borrando media hora de anotaciones de un tecleo.
+Cómo llegó ahí: una edición por reemplazo de texto que **no encontró el patrón y no hizo nada**, dejando la versión vieja de la función más una línea suelta. El reemplazo falló en silencio y no se verificó el resultado. Regla que queda: después de editar por reemplazo, se lee la función resultante, no se asume.

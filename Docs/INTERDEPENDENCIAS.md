@@ -38,15 +38,17 @@ Cuidado al tocarlo: la posición se guarda desde el hilo principal y se lee desd
 
 ## Motor de dibujo
 
-**Fase 7. Existe.** `Dibujo/DrawingSurface.swift` (el modelo), `Dibujo/DrawingRenderer.swift` (el dibujo) y `Dibujo/WhiteboardWindow.swift` (el espejo del tablero).
+**Fases 7 y 8. Existe.** `Dibujo/DrawingSurface.swift` (el modelo), `Dibujo/DrawingRenderer.swift` (el dibujo) y `Dibujo/DrawingWindow.swift` (el espejo, con fondo de lienzo o transparente).
 
 Trazos a mano alzada, cuadros de texto, paleta de colores, deshacer, borrar.
 
-**Motor único, contenidos separados por superficie:** `DrawingSurface` es el motor y cada superficie es una instancia. Hoy existe la del tablero; la capa de anotación de la Fase 8 es otra instancia de la misma clase. Borrar una nunca toca la otra.
+**Motor único, contenidos separados por superficie:** `DrawingSurface` es el motor y cada superficie es una instancia. Existen dos: el tablero y la capa de anotación sobre la pantalla real. Borrar una nunca toca la otra. La ventana también es una sola clase, cambiando solo el fondo (decisión 60).
+
+Deshacer, borrar y el color actúan sobre la **superficie activa**: el tablero si el modo es tablero, la anotación si está prendida y el modo es pantalla (decisión 61). El color es la excepción, porque la paleta es una sola en la interfaz y se iguala en las dos.
 
 Consumidores actuales: `WhiteboardWindow` para mostrar y editar, `FrameCompositor` para componerlo en el video, `RecordingController` para los atajos y para limpiarlo al iniciar cada toma.
 
-Consumidores previstos: la capa de anotación (Fase 8) y el widget (Fase 11, que muestra el color activo).
+Consumidores previstos: el widget (Fase 11, que muestra el color activo).
 
 Cuidado al tocarlo:
 

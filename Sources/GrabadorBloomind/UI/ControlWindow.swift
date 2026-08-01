@@ -76,6 +76,12 @@ final class ControlWindow: NSWindowController {
         cameraEnumerator.onChange = { [weak self] in
             self?.loadCameras()
         }
+        recorder.onDrawingMirrorChange = { [weak self] visible in
+            // Con la capa de anotación, que es transparente, esta ventana se vería
+            // a través del lienzo y estorbaría justo donde se está dibujando.
+            // Vuelve sola al salir del modo de dibujo.
+            if visible { self?.window?.orderOut(nil) } else { self?.showWindow(nil) }
+        }
         recorder.onModeChange = { [weak self] mode in
             // En cámara completa la burbuja no se compone (matriz 8.4): el
             // espejo se esconde para que la pantalla diga la verdad.
@@ -503,6 +509,9 @@ final class ControlWindow: NSWindowController {
         case .pantalla: if camera != nil { texto += "   Pantalla" }
         case .camara:   texto += "   Cámara completa"
         case .tablero:  texto += "   Tablero · marcador \(recorder.markerColor.label)"
+        }
+        if recorder.isAnnotationOn, recorder.mode == .pantalla {
+            texto += "   Anotando · marcador \(recorder.markerColor.label)"
         }
 
         if recorder.isPaused {
