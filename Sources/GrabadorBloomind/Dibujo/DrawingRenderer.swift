@@ -21,9 +21,9 @@ enum DrawingRenderer {
     /// Tamaño del texto, también como fracción del alto.
     private static let fontSizeRatio: CGFloat = 0.038
 
-    /// Fondo del tablero: lienzo blanco (plan, 8.4).
-    static func fillWhiteboard(_ context: CGContext, size: CGSize) {
-        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+    /// Fondo del tablero.
+    static func fillBoard(_ context: CGContext, size: CGSize, color: BoardColor) {
+        context.setFillColor(color.cgColor)
         context.fill(CGRect(origin: .zero, size: size))
     }
 

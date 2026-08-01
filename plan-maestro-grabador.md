@@ -127,7 +127,7 @@ Léelos completos antes de cada fase que los toque.
 
 ### 8.4 Modos de fuente y matriz de visibilidad
 
-Tres modos que definen el fondo del frame: Pantalla (la captura), Cámara completa (la cámara recortada al centro para llenar el cuadro), Tablero (lienzo blanco). El cambio es con atajo, instantáneo, corte directo. Las fuentes siguen corriendo de fondo en todos los modos.
+Tres modos que definen el fondo del frame: Pantalla (la captura), Cámara completa (la cámara recortada al centro para llenar el cuadro), Tablero (lienzo blanco o negro, alternable en vivo con su atajo; ver decisión 66). El cambio es con atajo, instantáneo, corte directo. Las fuentes siguen corriendo de fondo en todos los modos.
 
 Matriz de visibilidad de capas (esto se implementa tal cual, no se improvisa):
 

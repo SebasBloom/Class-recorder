@@ -26,8 +26,12 @@ final class DrawingWindow: NSWindow {
 
     private let canvas: DrawingCanvasView
 
-    init(surface: DrawingSurface, background: Background, screenFrame: NSRect) {
-        canvas = DrawingCanvasView(surface: surface, background: background)
+    /// Color del lienzo. Cambia en vivo con su atajo, sin cortar la grabación.
+    private var boardColor: BoardColor
+
+    init(surface: DrawingSurface, background: Background, boardColor: BoardColor, screenFrame: NSRect) {
+        self.boardColor = boardColor
+        canvas = DrawingCanvasView(surface: surface, background: background, boardColor: boardColor)
 
         super.init(
             contentRect: screenFrame,
@@ -46,7 +50,8 @@ final class DrawingWindow: NSWindow {
         // píxeles: sobre los completamente transparentes, el clic se va derecho a
         // la ventana de abajo y la capa nunca recibe nada. Un alfa mínimo la
         // vuelve sólida para el mouse y sigue siendo invisible a ojo (decisión 63).
-        backgroundColor = background == .lienzo ? .white : NSColor(white: 0, alpha: 0.002)
+        backgroundColor = background == .lienzo ? NSColor(cgColor: boardColor.cgColor) ?? .white
+                                                : NSColor(white: 0, alpha: 0.002)
         hasShadow = false
         contentView = canvas
         // Sin esto el teclado nunca llega: los cuadros de texto no se podrían
@@ -84,6 +89,14 @@ final class DrawingWindow: NSWindow {
         canvas.needsDisplay = true
     }
 
+    /// Cambia el color del lienzo sin cortar nada.
+    func setBoardColor(_ color: BoardColor) {
+        boardColor = color
+        backgroundColor = NSColor(cgColor: color.cgColor) ?? .white
+        canvas.boardColor = color
+        canvas.needsDisplay = true
+    }
+
     /// Cierra el cuadro de texto activo, si hay alguno.
     func closeTextBox() {
         canvas.closeTextBox()
@@ -100,6 +113,7 @@ private final class DrawingCanvasView: NSView {
 
     private let surface: DrawingSurface
     private let background: DrawingWindow.Background
+    var boardColor: BoardColor
     private var mouseDownAt: CGPoint?
     private var isDrawing = false
 
@@ -108,9 +122,10 @@ private final class DrawingCanvasView: NSView {
     /// seguir funcionando siempre (punto delicado 7 del plan).
     private var activeText: String?
 
-    init(surface: DrawingSurface, background: DrawingWindow.Background) {
+    init(surface: DrawingSurface, background: DrawingWindow.Background, boardColor: BoardColor) {
         self.surface = surface
         self.background = background
+        self.boardColor = boardColor
         super.init(frame: .zero)
     }
 
@@ -121,7 +136,7 @@ private final class DrawingCanvasView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         if background == .lienzo {
-            DrawingRenderer.fillWhiteboard(context, size: bounds.size)
+            DrawingRenderer.fillBoard(context, size: bounds.size, color: boardColor)
         }
         DrawingRenderer.draw(items: surface.committedItems(),
                              liveStroke: surface.liveStroke(),

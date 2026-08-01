@@ -298,3 +298,8 @@ Activar no agrega ningún efecto visible que no fuera a pasar igual: el primer t
 Cómo se encontró: revisando el video de la prueba de la Fase 8. En el segundo 40 la anotación estaba sobre la pantalla; en el 45, después de haber borrado el **tablero**, había desaparecido. El log no mostraba nada raro porque la línea que se escribía era "Tablero borrado", que era cierta y a la vez incompleta.
 **Por qué importa más allá del bug:** es exactamente lo que el plan maestro mandó verificar en esta fase ("comprobar que borrar la capa no tocó el contenido del tablero y viceversa"). Sin ese paso escrito de antemano, esto se descubría en una clase real, borrando media hora de anotaciones de un tecleo.
 Cómo llegó ahí: una edición por reemplazo de texto que **no encontró el patrón y no hizo nada**, dejando la versión vieja de la función más una línea suelta. El reemplazo falló en silencio y no se verificó el resultado. Regla que queda: después de editar por reemplazo, se lee la función resultante, no se asume.
+
+**66. 2026-07-31 — El tablero puede ser blanco o negro, y se alterna en vivo.**
+Pedido de Sebas el 2026-07-31. **Cambia el plan maestro**, que en la sección 8.4 decía solo "lienzo blanco". Se alterna con Opción Comando B durante la grabación, sin cortar nada, y la elección se recuerda entre sesiones.
+Al rotar la paleta se saltea el color que se confundiría con el fondo: el negro sobre tablero negro, el blanco sobre tablero blanco. Sobre la pantalla real no se saltea ninguno, porque ahí el fondo es lo que haya en pantalla.
+Y al cambiar el fondo, si el marcador activo quedara invisible se rota solo: pasar a tablero negro con el marcador negro dejaría dibujando en la nada sin ningún aviso.

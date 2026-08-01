@@ -508,7 +508,7 @@ final class ControlWindow: NSWindowController {
         switch recorder.mode {
         case .pantalla: if camera != nil { texto += "   Pantalla" }
         case .camara:   texto += "   Cámara completa"
-        case .tablero:  texto += "   Tablero · marcador \(recorder.markerColor.label)"
+        case .tablero:  texto += "   Tablero \(recorder.boardColor.label) · marcador \(recorder.markerColor.label)"
         }
         if recorder.isAnnotationOn, recorder.mode == .pantalla {
             texto += "   Anotando · marcador \(recorder.markerColor.label)"

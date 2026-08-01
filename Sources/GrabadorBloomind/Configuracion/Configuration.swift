@@ -35,6 +35,9 @@ struct Configuration: Codable, Equatable {
     var lastMicrophoneID: String?
     var lastCameraID: String?
 
+    /// Color del lienzo del tablero: "blanco" o "negro".
+    var boardColor: String?
+
     var bubbleFrame: StoredRect?
     var widgetPosition: StoredPoint?
 

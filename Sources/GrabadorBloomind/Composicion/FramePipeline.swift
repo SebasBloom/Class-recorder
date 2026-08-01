@@ -20,6 +20,7 @@ final class FramePipeline {
     /// La capa de anotación se prende y se apaga; el tablero no. Cuando está
     /// apagada no se compone, pero su contenido sigue guardado.
     private var _annotationOn = false
+    private var _boardColor: BoardColor = .blanco
 
     /// Timestamp del primer frame. Todo lo demás se mide desde acá.
     private var sessionStart: CMTime?
@@ -118,6 +119,12 @@ final class FramePipeline {
         lock.unlock()
     }
 
+    func setBoardColor(_ color: BoardColor) {
+        lock.lock()
+        _boardColor = color
+        lock.unlock()
+    }
+
     /// Ubica la burbuja a partir del marco global de la ventana espejo.
     func setBubbleFrame(_ globalRect: CGRect?) {
         let pixels = globalRect.flatMap { converter.pixelRect(fromGlobal: $0) }
@@ -160,6 +167,7 @@ final class FramePipeline {
         let mode = _mode
         let bubbleRect = _bubbleRect
         let annotationOn = _annotationOn
+        let boardColor = _boardColor
         let modeChange = _pendingModeChange
         _pendingModeChange = nil
         lock.unlock()
@@ -182,6 +190,7 @@ final class FramePipeline {
                         camera: camera?.latestImage,
                         bubbleRect: bubbleRect,
                         whiteboard: whiteboard,
+                        boardColor: boardColor,
                         annotation: annotationOn ? annotation : nil,
                         time: time)
         cursorTrack.record(cursor: cursor, clicks: clicks, time: time)
@@ -225,6 +234,7 @@ final class FramePipeline {
 
         lock.lock()
         let bubbleRect = _bubbleRect
+        let boardColor = _boardColor
         lock.unlock()
 
         lock.lock()
@@ -261,6 +271,7 @@ final class FramePipeline {
                         camera: camera?.latestImage,
                         bubbleRect: bubbleRect,
                         whiteboard: whiteboard,
+                        boardColor: boardColor,
                         time: max(0, elapsed.seconds))
 
         guard let sample = sampleBuffer(from: buffer, at: now) else { return }

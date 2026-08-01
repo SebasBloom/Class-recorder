@@ -99,6 +99,7 @@ final class FrameCompositor {
               camera: CGImage?,
               bubbleRect: CGRect?,
               whiteboard: DrawingSurface? = nil,
+              boardColor: BoardColor = .blanco,
               annotation: DrawingSurface? = nil,
               time: Double) {
 
@@ -144,7 +145,7 @@ final class FrameCompositor {
         // dibujado encima; en cámara completa, la imagen de la cámara recortada
         // al centro. Los dos tapan la pantalla capturada por completo.
         if drawWhiteboard {
-            DrawingRenderer.fillWhiteboard(context, size: pixelSize)
+            DrawingRenderer.fillBoard(context, size: pixelSize, color: boardColor)
             drawSurface(whiteboard, in: context)
         }
 

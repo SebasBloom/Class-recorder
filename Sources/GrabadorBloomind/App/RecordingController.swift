@@ -35,6 +35,10 @@ final class RecordingController {
     private let annotation = DrawingSurface()
     private var annotationWindow: DrawingWindow?
     private(set) var isAnnotationOn = false
+
+    /// Color del lienzo del tablero. Se alterna en vivo con su atajo y se recuerda
+    /// entre sesiones.
+    private(set) var boardColor: BoardColor = .blanco
     /// La pantalla que se está grabando. El espejo del tablero tiene que cubrir
     /// esa y no la principal.
     private var recordingDisplay: CaptureDisplay?
@@ -105,6 +109,11 @@ final class RecordingController {
         whiteboard.clear()
         annotation.clear()
 
+        // Memoria pegajosa del color del lienzo.
+        if let saved = ConfigurationStore.shared.current.boardColor {
+            boardColor = saved == "negro" ? .negro : .blanco
+        }
+
         let url = Self.makeOutputURL(sessionName: "Prueba")
         Logger.shared.openLog(named: url.deletingPathExtension().lastPathComponent)
 
@@ -138,6 +147,7 @@ final class RecordingController {
             )
             self.pipeline = pipeline
             pipeline.setBubbleFrame(bubbleFrame)
+            pipeline.setBoardColor(boardColor)
             mouseTracker.start()
 
             // El frame llega en la cola de captura y se procesa ahí mismo. El
@@ -334,6 +344,9 @@ final class RecordingController {
         hotKeys.append(HotKey(keyCode: kVK_ANSI_D, modifiers: modifiers) { [weak self] in
             Task { @MainActor in self?.toggleAnnotation() }
         })
+        hotKeys.append(HotKey(keyCode: kVK_ANSI_B, modifiers: modifiers) { [weak self] in
+            Task { @MainActor in self?.toggleBoardColor() }
+        })
 
         self.recordingDisplay = display
     }
@@ -354,6 +367,7 @@ final class RecordingController {
             if whiteboardWindow == nil, let frame = recordingScreenFrame() {
                 whiteboardWindow = DrawingWindow(surface: whiteboard,
                                                  background: .lienzo,
+                                                 boardColor: boardColor,
                                                  screenFrame: frame)
             }
             annotationWindow?.hide()
@@ -414,6 +428,7 @@ final class RecordingController {
             if annotationWindow == nil, let frame = recordingScreenFrame() {
                 annotationWindow = DrawingWindow(surface: annotation,
                                                  background: .transparente,
+                                                 boardColor: boardColor,
                                                  screenFrame: frame)
             }
             // Solo se muestra sobre la pantalla real. Prenderla estando en cámara
@@ -452,10 +467,35 @@ final class RecordingController {
         activeMirror?.refresh()
     }
 
+    /// Alterna el lienzo entre blanco y negro, sin cortar la grabación.
+    ///
+    /// Si el marcador activo quedara invisible sobre el fondo nuevo, se rota solo:
+    /// pasar a tablero negro con el marcador negro dejaría dibujando en la nada.
+    private func toggleBoardColor() {
+        guard isRecording else { return }
+        boardColor = boardColor == .blanco ? .negro : .blanco
+
+        ConfigurationStore.shared.update { $0.boardColor = boardColor.label }
+        pipeline?.setBoardColor(boardColor)
+        whiteboardWindow?.setBoardColor(boardColor)
+
+        if whiteboard.color == boardColor.invisibleMarker {
+            rotateMarkerColor()
+        }
+
+        Logger.shared.log("Tablero \(boardColor.label)")
+        onStateChange?()
+    }
+
     /// La paleta es una sola en la interfaz, así que el color se rota en las dos
     /// superficies a la vez y no depende de cuál esté activa.
+    ///
+    /// En el tablero se saltea el color que se confundiría con el lienzo; sobre la
+    /// pantalla real no se saltea ninguno.
     private func rotateMarkerColor() {
-        let color = whiteboard.rotateColor()
+        let invisible = mode == .tablero ? boardColor.invisibleMarker : nil
+        let color = whiteboard.color.next(avoiding: invisible)
+        whiteboard.setColor(color)
         annotation.setColor(color)
         Logger.shared.log("Color del marcador: \(color.label)")
         refreshDrawingMirror()

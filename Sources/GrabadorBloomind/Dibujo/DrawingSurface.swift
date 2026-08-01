@@ -28,6 +28,37 @@ enum MarkerColor: Int, CaseIterable {
     var next: MarkerColor {
         MarkerColor(rawValue: (rawValue + 1) % MarkerColor.allCases.count) ?? .rojo
     }
+
+    /// El siguiente color de la paleta, salteando el que no se vería sobre el
+    /// fondo: el negro en un tablero negro, el blanco en uno blanco.
+    ///
+    /// Sobre la pantalla real no se saltea ninguno, porque ahí el fondo es lo que
+    /// haya en pantalla y cualquier color puede servir o no según la zona.
+    func next(avoiding invisible: MarkerColor?) -> MarkerColor {
+        let candidate = next
+        return candidate == invisible ? candidate.next : candidate
+    }
+}
+
+/// Fondo del tablero. El plan nació con lienzo blanco; el negro se agregó a
+/// pedido de Sebas el 2026-07-31 (decisión 66).
+enum BoardColor {
+    case blanco
+    case negro
+
+    var cgColor: CGColor {
+        switch self {
+        case .blanco: return CGColor(red: 1, green: 1, blue: 1, alpha: 1)
+        case .negro:  return CGColor(red: 0.07, green: 0.07, blue: 0.07, alpha: 1)
+        }
+    }
+
+    /// El color de marcador que se confundiría con este fondo.
+    var invisibleMarker: MarkerColor {
+        self == .blanco ? .blanco : .negro
+    }
+
+    var label: String { self == .blanco ? "blanco" : "negro" }
 }
 
 /// Un trazo a mano alzada.
