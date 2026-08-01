@@ -21,6 +21,8 @@ final class FramePipeline {
     /// apagada no se compone, pero su contenido sigue guardado.
     private var _annotationOn = false
     private var _boardColor: BoardColor = .blanco
+    /// Zonas de censura ya convertidas a píxeles del frame, listas para tapar.
+    private var _redactions: [(rect: CGRect, style: RedactionStyle)] = []
 
     /// Timestamp del primer frame. Todo lo demás se mide desde acá.
     private var sessionStart: CMTime?
@@ -125,6 +127,19 @@ final class FramePipeline {
         lock.unlock()
     }
 
+    /// Recibe las zonas activas en coordenadas globales y las deja convertidas.
+    /// La conversión se hace acá y no por frame: las zonas cambian cuando alguien
+    /// aprieta un atajo, no treinta veces por segundo.
+    func setRedactions(_ zonas: [(rect: CGRect, style: RedactionStyle)]) {
+        let convertidas = zonas.compactMap { zona -> (rect: CGRect, style: RedactionStyle)? in
+            guard let pixeles = converter.pixelRect(fromGlobal: zona.rect) else { return nil }
+            return (pixeles, zona.style)
+        }
+        lock.lock()
+        _redactions = convertidas
+        lock.unlock()
+    }
+
     /// Ubica la burbuja a partir del marco global de la ventana espejo.
     func setBubbleFrame(_ globalRect: CGRect?) {
         let pixels = globalRect.flatMap { converter.pixelRect(fromGlobal: $0) }
@@ -168,6 +183,7 @@ final class FramePipeline {
         let bubbleRect = _bubbleRect
         let annotationOn = _annotationOn
         let boardColor = _boardColor
+        let redactions = _redactions
         let modeChange = _pendingModeChange
         _pendingModeChange = nil
         lock.unlock()
@@ -192,6 +208,7 @@ final class FramePipeline {
                         whiteboard: whiteboard,
                         boardColor: boardColor,
                         annotation: annotationOn ? annotation : nil,
+                        redactions: redactions,
                         time: time)
         cursorTrack.record(cursor: cursor, clicks: clicks, time: time)
 

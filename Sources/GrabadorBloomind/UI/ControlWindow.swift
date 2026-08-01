@@ -518,6 +518,11 @@ final class ControlWindow: NSWindowController {
         if recorder.isAnnotationOn, recorder.mode == .pantalla {
             texto += "   Anotando · marcador \(recorder.markerColor.label)"
         }
+        // Indicador de censura activa (plan, 8.6): saber sin adivinar si la zona
+        // está tapada. El widget definitivo llega en la Fase 11.
+        if recorder.isRedacting {
+            texto += "   ▓ Censura activa"
+        }
 
         if recorder.isPaused {
             statusLabel.stringValue = "❚❚ Pausado   \(texto)"

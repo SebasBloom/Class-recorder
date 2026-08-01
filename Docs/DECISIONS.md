@@ -322,3 +322,23 @@ La tarjeta de atajos pasa de Opción Comando barra diagonal a **Opción Comando 
 Razón: **bug real, encontrado por Sebas.** Un atajo global se registra por **posición física** de la tecla, no por el carácter que produce. En el teclado latinoamericano de Sebas la barra diagonal es Shift+7, así que Opción+Comando+/ nunca coincidía con la tecla registrada y el atajo no existía. Peor: la interfaz mostraba "⌥⌘/" cuando la tecla en esa posición está rotulada "-", o sea que la pantalla de preferencias mentía.
 Las letras y los números están en la misma posición física y con el mismo rótulo en todas las distribuciones QWERTY; los símbolos no. La regla aplica a cualquier default futuro.
 Ojo: esto solo afecta a los **defaults**, que llevan su etiqueta escrita a mano. Los atajos que el usuario reasigna toman la etiqueta de la tecla que él mismo apretó (decisión 67), así que ahí el problema no existe.
+
+**71. 2026-08-01 — La zona de censura se guarda en coordenadas globales, no en píxeles del video.**
+Igual que el marco de la burbuja: `RedactionSlot` guarda el rectángulo en coordenadas de macOS y el conversor lo traduce a píxeles del frame.
+Razón: la zona sobrevive a cambiar de pantalla o de resolución de captura. La barra de direcciones del VPS está en el mismo lugar de la pantalla, no en el mismo píxel de un archivo.
+La conversión se hace al prender o apagar, no por frame: las zonas cambian cuando alguien aprieta un atajo, no treinta veces por segundo.
+
+**72. 2026-08-01 — El blur se hace promediando bloques sobre el propio buffer, sin CoreImage.**
+`pixelate` promedia bloques de 24 píxeles directo sobre el buffer de la captura.
+Razón: esto corre una vez por frame en la cola de captura, que es la que no se puede atrasar. Un filtro de CoreImage implicaría crear contextos e imágenes intermedias por frame, que es exactamente lo que la decisión 28 evita.
+El bloque de 24 píxeles es lo bastante grueso para que no se lea un texto debajo. **El bloque sólido sigue siendo el default** porque es el único que garantiza que no se pueda reconstruir lo que había.
+
+**73. 2026-08-01 — Al detener la grabación, la censura se apaga pero la zona se recuerda.**
+`turnOff()` apaga la tapa sin borrar el rectángulo.
+Razón: cada toma arranca sin nada tapado, que es lo predecible, pero el permanente no obliga a redibujar la zona en cada clase. Es justamente la diferencia entre los dos slots.
+
+**74. 2026-08-01 — Una sola zona de censura, que no persiste en disco. Reemplaza los dos slots.**
+Pedido de Sebas el 2026-08-01: *"no se me ocurre por qué dejar una barra de censura permanente"*. **Cambia las secciones 8.6 y 8.8 del plan maestro y deja sin efecto la decisión 5.**
+Queda un solo atajo (Opción Comando C) y su variante con Shift para redibujar. La zona vive mientras la app esté abierta; al reabrir, se dibuja de nuevo.
+Razón: el permanente existía por un caso hipotético (la barra de direcciones del VPS siempre en el mismo lugar) que el propio Sebas descartó al usarlo. Lo que costaba era real: dos slots, dos atajos más, dos campos en `config.json` y un rectángulo de una zona sensible guardado en disco para siempre.
+De paso es más seguro por defecto: nada de lo que se tapa queda escrito en ningún archivo. Los campos `permanentRedactionRect` y `permanentRedactionStyle` desaparecen de la configuración; un `config.json` viejo que los tenga los ignora al cargar y los suelta en la próxima escritura.

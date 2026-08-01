@@ -449,3 +449,63 @@ Los pasos 1, 2, 3, 5, 6 y 7 no dejaron rastro en los logs ni en `config.json` (l
 - Que fuera de grabación Opción Comando 1 siga funcionando normal en Finder
 - Iniciar y detener con Control Opción Comando G sin abrir la ventana de control
 - Restaurar por defecto
+
+## Fase 10. Censura — VALIDADA el 2026-08-01
+
+Una zona que tapa en el video lo que no puede quedar grabado.
+
+- **Opción + Comando + C** — la primera vez abre el selector para que arrastres la zona; después prende y apaga al instante
+- **Shift + Opción + Comando + C** — redibujar la zona
+
+La zona vive mientras la app esté abierta. Al reabrirla se dibuja de nuevo: nada de lo que tapás queda guardado en disco.
+
+**Importante:** la censura tapa **el video, no tu pantalla**. Vos vas a seguir viendo la barra de direcciones normal mientras el archivo la tiene tapada. Es a propósito (decisión 3), pero significa que en pantalla no vas a notar nada: el aviso está en el renglón de estado del control, que dice **▓ Censura activa**.
+
+### 1. Tapar la barra de direcciones
+
+Abrí el navegador con alguna página. Grabá y durante la grabación:
+
+- Apretá **Opción + Comando + C**
+- Arrastrá sobre la barra de direcciones y soltá
+- Dejá correr unos segundos
+- Apretá **Opción + Comando + C** de nuevo para destapar
+- Dejá correr unos segundos más y detené
+
+**Tiene que:** en el video, la barra de direcciones estar tapada con un bloque sólido mientras estuvo activa, y legible antes y después. **El velo oscuro del selector no puede aparecer en el video**: es una ventana de la app.
+
+### 2. Prender y apagar sin redibujar
+
+En esa misma grabación, apretá **Opción + Comando + C** dos o tres veces seguidas.
+
+**Tiene que:** tapar y destapar al instante, sin volver a pedirte la zona.
+
+### 3. Redibujar
+
+Apretá **Shift + Opción + Comando + C**.
+
+**Tiene que:** abrir el selector de nuevo y quedarse con la zona nueva.
+
+### 4. Al reabrir la app, se olvida
+
+Cerrá la app entera y volvé a abrirla. Grabá y apretá **Opción + Comando + C**.
+
+**Tiene que:** pedirte que dibujes la zona otra vez. Es a propósito: nada de lo que tapás queda escrito en disco.
+
+### 5. El log no dice qué tapaste
+
+Abrí el log de esa grabación.
+
+**Tiene que:** mencionar que la censura se activó y se desactivó, y **jamás** una coordenada ni nada sobre lo que había en pantalla. Si ves números de posición ahí, es una falla de privacidad y hay que corregirla.
+
+El log ahora también anota cada atajo que llega ("Atajo: Censura on / off") y cuántos quedaron activos al empezar a grabar. Eso es diagnóstico: si un atajo no responde, el log dice si la combinación llegó o no.
+
+### Resultados medidos
+
+1. **La censura tapa de verdad:** verificado en video comparando el mismo recorte antes y durante. Segundo 20 se lee la URL completa del documento; segundo 40, bloque sólido y la URL no está.
+2. **El selector no sale en el video:** confirmado, ni el velo ni el instructivo aparecen.
+3. **Los atajos llegan:** el log muestra 18 atajos activos durante la grabación y 1 fuera de ella, que es exactamente lo que pide el punto delicado 7 (fuera de grabación solo iniciar/detener).
+4. **El log no dice qué se tapó:** registra "zona definida y activada" y "desactivada", sin una sola coordenada.
+
+### Cambio de alcance
+
+Los dos slots del plan se redujeron a **uno solo sin persistencia** a pedido de Sebas (decisión 74). Con eso desaparecieron un atajo, dos campos de `config.json` y el rectángulo de una zona sensible guardado en disco.

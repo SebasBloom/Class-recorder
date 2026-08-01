@@ -166,8 +166,8 @@ Coordenadas en píxeles del video final (ya convertidas, VideoFlow no necesita s
 
 ### 8.6 Censura en vivo
 
-- Dos slots independientes: Permanente (persiste en disco, caso barra de direcciones del VPS) y De sesión (solo en memoria, muere al cerrar la app).
-- Comportamiento por slot: la primera vez que se usa su atajo sin rectángulo definido, entra en modo dibujar (arrastrás el rectángulo y queda fijado). De ahí en adelante el mismo atajo prende y apaga la tapa al instante. Modificador Shift junto al atajo fuerza el modo dibujar aunque ya exista posición guardada.
+- **Una sola zona, que no persiste en disco** (decisión 74, reemplaza los dos slots originales). Vive mientras la app esté abierta y se dibuja de nuevo en cada sesión.
+- Comportamiento: la primera vez que se usa el atajo sin rectángulo definido, entra en modo dibujar (arrastrás el rectángulo y queda fijado). De ahí en adelante el mismo atajo prende y apaga la tapa al instante. Modificador Shift junto al atajo fuerza el modo dibujar aunque ya exista una zona elegida.
 - Estilo: bloque sólido opaco por defecto. Blur disponible como opción por slot en preferencias, para contenido menos sensible.
 - El widget muestra un indicador visible de censura activa, para saber sin adivinar si la zona está tapada.
 - El log registra activaciones y desactivaciones como eventos, jamás posiciones ni contenido.
@@ -195,9 +195,8 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 | Modo Tablero | Opción Comando 3 | Durante grabación |
 | Pausar / reanudar | Opción Comando P | Durante grabación |
 | Reiniciar toma | Opción Comando R | Durante grabación |
-| Censura permanente on/off | Opción Comando C | Durante grabación |
-| Censura de sesión on/off | Opción Comando X | Durante grabación |
-| Redibujar censura (cualquier slot) | Shift más el atajo del slot | Durante grabación |
+| Censura on/off | Opción Comando C | Durante grabación |
+| Redibujar la zona censurada | Shift Opción Comando C | Durante grabación |
 | Capa de anotación on/off | Opción Comando D | Durante grabación |
 | Rotar color del marcador | Opción Comando 0 | Durante grabación |
 | Deshacer último trazo | Opción Comando Z | Modos de dibujo |

@@ -41,10 +41,6 @@ struct Configuration: Codable, Equatable {
     var bubbleFrame: StoredRect?
     var widgetPosition: StoredPoint?
 
-    /// Slot de censura permanente. El de sesión vive solo en memoria y no se
-    /// guarda nunca (decisión 5).
-    var permanentRedactionRect: StoredRect?
-
     /// Atajos reasignados por el usuario: acción -> combinación. Vacío significa
     /// "todos en su valor por defecto".
     var shortcuts: [String: Shortcut] = [:]

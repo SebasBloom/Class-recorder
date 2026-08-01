@@ -16,6 +16,8 @@ enum ShortcutAction: String, CaseIterable {
     case colorTablero = "color_tablero"
     case deshacer = "deshacer"
     case borrar = "borrar"
+    case censura = "censura"
+    case redibujarCensura = "redibujar_censura"
     case tarjeta = "tarjeta"
 
     var label: String {
@@ -30,6 +32,8 @@ enum ShortcutAction: String, CaseIterable {
         case .colorTablero:   return "Tablero blanco / negro"
         case .deshacer:       return "Deshacer último trazo"
         case .borrar:         return "Borrar la superficie activa"
+        case .censura:              return "Censura on / off"
+        case .redibujarCensura:     return "Redibujar la zona censurada"
         case .tarjeta:        return "Tarjeta de atajos (mantener)"
         }
     }
@@ -58,6 +62,10 @@ enum ShortcutAction: String, CaseIterable {
         case .colorTablero:   return Shortcut(tecla: kVK_ANSI_B, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘B")
         case .deshacer:       return Shortcut(tecla: kVK_ANSI_Z, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘Z")
         case .borrar:         return Shortcut(tecla: kVK_Delete, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘⌫")
+        // Shift más el atajo fuerza el modo dibujar aunque ya haya zona elegida
+        // en esta sesión (plan, 8.6).
+        case .censura:          return Shortcut(tecla: kVK_ANSI_C, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘C")
+        case .redibujarCensura: return Shortcut(tecla: kVK_ANSI_C, modificadores: optionKey | cmdKey | shiftKey, etiqueta: "⇧⌥⌘C")
         case .tarjeta:        return Shortcut(tecla: kVK_ANSI_H, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘H")
         }
     }
@@ -162,9 +170,18 @@ final class ShortcutRegistry {
             let teclas = [shortcut.tecla] + (shortcut == action.porDefecto ? action.equivalentes : [])
             for tecla in teclas {
                 hotKeys.append(HotKey(keyCode: tecla, modifiers: shortcut.modificadores,
-                                      action: { [weak self] in self?.onAction?(action) },
+                                      action: { [weak self] in
+                                          // Queda registrado que la combinación llegó, aunque la
+                                          // acción después no haga nada visible. Sin esto, "el
+                                          // atajo no funciona" y "el atajo funciona pero no se ve
+                                          // el efecto" se ven exactamente igual desde afuera.
+                                          Logger.shared.log("Atajo: \(action.label)")
+                                          self?.onAction?(action)
+                                      },
                                       release: { [weak self] in self?.onRelease?(action) }))
             }
         }
+
+        Logger.shared.log("Atajos activos: \(hotKeys.count) registrados, grabando: \(isRecording ? "sí" : "no")")
     }
 }

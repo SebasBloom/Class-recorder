@@ -39,6 +39,14 @@ final class RecordingController {
     /// Color del lienzo del tablero. Se alterna en vivo con su atajo y se recuerda
     /// entre sesiones.
     private(set) var boardColor: BoardColor = .blanco
+
+    /// La zona censurada. Vive mientras la app esté abierta y se dibuja de nuevo
+    /// en cada sesión (decisión 74).
+    private let redaction = RedactionSlot()
+    private var rectangleSelector: RectangleSelector?
+
+    /// Para la UI: si hay algo tapado en este momento.
+    var isRedacting: Bool { redaction.activeRect != nil }
     /// La pantalla que se está grabando. El espejo del tablero tiene que cubrir
     /// esa y no la principal.
     private var recordingDisplay: CaptureDisplay?
@@ -235,6 +243,9 @@ final class RecordingController {
         setMode(.pantalla)
         closeWhiteboardWindow()
         setAnnotation(on: false)
+        // La zona queda en memoria; lo que se apaga es la tapa. La próxima toma
+        // de esta misma sesión arranca destapada sin obligar a redibujar.
+        redaction.turnOff()
         recordingDisplay = nil
 
         let writer = self.writer
@@ -319,7 +330,56 @@ final class RecordingController {
         case .colorTablero:   toggleBoardColor()
         case .deshacer:       undoDrawing()
         case .borrar:         clearDrawing()
+        case .censura:          toggleRedaction(forceDraw: false)
+        case .redibujarCensura: toggleRedaction(forceDraw: true)
         }
+    }
+
+    // MARK: - Censura
+
+    /// Prende, apaga o redibuja la zona censurada.
+    ///
+    /// La primera vez de cada sesión, sin zona definida, abre el selector. De ahí
+    /// en adelante el mismo atajo prende y apaga al instante; Shift fuerza el
+    /// redibujado (plan, 8.6).
+    private func toggleRedaction(forceDraw: Bool) {
+        guard isRecording else { return }
+
+        if forceDraw || redaction.rect == nil {
+            presentRectangleSelector()
+            return
+        }
+
+        redaction.toggle()
+        publishRedactions()
+        onStateChange?()
+    }
+
+    private func presentRectangleSelector() {
+        guard rectangleSelector == nil, let frame = recordingScreenFrame() else { return }
+
+        // El selector es una ventana de la app, así que queda fuera de la
+        // captura: en el video no se ve el velo ni el instructivo, solo aparece
+        // la zona ya tapada.
+        rectangleSelector = RectangleSelector.present(
+            on: frame,
+            titulo: "Elegí la zona a tapar"
+        ) { [weak self] rect in
+            Task { @MainActor in
+                guard let self else { return }
+                self.rectangleSelector = nil
+                if let rect { self.redaction.setRect(rect) }
+                self.publishRedactions()
+                self.onStateChange?()
+            }
+        }
+    }
+
+    /// Le pasa al pipeline la zona que hay que tapar ahora.
+    private func publishRedactions() {
+        var zonas: [(rect: CGRect, style: RedactionStyle)] = []
+        if let rect = redaction.activeRect { zonas.append((rect, redaction.style)) }
+        pipeline?.setRedactions(zonas)
     }
 
     // MARK: - Superficies de dibujo

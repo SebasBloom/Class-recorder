@@ -13,6 +13,19 @@ enum CaptureMode: String {
     case tablero
 }
 
+/// Cómo se tapa una zona censurada.
+///
+/// Vive acá y no en `Censura/` porque es el compositor el que lo dibuja, igual
+/// que `CaptureMode` y `CompositionLayer`: los tipos que describen qué se pinta
+/// en un frame están todos juntos.
+enum RedactionStyle: String, Codable {
+    /// Bloque opaco. Es el default y el único que garantiza que no se pueda
+    /// reconstruir lo que había debajo.
+    case bloque
+    /// Desenfoque. Opción para contenido menos sensible (plan, 8.6).
+    case blur
+}
+
 /// Capas que se componen sobre el fondo.
 enum CompositionLayer {
     case cursorCircle
@@ -101,6 +114,7 @@ final class FrameCompositor {
               whiteboard: DrawingSurface? = nil,
               boardColor: BoardColor = .blanco,
               annotation: DrawingSurface? = nil,
+              redactions: [(rect: CGRect, style: RedactionStyle)] = [],
               time: Double) {
 
         if isVisible(.clickEffect, in: mode) {
@@ -121,8 +135,10 @@ final class FrameCompositor {
         // La capa de anotación solo existe sobre la pantalla real: en cámara y en
         // tablero no se compone, aunque esté prendida y con contenido.
         let drawAnnotation = annotation != nil && isVisible(.screenAnnotation, in: mode)
+        let drawRedactions = !redactions.isEmpty && isVisible(.redaction, in: mode)
 
-        guard drawCursor || drawBubble || drawFullCamera || drawWhiteboard || drawAnnotation || !ripples.isEmpty else { return }
+        guard drawCursor || drawBubble || drawFullCamera || drawWhiteboard || drawAnnotation
+                || drawRedactions || !ripples.isEmpty else { return }
 
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
@@ -153,6 +169,16 @@ final class FrameCompositor {
             context.interpolationQuality = .low
             context.draw(camera, in: Self.fillRect(imageSize: CGSize(width: camera.width, height: camera.height),
                                                    in: CGRect(origin: .zero, size: pixelSize)))
+        }
+
+        // La censura va antes que todo lo demás salvo el fondo: tiene que tapar
+        // el contenido de la pantalla, pero el cursor y la burbuja se ven encima
+        // porque no son contenido sensible.
+        if drawRedactions {
+            for redaction in redactions {
+                drawRedaction(redaction.rect, style: redaction.style,
+                              in: context, buffer: pixelBuffer)
+            }
         }
 
         // Las ondas van debajo del círculo fijo, para que el círculo siempre se
@@ -264,6 +290,79 @@ final class FrameCompositor {
         context.setShouldAntialias(true)
         DrawingRenderer.draw(items: items, liveStroke: nil, in: context, size: pixelSize)
         return context.makeImage()
+    }
+
+    /// Tapa una zona del frame.
+    ///
+    /// El bloque es un rectángulo opaco, y es el default por una razón: es lo
+    /// único que garantiza que no se pueda reconstruir lo que había debajo.
+    ///
+    /// El blur se hace promediando bloques de píxeles gruesos sobre el propio
+    /// buffer, sin CoreImage: es una operación por frame en la cola de captura y
+    /// tiene que costar lo mínimo. El bloque es de 24 píxeles, suficientemente
+    /// grueso para que no se lea un texto debajo.
+    private func drawRedaction(_ rect: CGRect, style: RedactionStyle,
+                               in context: CGContext, buffer: CVPixelBuffer) {
+        // El rectángulo llega con origen arriba; el contexto lo tiene abajo.
+        let target = CGRect(x: rect.minX, y: pixelSize.height - rect.maxY,
+                            width: rect.width, height: rect.height)
+            .intersection(CGRect(origin: .zero, size: pixelSize))
+        guard !target.isNull, target.width >= 1, target.height >= 1 else { return }
+
+        switch style {
+        case .bloque:
+            context.setFillColor(CGColor(red: 0.05, green: 0.05, blue: 0.07, alpha: 1))
+            context.fill(target)
+        case .blur:
+            pixelate(target, in: buffer)
+        }
+    }
+
+    /// Promedia bloques de píxeles dentro de la zona, directo sobre el buffer.
+    private func pixelate(_ rect: CGRect, in buffer: CVPixelBuffer) {
+        let bloque = 24
+        guard let base = CVPixelBufferGetBaseAddress(buffer) else { return }
+        let bytesPorFila = CVPixelBufferGetBytesPerRow(buffer)
+        let datos = base.assumingMemoryBound(to: UInt8.self)
+
+        let x0 = max(0, Int(rect.minX)), x1 = min(Int(pixelSize.width), Int(rect.maxX))
+        let y0 = max(0, Int(rect.minY)), y1 = min(Int(pixelSize.height), Int(rect.maxY))
+
+        var y = y0
+        while y < y1 {
+            var x = x0
+            while x < x1 {
+                let anchoBloque = min(bloque, x1 - x)
+                let altoBloque = min(bloque, y1 - y)
+
+                var suma = (b: 0, g: 0, r: 0)
+                var cuenta = 0
+                for fila in y..<(y + altoBloque) {
+                    let inicioFila = fila * bytesPorFila
+                    for columna in x..<(x + anchoBloque) {
+                        let p = inicioFila + columna * 4
+                        suma.b += Int(datos[p])
+                        suma.g += Int(datos[p + 1])
+                        suma.r += Int(datos[p + 2])
+                        cuenta += 1
+                    }
+                }
+                guard cuenta > 0 else { x += bloque; continue }
+
+                let promedio = (b: UInt8(suma.b / cuenta), g: UInt8(suma.g / cuenta), r: UInt8(suma.r / cuenta))
+                for fila in y..<(y + altoBloque) {
+                    let inicioFila = fila * bytesPorFila
+                    for columna in x..<(x + anchoBloque) {
+                        let p = inicioFila + columna * 4
+                        datos[p] = promedio.b
+                        datos[p + 1] = promedio.g
+                        datos[p + 2] = promedio.r
+                    }
+                }
+                x += bloque
+            }
+            y += bloque
+        }
     }
 
     /// Burbuja de cámara: rectángulo de esquinas redondeadas con la imagen
