@@ -412,3 +412,34 @@ Elegido por Sebas el 2026-08-19 sobre las otras dos opciones que se le plantearo
 La decisión 37 dice que el procesamiento de audio va en VideoFlow, no en el grabador. El ducking es procesamiento y se hace igual, acá.
 Razón: la decisión 9 obliga a entregar **un solo track ya mezclado**, para que Whisper transcriba limpio. Una vez sumadas, las dos fuentes no se pueden separar nunca más, así que un balance mal puesto es irreversible y VideoFlow no tiene nada que arreglar: recibe un archivo donde la voz ya quedó enterrada. Es lo contrario de la reducción de ruido, que sí se puede aplicar después sin pérdida.
 Criterio general que queda: en el grabador solo va el procesamiento que **no se pueda hacer después**. Todo lo demás sigue siendo de VideoFlow. El limitador de la mezcla ya cumplía este criterio por la misma razón.
+
+
+## 2026-09-05 — La entrega se arma con `armar-entrega.sh`, y el zip se hace con `ditto`
+
+**Decisión.** Un script compila, comprime el bundle con `ditto -c -k --keepParent` y
+genera el manual como `.txt` junto al zip. Es lo único que se le pasa a quien va a
+usar la app.
+
+**Razón.** Tres cosas que se hacían a mano y cada una tiene su trampa:
+
+1. **`ditto`, no `zip`.** Es lo único que preserva la firma y los metadatos del
+   bundle. Un `.app` mal comprimido llega "dañado" a la otra Mac y el mensaje no
+   dice por qué. Verificado: al descomprimir el zip, `codesign --verify` responde
+   "valid on disk" y "satisfies its Designated Requirement".
+2. **El manual en `.txt`.** Un `.md` en macOS abre en cualquier cosa (o en nada) y
+   muestra la sintaxis cruda. El `.txt` abre con doble clic en TextEdit.
+3. **Compilar siempre antes de comprimir**, para que el zip no quede atrasado
+   respecto del código. Ya había pasado: el zip del 20 de agosto salió de código que
+   nunca se commiteó.
+
+**Nota sobre Gatekeeper, para no diagnosticarlo dos veces.** `spctl -a -vv` sobre la
+app responde `rejected`, con `origin=Bloomind Desarrollo`. **Eso es lo esperado**, no
+un problema del bundle: la app está firmada con el certificado autofirmado de la
+máquina que compila, no con un Developer ID notarizado. La firma es válida y estable
+(por eso los permisos de macOS se dan una sola vez), pero Gatekeeper exige la
+autorización manual en Privacidad y seguridad que describe el manual.
+
+**Pendiente que puede tumbar la instalación:** el binario es `arm64` puro
+(`lipo -archs` → `arm64`), así que **no corre en un Mac Intel**, y el manual solo
+declara "macOS 15 o más nuevo". Hay que confirmar qué Mac tiene Iván antes de
+mandarle nada; si es Intel, se compila universal.
