@@ -189,10 +189,11 @@ final class RecordingController {
                 }
             }
 
-            // Con una sola fuente el audio va directo a la pista. Con las dos,
-            // pasa por el mezclador, que las suma sobre una línea de tiempo
-            // común y entrega bloques ya combinados.
-            if audioMode == .mixed {
+            // Todo el audio pasa por el mezclador, también con una sola fuente
+            // (decisión 80). Con una sola es su caso degenerado, y tener un
+            // camino único es lo que hace que silenciar y el ducking funcionen
+            // igual en los cuatro modos, sin un segundo mecanismo que mantener.
+            if audioMode.hasAudio {
                 let mixer = AudioMixer { [writer] mixed in
                     writer.appendAudio(mixed)
                 }
@@ -202,13 +203,6 @@ final class RecordingController {
                 }
                 capture.onSystemAudio = { [mixer] buffer in
                     autoreleasepool { mixer.add(buffer, from: .system) }
-                }
-            } else {
-                capture.onMicrophone = { [writer] buffer in
-                    autoreleasepool { writer.appendAudio(buffer) }
-                }
-                capture.onSystemAudio = { [writer] buffer in
-                    autoreleasepool { writer.appendAudio(buffer) }
                 }
             }
 
@@ -363,7 +357,60 @@ final class RecordingController {
         case .reiniciarToma:    onRestartRequested?()
         case .censura:          toggleRedaction(forceDraw: false)
         case .redibujarCensura: toggleRedaction(forceDraw: true)
+        case .silenciarMicrofono: toggleMute(.microphone)
+        case .silenciarSistema:   toggleMute(.system)
         }
+    }
+
+    // MARK: - Cámara en vivo
+
+    /// Cambia la cámara que se compone, o la quita con nil, con la grabación
+    /// corriendo.
+    ///
+    /// Esto se puede hacer con la cámara y no con el audio (decisión 82) porque
+    /// la cámara no es una pista del archivo ni una fuente del stream de
+    /// captura: se dibuja sobre cada frame, así que puede nacer y morir cuando
+    /// sea.
+    func setCamera(_ camera: CameraCapture?) {
+        self.camera = camera
+        pipeline?.setCamera(camera)
+        activeCameraID = camera?.device.uniqueID
+
+        // En modo cámara completa el fondo del frame **es** la cámara: apagarla
+        // sin más dejaría el video en negro y congelado, porque el reloj
+        // sintético no corre sin imagen (decisión 83).
+        if camera == nil, mode == .camara {
+            setMode(.pantalla)
+            Logger.shared.log("Cámara apagada en modo cámara completa: se vuelve a modo pantalla")
+        }
+        onStateChange?()
+    }
+
+    // MARK: - Silencio por fuente
+
+    /// Si la fuente entró en esta grabación. Una que no se eligió antes de
+    /// arrancar no se puede encender después (decisión 82), así que su botón va
+    /// deshabilitado en vez de ausente.
+    func capturesSource(_ source: AudioMixer.Source) -> Bool {
+        guard let modo = lastStartOptions?.audioMode else { return false }
+        return source == .microphone ? modo.capturesMicrophone : modo.capturesSystem
+    }
+
+    func isMuted(_ source: AudioMixer.Source) -> Bool {
+        mixer?.isMuted(source) ?? false
+    }
+
+    /// Silencia o reactiva una fuente en vivo. Se permite dejar las dos mudas: el
+    /// widget lo muestra bien visible y el archivo queda con silencio, no con un
+    /// hueco (decisión 81).
+    func toggleMute(_ source: AudioMixer.Source) {
+        guard isRecording, let mixer, capturesSource(source) else { return }
+        let silenciada = !mixer.isMuted(source)
+        mixer.setMuted(silenciada, for: source)
+
+        let nombre = source == .microphone ? "micrófono" : "audio del sistema"
+        Logger.shared.log("\(silenciada ? "Silenciado" : "Reactivado") el \(nombre)")
+        onStateChange?()
     }
 
     // MARK: - Disco, reinicio de toma y notificación

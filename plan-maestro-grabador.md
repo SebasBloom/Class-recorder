@@ -117,13 +117,17 @@ Léelos completos antes de cada fase que los toque.
 - Sub selector de dispositivo de micrófono: lista dinámica de todo lo disponible (integrado, USB, Bluetooth, iPhone por Continuity, que es como entra el DJI Mic Mini). La lista se refresca en vivo al conectar o desconectar dispositivos.
 - Indicador de nivel de audio en el panel antes de grabar, mostrando en vivo que el dispositivo elegido capta sonido. Existe para no perder una hora por un micrófono mal seleccionado.
 - El audio nunca se interrumpe por cambios de modo de video.
+- **Balance entre fuentes con ducking.** Cuando se graban las dos, el audio del sistema baja solo mientras se habla y vuelve a su nivel pleno al callar. Sin esto, el material de fondo entra entre 5 y 9 dB por encima de la voz y la entierra, que fue el problema medido el 2026-08-19 (decisiones 78 y 86). Es la única excepción a la regla de "el procesamiento de audio va en VideoFlow" (decisión 87), y existe porque la mezcla es irreversible: entregamos un solo track, así que un balance mal puesto no se puede arreglar después.
+- **Silenciar en vivo:** cada fuente que se eligió antes de arrancar se puede silenciar y volver a activar durante la grabación, con botón en el widget y atajo. Silenciar es bajar esa fuente a cero, no cortarla: la línea de tiempo del audio sigue corriendo y el archivo nunca queda con un hueco (decisión 81). Se permite dejar las dos en silencio; el widget lo muestra bien visible.
+- **Lo que no se puede es al revés:** una fuente que no se eligió antes de arrancar no se puede sumar a mitad de grabación. El stream de captura decide qué fuentes abre al iniciar y la pista de audio se declara antes de escribir la primera muestra (decisiones 32 y 82). Capturar siempre las dos y descartar una sería posible, pero dejaría el micrófono abierto toda la clase aunque se haya elegido "solo sistema", y eso contradice la promesa de privacidad de la sección 5.
 
 ### 8.3 Cámara
 
 - Sub selector de cámara: lista dinámica (integrada, webcams USB, iPhone por Continuity, GoPro en modo webcam). Mismo patrón que micrófonos.
 - Captura siempre a la resolución completa del dispositivo.
 - Burbuja: se compone en el frame, arrastrable y redimensionable durante la grabación (la interacción es sobre una ventana espejo excluida de la captura; la posición y tamaño se reflejan en la composición). Posición y tamaño persisten en configuración.
-- Botón para apagar y prender la burbuja en el widget.
+- Botón de cámara en el widget: despliega un menú con las cámaras disponibles y, cuando hay una activa, la opción de apagarla. **Sirve también para prender la cámara habiendo arrancado la grabación sin ninguna**, porque la cámara no es una pista del archivo ni una fuente del stream de captura: se compone sobre cada frame, así que puede nacer y morir a mitad de grabación (decisión 82). Si el permiso de cámara no se dio todavía, se pide en ese momento y la grabación sigue corriendo pase lo que pase.
+- Apagar la cámara estando en modo cámara completa devuelve el fondo a modo pantalla, para no dejar el video en negro (decisión 83).
 
 ### 8.4 Modos de fuente y matriz de visibilidad
 
@@ -201,6 +205,8 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 | Rotar color del marcador | Opción Comando 0 | Durante grabación |
 | Deshacer último trazo | Opción Comando Z | Modos de dibujo |
 | Borrar superficie de dibujo activa | Opción Comando Delete | Modos de dibujo |
+| Silenciar / activar micrófono | Opción Comando M | Durante grabación, si se eligió micrófono |
+| Silenciar / activar audio del sistema | Opción Comando S | Durante grabación, si se eligió audio del sistema |
 | Tarjeta de atajos (mantener presionado) | Opción Comando H | Durante grabación |
 
 - La tarjeta de atajos: mientras se mantiene presionada la combinación, aparece una tarjeta translúcida en una esquina con la lista de atajos activos y sus teclas. Al soltar desaparece. Es una ventana propia: excluida de la captura, invisible en el video.
@@ -209,7 +215,8 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 ### 8.9 Control de grabación
 
 - Cuenta regresiva 3, 2, 1 antes de arrancar (configurable on/off). El archivo empieza después del conteo.
-- Widget flotante durante la grabación: pequeño, arrastrable, siempre encima, excluido de la captura. Muestra tiempo transcurrido, estado (grabando o pausado), modo activo, indicador de censura activa, color del marcador cuando aplica. Botones: pausar/reanudar, detener, reiniciar toma, burbuja on/off.
+- Widget flotante durante la grabación: pequeño, arrastrable, siempre encima, excluido de la captura. Muestra tiempo transcurrido, estado (grabando o pausado), modo activo, indicador de censura activa, color del marcador cuando aplica, y **qué fuentes de audio están silenciadas**. Botones: pausar/reanudar, detener, reiniciar toma, cámara (menú de selección y apagado), silenciar micrófono, silenciar audio del sistema.
+- Los dos botones de audio quedan deshabilitados para las fuentes que no se eligieron antes de arrancar: no son un atajo para encenderlas, solo para callarlas.
 - Pausar congela todos los tracks coherentemente; reanudar es inmediato, sin conteo.
 - Reiniciar toma: detiene, manda el archivo actual a la Papelera, arranca una toma nueva de inmediato con la misma configuración. El nombre de archivo incluye la hora de inicio, así que nunca colisiona.
 - Al detener: notificación con el nombre del archivo y acceso directo a la carpeta.
@@ -320,6 +327,28 @@ Aceptación: flujo completo de punta a punta sin tocar nada técnico: abrir desd
 Prueba de fuego: una grabación real de 60 minutos con todo activo (círculo, burbuja, cambios de modo, censura, anotaciones, mezcla de audio). Verificación de memoria entre minuto 5 y minuto 55. Verificación de sincronización de audio al inicio y al final (dar una palmada frente a la cámara al arrancar y otra antes de terminar; en el archivo, sonido e imagen de ambas palmadas deben calzar). Detección de grabación interrumpida: si la app se abre y encuentra una grabación que no cerró bien, avisa que existe un archivo recuperable y ofrece abrir su carpeta. Revisión de logs de la prueba larga. Limpieza de temporales verificada. Exportar el `.app`, pasarlo a la Mac de Iván, seguir el README para autorizarlo en Gatekeeper y dar los permisos, y grabar 5 minutos allá. Revisión final del README contra el comportamiento real, actualizando lo que haya cambiado.
 
 Aceptación: el archivo de una hora reproduce completo, con audio sincronizado en ambas palmadas, y la memoria se mantuvo estable. En la Mac de Iván, la app se instaló y grabó siguiendo solo el README, sin ayuda de nadie.
+
+### Fase 13. Controles en vivo de audio y cámara
+
+Agregada el 2026-08-19, después de la Fase 12, a pedido de Sebas: dar clase obliga a cambiar de idea a mitad de grabación y hoy toda la configuración se congela al arrancar.
+
+**Ubicación en el orden de trabajo.** Esta fase entra **antes** de dar por cerrada la Fase 12, que no está validada todavía. La prueba de fuego de 60 minutos de la Fase 12 se ejecuta una sola vez, ya con estos controles adentro: no tiene sentido endurecer y entregar una versión que va a cambiar el día siguiente.
+
+Contenido:
+
+1. **El mezclador pasa a tener un carril por fuente** en vez de un búfer compartido, y la suma ocurre al emitir (decisión 85). Es el cambio que habilita los tres siguientes: sin carriles separados no se puede tratar distinto a una fuente que a la otra.
+2. **El mezclador pasa a usarse siempre que la grabación tenga audio**, no solo en modo mixto. Con una sola fuente es su caso degenerado y ya está probado. Deja un único camino de audio, que es lo que hace que silenciar funcione igual en los cuatro modos (decisión 80). Elimina la bifurcación que hoy vive en `RecordingController`.
+3. **Ducking** del audio del sistema mientras se habla (decisión 86), con sus cuatro parámetros juntos en un solo lugar del código. Es lo que arregla el problema reportado el 2026-08-19.
+4. **Silenciar por fuente**, con ganancia cero en vez de corte de flujo (decisión 81). Se permite el silencio total.
+5. **Dos acciones nuevas en el registro central de atajos** (Opción Comando M y Opción Comando S), reasignables como todas.
+6. **Dos botones nuevos en el widget** con su estado visible, deshabilitados para las fuentes no elegidas.
+7. **Botón de cámara con menú**: lista de cámaras disponibles, marca la activa, permite apagarla y permite prender una habiendo arrancado sin ninguna. Pide el permiso de cámara en el momento si hace falta, sin tumbar la grabación.
+8. **Apagar la cámara en modo cámara completa devuelve a modo pantalla** (decisión 83).
+9. Actualizar la tarjeta de atajos, la pantalla de preferencias y el README con lo nuevo.
+
+Piezas compartidas que toca, todas con sus consumidores a reverificar: mezcla de audio, pipeline de composición, cámara, registro de acciones y atajos.
+
+Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 13".
 
 ## 10. Protocolo de trabajo por sesión
 

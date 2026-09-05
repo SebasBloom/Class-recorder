@@ -582,3 +582,79 @@ Pasame el log de esa grabación.
 Copiale el `.app`, y que **siga el README solo, sin que vos le expliques nada**. Que lo autorice en Gatekeeper, dé los permisos y grabe 5 minutos.
 
 **Tiene que:** lograrlo sin ayuda. Si se traba en algún paso, ese paso está mal escrito en el README y hay que arreglarlo. Es la prueba de verdad del manual.
+
+## Fase 13. Controles en vivo de audio y cámara — PENDIENTE
+
+Lo que cambia: hoy todo lo que elegís en el panel queda congelado al arrancar. Desde esta fase podés silenciar el micrófono o el audio del sistema en mitad de la clase, y prender, cambiar o apagar la cámara aunque hayas empezado sin ninguna.
+
+- **Opción + Comando + M** — silenciar y volver a activar el micrófono
+- **Opción + Comando + S** — silenciar y volver a activar el audio del sistema
+- **Botón de cámara en el widget** — despliega la lista de cámaras, marca la que está activa y deja apagarla
+
+Lo único que **no** vas a poder hacer es sumar un audio que no elegiste antes de arrancar: si empezaste en "solo sistema", el micrófono no se puede encender después. Está explicado en la decisión 82 y es a propósito, para no dejar tu micrófono abierto toda la clase sin que lo hayas pedido.
+
+### 1. El video ya no te tapa la voz
+
+Este es el criterio que originó la fase. Poné a sonar un video con gente hablando (el de noticias de MMA sirve) y grabá en modo **Micrófono + sistema**:
+
+- Dejá correr el video 10 segundos **sin hablar**
+- Hablá encima del video otros 15 segundos, en tu tono normal de clase
+- Callate y dejá el video solo otros 10 segundos
+- Detené
+
+**Tiene que:** en el primer y el tercer tramo, el video oírse a su volumen normal. En el tramo del medio, **tu voz por encima del video con claridad**, con el video audible pero abajo. Al empezar a hablar el video tiene que bajar rápido, sin comerse tu primera palabra, y al callarte tiene que volver a subir con suavidad, sin bombear ni respirar entre frase y frase.
+
+Referencia de lo que hay hoy, para comparar: el audio del sistema entra entre 5 y 9 dB **por encima** de tu voz. Si la grabación nueva suena igual de embarrada que la de hoy, la fase falla.
+
+### 2. Silenciar el micrófono a mitad de clase
+
+Grabá en modo **Micrófono + sistema**, con algo sonando en el computador, y durante la grabación:
+
+- Hablá unos 10 segundos
+- Apretá **Opción + Comando + M** y seguí hablando otros 10 segundos
+- Apretá **Opción + Comando + M** de nuevo y hablá 10 segundos más
+- Detené
+
+**Tiene que:** en el video, oírse tu voz en el primer y el tercer tramo y **nada de tu voz** en el del medio, mientras el sonido del computador sigue igual de parejo en los tres. El widget tiene que mostrar bien visible que el micrófono está mudo mientras lo esté.
+
+### 3. Silenciar el audio del sistema
+
+Misma grabación o una nueva, al revés: dejá algo sonando y apretá **Opción + Comando + S** un rato en el medio, hablando todo el tiempo.
+
+**Tiene que:** desaparecer el sonido del computador en ese tramo y tu voz seguir sin cortes ni saltos.
+
+### 4. El silencio total está permitido
+
+Silenciá las dos fuentes al mismo tiempo unos segundos y volvé a activarlas.
+
+**Tiene que:** dejarte hacerlo, mostrarlo clarísimo en el widget, y el archivo tiene que quedar con **silencio** en ese tramo, no con un hueco. Para comprobarlo: el video no puede saltar ni desincronizarse después de ese tramo. Si al volver del silencio la voz quedó corrida contra la imagen, la fase falla.
+
+### 5. Prender la cámara habiendo arrancado sin ninguna
+
+Arrancá una grabación **sin elegir cámara** en el panel. Durante la grabación, tocá el botón de cámara del widget y elegí una de la lista.
+
+**Tiene que:** aparecer la burbuja en el video de ahí en adelante, sin cortar la grabación ni el audio. Lo grabado antes queda sin burbuja, que es lo correcto.
+
+### 6. Cambiar de cámara y apagarla
+
+Con la cámara prendida, abrí el menú y elegí otra (si tenés el iPhone por Continuity, probalo). Después abrí el menú y apagala.
+
+**Tiene que:** cambiar de imagen en la burbuja en un segundo o dos, sin tumbar la grabación, y apagarse dejando el video normal. El audio no se puede interrumpir en ningún momento.
+
+### 7. Apagar la cámara en modo cámara completa
+
+Poné modo cámara completa (**Opción + Comando + 2**) y con ese modo activo apagá la cámara desde el widget.
+
+**Tiene que:** volver solo a modo pantalla. Si el video queda en negro o congelado, la fase falla.
+
+### 8. Los cuatro modos de audio siguen sanos
+
+Esta fase cambia el camino del audio para **todos** los modos, no solo el mixto, así que hay que reverificar los cuatro. Grabá una toma corta en cada uno: sin audio, solo micrófono, solo sistema, micrófono + sistema.
+
+**Tiene que:** sonar bien en los cuatro, igual que antes. En los modos de una sola fuente, el botón de la fuente que no elegiste tiene que estar deshabilitado, no ausente.
+
+### 9. Cada toma arranca sonando
+
+Silenciá el micrófono, detené la grabación y arrancá otra.
+
+**Tiene que:** la toma nueva arrancar con el micrófono **activo**. El silencio no se hereda (decisión 84).

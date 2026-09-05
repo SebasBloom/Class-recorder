@@ -15,12 +15,20 @@ Todo funciona local. La app no se conecta a internet para nada, no sube nada a n
 
 ## Instalación
 
-La app no viene del App Store, así que la primera vez macOS la bloquea por seguridad. Es normal y se resuelve una sola vez:
+Te va a llegar un archivo llamado `Grabador Bloomind.zip`. No hace falta terminal, ni cuenta de nada, ni instalar programas: son cuatro pasos y se hacen una sola vez.
 
-1. Copiá el archivo de la app (termina en .app) a tu carpeta de Aplicaciones.
-2. Hacé doble clic. Va a salir un aviso diciendo que no se puede abrir.
-3. Andá a Configuración del Sistema, luego Privacidad y seguridad, bajá hasta el final y tocá "Abrir de todos modos".
-4. Confirmá. De ahí en adelante abre normal.
+1. **Descargá el zip y hacele doble clic.** Se descomprime solo y aparece `Grabador Bloomind.app` al lado.
+2. **Arrastrá esa app a tu carpeta Aplicaciones.** Importante: usala desde ahí, no desde Descargas.
+3. **Hacé doble clic.** La primera vez macOS te va a decir que no se puede abrir porque no viene del App Store. Es lo esperado, no está dañada.
+4. **Andá a Configuración del Sistema → Privacidad y seguridad**, bajá hasta el final y vas a ver un mensaje sobre el Grabador con un botón **"Abrir de todos modos"**. Tocalo y confirmá.
+
+De ahí en adelante abre normal con doble clic, y no vuelve a preguntar.
+
+Un detalle que ahorra un susto: la app **no abre ninguna ventana** al arrancar. Aparece como un ícono chiquito arriba a la derecha, en la barra de menú junto al reloj. Si hiciste doble clic y "no pasó nada", mirá ahí arriba.
+
+### Cuando llegue una versión nueva
+
+Mismo procedimiento, pero antes **salí de la app** (ícono de la barra de menú, Salir) y reemplazá la de Aplicaciones por la nueva. Los permisos y tus atajos personalizados se mantienen, no hay que configurar nada de nuevo.
 
 ## Permisos que va a pedir
 
@@ -43,7 +51,9 @@ No aparece en el Dock. Buscá su ícono arriba a la derecha, en la barra de men�
 Al tocar "Iniciar grabación" se abre un panel con todo lo que hay que decidir:
 
 - **Qué pantalla grabar**, si tenés más de una. También podés grabar solo un pedazo de la pantalla dibujando un rectángulo.
-- **Audio**: solo tu micrófono, solo el sonido del sistema, o los dos mezclados. Abajo elegís cuál micrófono usar. Ahí aparecen todos los que el Mac vea en ese momento: el integrado, AirPods, o el iPhone si está cerca y desbloqueado (así entra el DJI Mic conectado al teléfono). Hay un medidor que se mueve cuando el micrófono capta sonido: revisalo antes de arrancar, te salva de grabar una hora muda.
+- **Audio**: solo tu micrófono, solo el sonido del sistema, o los dos mezclados. Si elegís los dos, la app baja sola el sonido del computador mientras estás hablando y lo devuelve a su nivel cuando callás, para que tu explicación siempre quede por encima del video que estés mostrando.
+
+  > **Si vas a grabar los dos audios, poneté audífonos.** No es una recomendación de estilo: si el sonido sale por los parlantes, tu micrófono también los escucha y todo lo que suene en el computador queda grabado dos veces, con unos milisegundos de diferencia. Se oye como un eco. Está medido en la Mac de Sebas: con los parlantes sonando, el micrófono captaba el video casi tan fuerte como la propia captura; con el volumen bajo, el mismo micrófono quedaba 40 dB más limpio. Le pasa a cualquier grabador, no es un defecto de este. Con audífonos desaparece por completo. Abajo elegís cuál micrófono usar. Ahí aparecen todos los que el Mac vea en ese momento: el integrado, AirPods, o el iPhone si está cerca y desbloqueado (así entra el DJI Mic conectado al teléfono). Hay un medidor que se mueve cuando el micrófono capta sonido: revisalo antes de arrancar, te salva de grabar una hora muda.
 - **Cámara**: elegí entre las que estén disponibles, incluida la del iPhone.
 - **Nombre de la sesión**: ponele nombre a la grabación (por ejemplo "Clase Supabase parte 1") para encontrarla fácil después.
 - **Carpeta de destino**: dónde se guarda el video.
@@ -54,7 +64,7 @@ Al confirmar, cuenta 3, 2, 1 y arranca.
 
 ## Durante la grabación
 
-Aparece un widget flotante chiquito que podés arrastrar a donde no moleste. Muestra el tiempo, el estado, el modo activo y un indicador cuando la censura está tapando algo. Tiene botones para pausar, detener, reiniciar la toma y prender o apagar la burbuja de cámara. Ni el widget ni ninguna ventana de la app salen en el video, tranquilo.
+Aparece un widget flotante chiquito que podés arrastrar a donde no moleste. Muestra el tiempo, el estado, el modo activo, un indicador cuando la censura está tapando algo y otro cuando silenciaste algún audio. Tiene botones para pausar, detener, reiniciar la toma, manejar la cámara y silenciar el micrófono o el sonido del computador. Ni el widget ni ninguna ventana de la app salen en el video, tranquilo.
 
 Lo demás se maneja con atajos de teclado. Los importantes:
 
@@ -71,6 +81,8 @@ Lo demás se maneja con atajos de teclado. Los importantes:
 | Prender o apagar el marcador sobre la pantalla | Opción Comando D |
 | Cambiar el color del marcador | Opción Comando 0 |
 | Tablero blanco o negro | Opción Comando B |
+| Silenciar o activar tu micrófono | Opción Comando M |
+| Silenciar o activar el sonido del computador | Opción Comando S |
 | Deshacer el último trazo | Opción Comando Z |
 | Borrar lo dibujado en la superficie activa | Opción Comando borrar |
 | Recordatorio de todos los atajos | Mantener Opción Comando H |
@@ -97,6 +109,18 @@ La zona vive mientras la app esté abierta. Si la cerrás y volvés, hay que dib
 - **En el tablero** (Opción Comando 3): lienzo entero con las mismas herramientas. Lo que dibujás en el tablero y lo que dibujás sobre la pantalla son independientes: borrar uno no toca el otro.
 - El marcador tiene cinco colores (rojo, amarillo, verde, blanco, negro) y se rotan con Opción Comando 0. El color activo se ve en el widget, y también en un círculo arriba a la derecha mientras estás en el tablero. Sobre el tablero se saltea solo el color que no se vería: el blanco en tablero blanco, el negro en tablero negro.
 
+### Cambiar el audio y la cámara sin cortar la grabación
+
+No todo queda congelado cuando arrancás. En mitad de la clase podés:
+
+- **Callar tu micrófono** con Opción Comando M, para toser, atender una llamada o dejar que se oiga solo el video que estás mostrando. Volvés a apretar y sigue.
+- **Callar el sonido del computador** con Opción Comando S, para que una notificación o un video de fondo no se metan en la clase.
+- **Prender, cambiar o apagar la cámara** desde el botón de cámara del widget. Ahí se despliega la lista de las que tengas disponibles. Podés prender la cámara aunque hayas arrancado a grabar sin ninguna: lo grabado antes queda sin burbuja y de ahí en adelante aparece.
+
+El widget muestra bien visible qué está silenciado, para que no se te pase. Podés dejar las dos cosas calladas a la vez si querés un tramo mudo.
+
+Lo único que **no** se puede es al revés: si arrancaste eligiendo "solo el sonido del sistema", el micrófono no se puede sumar después. Es a propósito: la app solo abre tu micrófono si vos lo pediste antes de empezar, y no lo deja abierto "por si acaso".
+
 ### Pausar y reiniciar
 
 - **Pausar** (Opción Comando P): congela la grabación. Al reanudar, el video sigue como si la pausa no hubiera existido, sin hueco.
@@ -112,6 +136,8 @@ Junto a cada video vas a ver un archivo con el mismo nombre terminado en `.curso
 
 ## Si algo falla
 
+- **El audio del sistema suena como con eco, o doble**: estás grabando los dos audios con los parlantes prendidos, y tu micrófono está oyendo los parlantes. **Poneté audífonos y desaparece.** Si no tenés a mano, callá tu micrófono (Opción Comando M) mientras no estés hablando.
+- **Grabaste con "los dos audios" y tu voz quedó por debajo del video**: la app baja sola el sonido del computador mientras hablás y lo sube cuando callás, así que esto no debería pasarte. Si igual te queda bajo, casi siempre es el micrófono: el interno del MacBook capta flojo y lejos. Con el DJI por el iPhone la diferencia es enorme, está medida: 34 dB menos de ruido de fondo.
 - **La app pide un permiso otra vez**: normal, sobre todo el de pantalla una vez al mes. Aceptalo y seguí.
 - **No aparece tu micrófono o cámara en la lista**: revisá que el aparato esté prendido y conectado. Si es el iPhone, que esté cerca y desbloqueado. La lista se actualiza sola al conectar.
 - **Se desconectó el micrófono o la cámara a mitad de grabación** (se acabó la batería, se bloqueó el teléfono): la app te avisa en pantalla y la grabación sigue con lo que quede. El video no se pierde.

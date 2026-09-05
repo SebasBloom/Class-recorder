@@ -354,3 +354,61 @@ El plan pedía "limpieza de temporales verificada" en la Fase 12. Verificado: la
 **77. 2026-08-01 — Una grabación que no cerró bien se avisa al arrancar.**
 `RecoveryMarker` deja un archivo con la ruta del video mientras se graba y lo borra al cerrar bien. Si al arrancar sigue ahí, la app avisa y ofrece abrir la carpeta.
 Razón: la resistencia a fallos de la decisión 11 ya dejaba el archivo reproducible, pero nadie te lo decía. El aviso se consume al leerlo, así que aparece una sola vez y no en cada arranque.
+
+**78. 2026-08-19 — El modo "Micrófono + sistema" no tiene un defecto de mezcla: le falta balance entre fuentes.**
+Sebas reportó que el modo mixto "no funciona" mientras los modos de una sola fuente sí, y que el audio del sistema "suena como en eco y apaga mi voz".
+Lo que se descartó midiendo, en seis grabaciones reales con `AudioMixer` y `ScreenCapture` instrumentados:
+- **El audio del sistema llega completo** con el micrófono activo: 1.972 bloques continuos, y el mezclador escribe el 100% de las muestras que le ofrecen (1.893.120 de 1.893.120). No se descarta nada.
+- **El mezclador no duplica nada.** Volcando cada fuente a su propio archivo se comparó el audio del sistema tal como entra contra el que quedó en el video: correlación 0,896 en retardo cero y **una sola copia**. Un duplicado daría un segundo pico fuerte; no existe.
+- **El micrófono no capta los parlantes de forma significativa:** el rebote explica el 0,1% de su energía (correlación 0,029). No hay filtro de peine.
+- **El video no repite la voz del micrófono:** sin picos de correlación de envolventes más allá de 0 ms, buscando hasta 3 segundos de retardo.
+La causa real es que **el audio del sistema entra entre 5 y 9 dB por encima del micrófono, segundo a segundo, y el mezclador los suma uno a uno sin ninguna ganancia relativa.** Nunca se le puso balance. Con dos voces distintas al mismo nivel el resultado suena embarrado, que es lo que se percibe como eco. Agravante medido: el micrófono interno del MacBook Air capta bajo, entre −36 y −43 dB cuando queda solo.
+Se corrige con el ducking de la decisión 86.
+
+**78-bis. 2026-08-19 — Corrección de la decisión 78, y por qué se dejó escrita.**
+La versión original de la decisión 78 afirmaba que la causa era un filtro de peine por doble captura acústica, con 13 muescas espectrales separadas 258 Hz como prueba. **Era falso**, y se corrigió el mismo día.
+El error: esa medición se hizo sobre el archivo **ya mezclado**, donde las dos fuentes son inseparables, y el patrón espectral se interpretó como doble captura sin poder verificarlo. Recién al volcar cada fuente a su propio archivo se pudo correlacionar micrófono contra sistema y ver que la copia no existía.
+El aprendizaje, que vale para todo el proyecto: **un archivo mezclado no sirve para diagnosticar la mezcla.** Cuando el síntoma involucra dos fuentes sumadas, el primer paso es volcarlas por separado, no analizar la suma con más ingenio. En el camino murieron tres hipótesis fuertes: que el audio del sistema no llegaba, que el limitador distorsionaba, y esta del filtro de peine. Ninguna sobrevivió a la medición correcta.
+Segundo aprendizaje: "los canales L y R salen idénticos" **no** prueba que falte el audio del sistema. La voz de una videollamada es mono y da canales idénticos igual.
+
+**79. 2026-08-19 — La caché de convertidores de audio se indexa por el formato, no por la identidad del objeto.**
+`AudioMixer.convert` usaba `ObjectIdentifier(inputFormat)` como clave, pero `inputFormat` se construye nuevo en cada bloque, así que la caché no acertaba nunca: creaba un `AVAudioConverter` por bloque y los acumulaba para siempre. Medido: 9.614 convertidores en 67 segundos, del orden de 500.000 en una clase de una hora. La clave ahora describe el formato (frecuencia, canales, flags, bits) y se crean dos.
+Razón: era una fuga de memoria real, encontrada de paso investigando la decisión 78, en la pieza que más presión de memoria aguanta en grabaciones largas.
+
+**80. 2026-08-19 — El mezclador se usa siempre que la grabación tenga audio, no solo en modo mixto.**
+Antes, con una sola fuente el buffer iba directo al escritor y solo el modo mixto pasaba por `AudioMixer`. Ahora todos los modos con audio pasan por el mezclador.
+Razón: silenciar en vivo necesita un punto único donde aplicar la ganancia. Con la bifurcación harían falta dos mecanismos, y el de la ruta directa tendría que cortar el flujo de buffers, que deja huecos. Con una sola fuente el mezclador es su caso degenerado, ya probado desde la Fase 5.
+Alternativa descartada: silenciar en la ruta directa poniendo a cero una copia del buffer. Es más código que reusar el mezclador y deja dos caminos que mantener.
+Costo aceptado: los modos de una sola fuente ganan los 0,25 s de latencia del mezclador. No afecta la sincronía porque el escritor alinea por timestamp, no por orden de llegada.
+
+**81. 2026-08-19 — Silenciar es ganancia cero, no cortar el flujo de buffers.**
+Una fuente silenciada sigue entrando al mezclador y sigue empujando la línea de tiempo; lo único que cambia es que sus muestras se multiplican por cero.
+Razón: si se dejara de pasar los buffers, la posición escrita más alta dejaría de avanzar mientras dure el silencio y el tramo no se emitiría, dejando un hueco en la pista de audio. Con ganancia cero el archivo tiene audio continuo de punta a punta y el tramo silenciado es silencio de verdad, no ausencia de datos.
+
+**82. 2026-08-19 — La cámara se puede prender a mitad de grabación; una fuente de audio no.**
+Es una asimetría deliberada y vale la pena entender por qué. La cámara no es una pista del archivo ni una fuente del stream de captura: se dibuja sobre cada frame, así que puede nacer y morir cuando sea. El audio es las dos cosas, y ambas se fijan antes de escribir la primera muestra (decisión 32).
+Se evaluó capturar siempre las dos fuentes de audio y descartar la no elegida, lo que habría permitido encenderlas en vivo. Descartado: dejaría el micrófono abierto toda la clase, con el indicador naranja de macOS encendido, aunque el usuario haya elegido "solo sistema". Cambiar "no estoy grabando tu micrófono" por "lo grabo y lo tiro" contradice la sección 5 del plan, y Sebas graba con clientes bajo confidencialidad.
+
+**83. 2026-08-19 — Apagar la cámara en modo cámara completa devuelve a modo pantalla.**
+Razón: en ese modo el fondo del frame **es** la cámara. Apagarla sin más dejaría el video en negro y, peor, el reloj sintético del pipeline deja de correr cuando no hay imagen de cámara, así que un fondo negro quieto ni siquiera avanzaría. Volver a pantalla es lo único que deja el video utilizable.
+
+**84. 2026-08-19 — El silencio de audio no persiste entre tomas.**
+Cada toma arranca con todas las fuentes elegidas sonando.
+Razón: es la misma lógica de la decisión 55 con el tablero, que arranca limpio en cada toma. Un micrófono silenciado que se hereda de la grabación anterior es exactamente la forma de perder una clase entera, y el costo de volver a apretar el botón es un segundo.
+
+**85. 2026-08-19 — El mezclador pasa a tener un carril por fuente, no un búfer compartido.**
+Hasta ahora las dos fuentes sumaban sobre el mismo búfer circular y la mezcla quedaba hecha en el momento de escribir. Ahora cada fuente escribe en su propio carril y la suma ocurre recién al emitir el bloque.
+Razón: una vez sumadas, las fuentes no se pueden volver a separar, así que cualquier cosa que trate distinto a una u otra —silenciar una, bajar el video mientras se habla, un balance— es imposible con el búfer compartido. Con carriles separados las tres salen del mismo cambio y se aplican en un solo lugar, al emitir.
+Costo: el doble de memoria del búfer, unos 3 MB. Irrelevante.
+Alternativa descartada: aplicar la ganancia a cada bloque **antes** de sumarlo. No sirve para el ducking, porque en el momento en que entra un bloque del sistema todavía no se sabe si el micrófono va a tener voz en esa misma posición de la línea de tiempo: puede llegar después. Con carriles, esa decisión se toma al emitir, cuando ya llegaron las dos.
+
+**86. 2026-08-19 — Ducking: el audio del sistema baja solo mientras se habla.**
+Al emitir cada bloque se mide el nivel del carril del micrófono. Si hay voz, el carril del sistema se atenúa; al callar, vuelve a su nivel pleno. Ataque rápido para no comerse la primera sílaba, liberación lenta para que no bombee entre palabras. Los cuatro parámetros (umbral, atenuación, ataque, liberación) viven juntos en un solo lugar del código, como los umbrales de disco.
+Razón: es el problema de la decisión 78 resuelto donde se puede resolver. Sebas da clase explicando encima de un video, y en una clase la voz del que explica manda sobre el material de fondo.
+Alternativa descartada: un nivel fijo con el sistema unos dB abajo. Es más simple y predecible, pero castiga los tramos en que se muestra un video **sin** hablar encima, que también son parte de una clase. El ducking solo actúa cuando hace falta.
+Elegido por Sebas el 2026-08-19 sobre las otras dos opciones que se le plantearon.
+
+**87. 2026-08-19 — El ducking es una excepción explícita a la decisión 37, y la única.**
+La decisión 37 dice que el procesamiento de audio va en VideoFlow, no en el grabador. El ducking es procesamiento y se hace igual, acá.
+Razón: la decisión 9 obliga a entregar **un solo track ya mezclado**, para que Whisper transcriba limpio. Una vez sumadas, las dos fuentes no se pueden separar nunca más, así que un balance mal puesto es irreversible y VideoFlow no tiene nada que arreglar: recibe un archivo donde la voz ya quedó enterrada. Es lo contrario de la reducción de ruido, que sí se puede aplicar después sin pérdida.
+Criterio general que queda: en el grabador solo va el procesamiento que **no se pueda hacer después**. Todo lo demás sigue siendo de VideoFlow. El limitador de la mezcla ya cumplía este criterio por la misma razón.

@@ -19,6 +19,8 @@ enum ShortcutAction: String, CaseIterable {
     case reiniciarToma = "reiniciar_toma"
     case censura = "censura"
     case redibujarCensura = "redibujar_censura"
+    case silenciarMicrofono = "silenciar_microfono"
+    case silenciarSistema = "silenciar_sistema"
     case tarjeta = "tarjeta"
 
     var label: String {
@@ -36,6 +38,8 @@ enum ShortcutAction: String, CaseIterable {
         case .reiniciarToma:        return "Reiniciar toma"
         case .censura:              return "Censura on / off"
         case .redibujarCensura:     return "Redibujar la zona censurada"
+        case .silenciarMicrofono:   return "Silenciar / activar micrófono"
+        case .silenciarSistema:     return "Silenciar / activar audio del sistema"
         case .tarjeta:        return "Tarjeta de atajos (mantener)"
         }
     }
@@ -69,6 +73,8 @@ enum ShortcutAction: String, CaseIterable {
         case .reiniciarToma:    return Shortcut(tecla: kVK_ANSI_R, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘R")
         case .censura:          return Shortcut(tecla: kVK_ANSI_C, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘C")
         case .redibujarCensura: return Shortcut(tecla: kVK_ANSI_C, modificadores: optionKey | cmdKey | shiftKey, etiqueta: "⇧⌥⌘C")
+        case .silenciarMicrofono: return Shortcut(tecla: kVK_ANSI_M, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘M")
+        case .silenciarSistema:   return Shortcut(tecla: kVK_ANSI_S, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘S")
         case .tarjeta:        return Shortcut(tecla: kVK_ANSI_H, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘H")
         }
     }

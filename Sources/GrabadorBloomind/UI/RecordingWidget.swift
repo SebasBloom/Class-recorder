@@ -16,6 +16,11 @@ final class RecordingWidget: NSPanel {
     var onStop: (() -> Void)?
     var onRestart: (() -> Void)?
     var onToggleBubble: (() -> Void)?
+    /// Devuelve el menú de cámaras en el momento de abrirlo, no antes: la lista
+    /// cambia cuando se conecta o desconecta un aparato.
+    var onCameraMenu: (() -> NSMenu?)?
+    var onToggleMicrophone: (() -> Void)?
+    var onToggleSystemAudio: (() -> Void)?
 
     private let tiempo = NSTextField(labelWithString: "00:00")
     private let estado = NSTextField(labelWithString: "")
@@ -26,6 +31,13 @@ final class RecordingWidget: NSPanel {
     private let detener = NSButton()
     private let reiniciar = NSButton()
     private let burbuja = NSButton()
+    private let microfono = NSButton()
+    private let sistema = NSButton()
+
+    /// Si hay una cámara encendida ahora mismo. No se puede leer del botón,
+    /// porque el botón está siempre habilitado: sin cámara sigue sirviendo para
+    /// prender una.
+    private var hayCamaraPrendida = false
 
     init() {
         super.init(
@@ -89,9 +101,15 @@ final class RecordingWidget: NSPanel {
         configurar(pausar, simbolo: "pause.fill", ayuda: "Pausar", accion: #selector(tocarPausa))
         configurar(detener, simbolo: "stop.fill", ayuda: "Detener", accion: #selector(tocarDetener))
         configurar(reiniciar, simbolo: "arrow.counterclockwise", ayuda: "Reiniciar toma", accion: #selector(tocarReiniciar))
-        configurar(burbuja, simbolo: "person.crop.circle", ayuda: "Burbuja on/off", accion: #selector(tocarBurbuja))
+        configurar(burbuja, simbolo: "person.crop.circle", ayuda: "Cámara", accion: #selector(tocarBurbuja))
+        // Mantener presionado el botón: el menú de cámaras, haya o no una prendida.
+        let menuLargo = NSPressGestureRecognizer(target: self, action: #selector(mostrarMenuDeCamara))
+        menuLargo.minimumPressDuration = 0.35
+        burbuja.addGestureRecognizer(menuLargo)
+        configurar(microfono, simbolo: "mic.fill", ayuda: "Silenciar micrófono", accion: #selector(tocarMicrofono))
+        configurar(sistema, simbolo: "speaker.wave.2.fill", ayuda: "Silenciar audio del sistema", accion: #selector(tocarSistema))
 
-        let botones = NSStackView(views: [pausar, detener, reiniciar, burbuja])
+        let botones = NSStackView(views: [pausar, detener, reiniciar, burbuja, microfono, sistema])
         botones.orientation = .horizontal
         botones.spacing = 4
 
@@ -145,7 +163,8 @@ final class RecordingWidget: NSPanel {
                 censura: Bool,
                 anotando: Bool,
                 color: MarkerColor,
-                hayCamara: Bool) {
+                hayCamara: Bool,
+                audio: AudioState) {
 
         tiempo.stringValue = String(format: "%02d:%02d", segundos / 60, segundos % 60)
         estado.stringValue = pausado ? "❚❚ PAUSADO" : "● GRABANDO"
@@ -160,6 +179,15 @@ final class RecordingWidget: NSPanel {
         }
         if anotando { partes.append("anotando") }
         if censura { partes.append("▓ censura") }
+        // El silencio va con nombre y no solo con el ícono tachado: es lo que
+        // evita grabar media clase mudo sin darse cuenta.
+        if audio.microfonoSilenciado && audio.sistemaSilenciado {
+            partes.append("🔇 SIN AUDIO")
+        } else if audio.microfonoSilenciado {
+            partes.append("🔇 micrófono")
+        } else if audio.sistemaSilenciado {
+            partes.append("🔇 sistema")
+        }
         detalle.stringValue = partes.joined(separator: " · ")
 
         // El punto de color solo tiene sentido cuando se está dibujando.
@@ -170,7 +198,48 @@ final class RecordingWidget: NSPanel {
         pausar.image = NSImage(systemSymbolName: pausado ? "play.fill" : "pause.fill",
                                accessibilityDescription: pausado ? "Reanudar" : "Pausar")
         pausar.toolTip = pausado ? "Reanudar" : "Pausar"
-        burbuja.isEnabled = hayCamara
+        // El botón de cámara nunca se deshabilita: sin cámara prendida sigue
+        // sirviendo para prender una, que es justo lo que pasa cuando se arrancó
+        // a grabar sin elegir ninguna (decisión 82). Un botón deshabilitado no
+        // recibe clics y el menú quedaría inalcanzable justo cuando hace falta.
+        hayCamaraPrendida = hayCamara
+        burbuja.isEnabled = true
+        burbuja.image = NSImage(systemSymbolName: hayCamara ? "person.crop.circle" : "person.crop.circle.badge.plus",
+                                accessibilityDescription: "Cámara")
+        burbuja.toolTip = hayCamara
+            ? "Burbuja on/off · mantené o clic derecho para elegir cámara"
+            : "Elegir cámara"
+        burbuja.contentTintColor = hayCamara ? nil : BloomindStyle.muted
+
+        // Las fuentes que no se eligieron antes de arrancar quedan deshabilitadas,
+        // no ausentes: el botón no es un atajo para encenderlas (decisión 82).
+        actualizar(microfono, activa: audio.capturaMicrofono, silenciada: audio.microfonoSilenciado,
+                   simboloVivo: "mic.fill", simboloMudo: "mic.slash.fill",
+                   ayudaViva: "Silenciar micrófono", ayudaMuda: "Activar micrófono")
+        actualizar(sistema, activa: audio.capturaSistema, silenciada: audio.sistemaSilenciado,
+                   simboloVivo: "speaker.wave.2.fill", simboloMudo: "speaker.slash.fill",
+                   ayudaViva: "Silenciar audio del sistema", ayudaMuda: "Activar audio del sistema")
+    }
+
+    /// Estado de audio que muestra el widget.
+    struct AudioState {
+        let capturaMicrofono: Bool
+        let capturaSistema: Bool
+        let microfonoSilenciado: Bool
+        let sistemaSilenciado: Bool
+    }
+
+    /// Un botón de audio: prendido, mudo o deshabilitado. El símbolo tachado es
+    /// lo que hace que se vea de reojo en mitad de una clase, sin leer.
+    private func actualizar(_ boton: NSButton, activa: Bool, silenciada: Bool,
+                            simboloVivo: String, simboloMudo: String,
+                            ayudaViva: String, ayudaMuda: String) {
+        boton.isEnabled = activa
+        let simbolo = silenciada ? simboloMudo : simboloVivo
+        let ayuda = silenciada ? ayudaMuda : ayudaViva
+        boton.image = NSImage(systemSymbolName: simbolo, accessibilityDescription: ayuda)
+        boton.toolTip = activa ? ayuda : "No se eligió esta fuente antes de grabar"
+        boton.contentTintColor = silenciada ? BloomindStyle.signal : nil
     }
 
     func present() {
@@ -197,7 +266,22 @@ final class RecordingWidget: NSPanel {
 
     @objc private func tocarPausa() { onPause?() }
     @objc private func tocarDetener() { onStop?() }
-    @objc private func tocarBurbuja() { onToggleBubble?() }
+    /// Con cámara prendida, el botón prende y apaga la burbuja, que es lo que se
+    /// hace veinte veces en una clase. El menú, que es lo que se hace una vez,
+    /// sale manteniéndolo o con clic derecho. Sin cámara prendida, el clic normal
+    /// abre el menú directo: no hay burbuja que alternar todavía.
+    @objc private func tocarBurbuja() {
+        if hayCamaraPrendida { onToggleBubble?() } else { mostrarMenuDeCamara() }
+    }
+
+    @objc private func mostrarMenuDeCamara() {
+        guard let menu = onCameraMenu?() else { return }
+        menu.popUp(positioning: nil,
+                   at: NSPoint(x: 0, y: burbuja.bounds.height + 4),
+                   in: burbuja)
+    }
+    @objc private func tocarMicrofono() { onToggleMicrophone?() }
+    @objc private func tocarSistema() { onToggleSystemAudio?() }
 
     /// Reiniciar toma descarta lo grabado. Manda a la Papelera, no borra
     /// (decisión 12), pero igual pregunta: es la única acción del widget que

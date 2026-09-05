@@ -158,11 +158,13 @@ Hasta la Fase 9 cada fase usa atajos fijos temporales, que se migran acá cuando
 
 `CameraCapture` corre la sesión a resolución completa y entrega dos cosas: la capa de previsualización para el espejo y la última imagen ya convertida para el compositor (decisión 46). `CameraMirrorWindow` es la ventana que se arrastra y se redimensiona.
 
-Consumidores actuales: `ControlWindow`, que la enciende al elegir cámara; `FramePipeline`, que lee la imagen; `RecordingController`, que la suelta si se desconecta.
+Consumidores actuales: `ControlWindow`, que la enciende al elegir cámara; `FramePipeline`, que lee la imagen; `RecordingController`, que la suelta si se desconecta; el widget, con su botón de burbuja on/off.
 
-Consumidores previstos: el widget de la Fase 11 (botón de burbuja on/off) y el modo cámara completa de los atajos de la Fase 9.
+Consumidores previstos: el menú de cámara del widget en la Fase 13, que puede **crear** una `CameraCapture` con la grabación ya corriendo.
 
 Cuidado al tocarlo: la sesión vive mientras haya una cámara elegida, no solo mientras se graba. Y la proporción de la ventana espejo está clavada a la de la cámara a propósito: es lo que hace que lo que se ve en pantalla sea exactamente lo que queda en el video.
+
+Cuidado nuevo desde la Fase 13: `FramePipeline` guardaba la cámara como constante, fijada al construirse. Al poder prenderla y apagarla en vivo pasa a ser mutable bajo el mismo lock que los demás ajustes en vivo (`setBoardColor`, `setAnnotationOn`, `setBubbleFrame`). Todo lo que lea la cámara desde la cola de captura tiene que hacerlo por ese lock: la cola de frames corre 30 veces por segundo y el cambio llega desde el hilo principal.
 
 ## Enumeración de dispositivos
 
@@ -180,11 +182,24 @@ Consumidores actuales: `ControlWindow` para la lista, `RecordingController` para
 
 El micrófono entra por el **mismo** `SCStream` que la pantalla, con `captureMicrophone`. Es la razón por la que el proyecto exige macOS 15.
 
-Consumidores actuales: `RecordingController`, que enchufa el audio directo al escritor.
-
-Consumidores previstos: la mezcla de la Fase 5, que va a sumar estas muestras con las del audio del sistema antes de escribirlas.
+Consumidores actuales: `RecordingController`, que enchufa el audio a la mezcla.
 
 Cuidado al tocarlo: el medidor de nivel y la grabación **no pueden tener el micrófono a la vez**. El medidor se apaga al empezar a grabar y se vuelve a encender al terminar.
+
+## Mezcla de audio
+
+**Fase 5. Existe.** `Audio/AudioMixer.swift`.
+
+Búfer circular sobre una línea de tiempo común: cada bloque se escribe en la posición absoluta que le corresponde según su timestamp y se suma a lo que ya haya ahí. Un tramo se emite cuando pasó el margen de latencia de 0,25 s. Todo se lleva antes a 48 kHz estéreo flotante.
+
+Consumidores actuales: `RecordingController`, solo en modo "Micrófono + sistema".
+
+**Cambios de la Fase 13**, los tres en esta misma pieza:
+- Pasa a **un carril por fuente**, con la suma al emitir en vez de sobre un búfer compartido (decisión 85). Sin esto no se puede tratar distinto a una fuente que a la otra.
+- Pasa a ser el **camino único de todo el audio**, también en los modos de una sola fuente (decisión 80).
+- Aplica el **silencio en vivo** con ganancia cero (decisión 81) y el **ducking** del sistema mientras se habla (decisión 86). Los dos se aplican en el mismo punto: al emitir, cuando ya llegaron las dos fuentes.
+
+Cuidado al tocarlo: es la pieza más delicada del proyecto y ahora la atraviesan los cuatro modos, así que **cualquier cambio obliga a reverificar los cuatro**, no solo el mixto. Dos trampas ya pisadas: la caché de convertidores tiene que indexarse por el formato y no por la identidad del objeto (decisión 79), y silenciar nunca puede hacerse cortando el flujo de buffers, porque la posición escrita más alta deja de avanzar y el tramo no se emite (decisión 81).
 
 ## Configuración central
 

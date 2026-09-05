@@ -92,6 +92,9 @@ final class ControlWindow: NSWindowController {
         // El atajo pasa por la misma confirmación que el botón del widget.
         recorder.onRestartRequested = { [weak self] in self?.widget.confirmRestart() }
         widget.onToggleBubble = { [weak self] in self?.toggleBubble() }
+        widget.onCameraMenu = { [weak self] in self?.cameraMenu() }
+        widget.onToggleMicrophone = { [weak self] in self?.recorder.toggleMute(.microphone) }
+        widget.onToggleSystemAudio = { [weak self] in self?.recorder.toggleMute(.system) }
         levelMeter.onLevel = { [weak self] level in
             self?.levelBar.level = CGFloat(level)
         }
@@ -561,7 +564,11 @@ final class ControlWindow: NSWindowController {
     /// Enciende o apaga la cámara y su ventana espejo. Pasa apenas se elige en la
     /// lista, sin esperar a grabar: así se encuadra antes de arrancar.
     @objc private func cameraChanged() {
-        closeCamera()
+        // Al **cambiar** de cámara no se le avisa al grabador del cierre: sería
+        // un "te quedaste sin cámara" falso, y en modo cámara completa lo haría
+        // saltar a modo pantalla en el medio del cambio (decisión 83).
+        let vaAQuedarSinCamara = selectedCamera() == nil
+        closeCamera(avisandoAlGrabador: vaAQuedarSinCamara)
 
         guard let device = selectedCamera() else {
             ConfigurationStore.shared.update { $0.lastCameraID = nil }
@@ -572,6 +579,7 @@ final class ControlWindow: NSWindowController {
             guard await CameraDeviceEnumerator.requestPermission() else {
                 showCameraPermissionAlert()
                 cameraPopUp.selectItem(at: 0)
+                if recorder.isRecording { recorder.setCamera(nil) }
                 return
             }
 
@@ -579,6 +587,8 @@ final class ControlWindow: NSWindowController {
                 statusLabel.stringValue = "No se pudo abrir la cámara"
                 statusLabel.textColor = BloomindStyle.signal
                 cameraPopUp.selectItem(at: 0)
+                // Acá sí se avisa: el cambio falló y quedamos sin ninguna.
+                if recorder.isRecording { recorder.setCamera(nil) }
                 return
             }
 
@@ -596,6 +606,10 @@ final class ControlWindow: NSWindowController {
             mirror.setVisible(true)
             self.mirror = mirror
 
+            // Con la grabación corriendo hay que avisarle al pipeline, que es
+            // quien compone la burbuja en cada frame.
+            if recorder.isRecording { recorder.setCamera(capture) }
+
             ConfigurationStore.shared.update { $0.lastCameraID = device.uniqueID }
         }
     }
@@ -609,11 +623,51 @@ final class ControlWindow: NSWindowController {
         recorder.setBubbleFrame(visible ? nil : mirror.frame)
     }
 
-    private func closeCamera() {
+    /// El menú del botón de cámara del widget: apagar la que está prendida y
+    /// elegir cualquiera de las disponibles, también con la grabación corriendo
+    /// y aunque se haya arrancado sin ninguna (decisión 82).
+    private func cameraMenu() -> NSMenu {
+        loadCameras()
+        let menu = NSMenu()
+        let activa = camera?.device.uniqueID
+
+        if camera != nil {
+            let apagar = NSMenuItem(title: "Apagar cámara", action: #selector(elegirCamaraDelWidget(_:)), keyEquivalent: "")
+            apagar.target = self
+            apagar.tag = -1
+            menu.addItem(apagar)
+            menu.addItem(.separator())
+        }
+
+        if cameras.isEmpty {
+            let vacio = NSMenuItem(title: "No hay cámaras disponibles", action: nil, keyEquivalent: "")
+            vacio.isEnabled = false
+            menu.addItem(vacio)
+        }
+
+        for (indice, dispositivo) in cameras.enumerated() {
+            let item = NSMenuItem(title: dispositivo.name, action: #selector(elegirCamaraDelWidget(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = indice
+            item.state = dispositivo.uniqueID == activa ? .on : .off
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    @objc private func elegirCamaraDelWidget(_ sender: NSMenuItem) {
+        // El popup del panel y el menú del widget eligen lo mismo, así que se
+        // mantienen sincronizados: uno solo manda, y es la lista de cámaras.
+        cameraPopUp.selectItem(at: sender.tag + 1)
+        cameraChanged()
+    }
+
+    private func closeCamera(avisandoAlGrabador: Bool = true) {
         mirror?.setVisible(false)
         mirror = nil
         camera?.stop()
         camera = nil
+        if avisandoAlGrabador, recorder.isRecording { recorder.setCamera(nil) }
         recorder.setBubbleFrame(nil)
     }
 
@@ -715,7 +769,12 @@ final class ControlWindow: NSWindowController {
                       censura: recorder.isRedacting,
                       anotando: recorder.isAnnotationOn,
                       color: recorder.markerColor,
-                      hayCamara: camera != nil)
+                      hayCamara: camera != nil,
+                      audio: RecordingWidget.AudioState(
+                          capturaMicrofono: recorder.capturesSource(.microphone),
+                          capturaSistema: recorder.capturesSource(.system),
+                          microfonoSilenciado: recorder.isMuted(.microphone),
+                          sistemaSilenciado: recorder.isMuted(.system)))
         var texto = String(format: "%02d:%02d", seconds / 60, seconds % 60)
         // El modo activo y el color del marcador van en el mismo renglón: son la
         // única señal de en qué estado está hasta que llegue el widget (Fase 11).

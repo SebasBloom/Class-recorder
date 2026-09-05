@@ -14,7 +14,11 @@ final class FramePipeline {
     private let cursorTrack: CursorTrackWriter
     private let tracker: MouseTracker
     private let writer: RecordingWriter
-    private let camera: CameraCapture?
+    /// Mutable desde la Fase 13: la cámara se puede prender y apagar con la
+    /// grabación corriendo. La lee la cola de captura 30 veces por segundo y la
+    /// cambia el hilo principal, así que va bajo el mismo lock que los demás
+    /// ajustes en vivo.
+    private var _camera: CameraCapture?
     private let whiteboard: DrawingSurface
     private let annotation: DrawingSurface
     /// La capa de anotación se prende y se apaga; el tablero no. Cuando está
@@ -91,7 +95,7 @@ final class FramePipeline {
         self.cursorTrack = cursorTrack
         self.tracker = tracker
         self.writer = writer
-        self.camera = camera
+        self._camera = camera
         self.whiteboard = whiteboard
         self.annotation = annotation
 
@@ -125,6 +129,20 @@ final class FramePipeline {
         lock.lock()
         _boardColor = color
         lock.unlock()
+    }
+
+    /// Cambia la cámara que se compone, o la quita con nil. El cambio se ve en el
+    /// frame siguiente.
+    func setCamera(_ camera: CameraCapture?) {
+        lock.lock()
+        _camera = camera
+        lock.unlock()
+    }
+
+    var camera: CameraCapture? {
+        lock.lock()
+        defer { lock.unlock() }
+        return _camera
     }
 
     /// Recibe las zonas activas en coordenadas globales y las deja convertidas.
