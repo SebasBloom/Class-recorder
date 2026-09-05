@@ -439,7 +439,8 @@ máquina que compila, no con un Developer ID notarizado. La firma es válida y e
 (por eso los permisos de macOS se dan una sola vez), pero Gatekeeper exige la
 autorización manual en Privacidad y seguridad que describe el manual.
 
-**Pendiente que puede tumbar la instalación:** el binario es `arm64` puro
-(`lipo -archs` → `arm64`), así que **no corre en un Mac Intel**, y el manual solo
-declara "macOS 15 o más nuevo". Hay que confirmar qué Mac tiene Iván antes de
-mandarle nada; si es Intel, se compila universal.
+**Resuelto (2026-09-05):** el binario es `arm64` puro (`lipo -archs` → `arm64`), así
+que **no corre en un Mac Intel**. La Mac de Iván es M2, confirmado por Sebas, así que
+se entrega así. El manual ahora lo declara en Requisitos, con cómo verificarlo en
+"Acerca de esta Mac". Si algún día hay que instalarlo en un Intel, se compila
+universal (`swift build --arch arm64 --arch x86_64`), no se toca nada más.

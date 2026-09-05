@@ -10,6 +10,9 @@ Todo funciona local. La app no se conecta a internet para nada, no sube nada a n
 
 ## Requisitos
 
+- Mac con chip Apple (M1, M2, M3 o más nuevo). En los Mac viejos con procesador
+  Intel la app no abre. Para saberlo: menú Apple → Acerca de esta Mac; donde dice
+  "Chip" tiene que aparecer un M.
 - macOS 15 (Sequoia) o más nuevo.
 - Espacio libre en disco: para una clase de una hora, calculá que el archivo puede pesar varios GB. La app te avisa si el espacio se está acabando.
 
