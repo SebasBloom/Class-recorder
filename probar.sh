@@ -40,6 +40,16 @@ correr dibujo \
 	"$FUENTES/Dibujo/DrawingSurface.swift" \
 	Pruebas/dibujo/main.swift
 
+correr ventanas \
+	"$FUENTES/UI/WindowLevels.swift" \
+	Pruebas/ventanas/main.swift
+
+correr configuracion \
+	"$FUENTES/Configuracion/Configuration.swift" \
+	"$FUENTES/EntradaGlobal/Shortcut.swift" \
+	"$FUENTES/Registro/Logger.swift" \
+	Pruebas/configuracion/main.swift
+
 correr mezcla \
 	"$FUENTES/Audio/AudioMixer.swift" \
 	"$FUENTES/Registro/Logger.swift" \

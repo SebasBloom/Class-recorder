@@ -60,6 +60,7 @@ Al tocar "Iniciar grabación" se abre un panel con todo lo que hay que decidir:
 - **Cámara**: elegí entre las que estén disponibles, incluida la del iPhone.
 - **Nombre de la sesión**: ponele nombre a la grabación (por ejemplo "Clase Supabase parte 1") para encontrarla fácil después.
 - **Carpeta de destino**: dónde se guarda el video.
+- **Guion del teleprompter**: si vas a leer algo, pegalo acá, junto con la velocidad y el tamaño de letra con que querés que arranque. Se puede dejar vacío, y también se puede cambiar después, en plena grabación.
 
 La app recuerda lo último que elegiste en todo. La segunda vez que grabes, el panel ya viene configurado como la vez anterior.
 
@@ -67,7 +68,20 @@ Al confirmar, cuenta 3, 2, 1 y arranca.
 
 ## Durante la grabación
 
-Aparece un widget flotante chiquito que podés arrastrar a donde no moleste. Muestra el tiempo, el estado, el modo activo, un indicador cuando la censura está tapando algo y otro cuando silenciaste algún audio. Tiene botones para pausar, detener, reiniciar la toma, manejar la cámara y silenciar el micrófono o el sonido del computador. Ni el widget ni ninguna ventana de la app salen en el video, tranquilo.
+Aparece un widget flotante chiquito que podés arrastrar a donde no moleste. Muestra el tiempo, el estado, el modo activo, un indicador cuando la censura está tapando algo y otro cuando silenciaste algún audio. Ni el widget ni ninguna ventana de la app salen en el video, tranquilo.
+
+**El widget tiene todo lo que tienen los atajos, en botones**, por si no te los acordás o preferís el mouse. Cada botón dice qué hace: el dibujito arriba y el nombre abajo, sin tener que adivinar ni dejar el mouse quieto esperando. Viene en dos tamaños y se cambia con el botón "Más" de la esquina:
+
+Los botones están agrupados y cada grupo dice de qué es:
+
+- **Comandos de grabación** (se ve siempre, en los dos tamaños): pausar, detener, reiniciar la toma, prender y apagar la cámara, callar el micrófono, callar el sonido del computador y prender el teleprompter.
+- **Pantalla a grabar** (solo expandido): los tres modos, o sea qué se está viendo en el video: tu pantalla, vos en cámara completa o el tablero.
+- **Comandos** (solo expandido): el círculo del cursor, la censura, redibujar la zona censurada, el marcador y su color.
+- **Comandos tableros** (solo expandido): tablero blanco o negro, deshacer, borrar y la tarjeta con todos los atajos.
+
+**Los botones te dicen qué está prendido.** El que está activo se pone **azul**: la cámara, el modo en el que estás, el círculo del cursor, el marcador. El que está tapando o callando algo se pone **coral**: la censura, o el micrófono y el sonido del computador cuando los silenciaste. Los que están apagados quedan grises. Así no tenés que acordarte de nada, mirás y ya.
+
+Se queda con el tamaño que hayas elegido la última vez. Y los botones te siguen funcionando aunque tengas el marcador o el tablero prendidos, que es cuando el mouse está ocupado dibujando: el widget queda por encima. Lo único: si dibujás justo debajo del widget, no vas a ver ese pedazo del trazo en tu pantalla, aunque en el video sí queda. Movés el widget y listo.
 
 Lo demás se maneja con atajos de teclado. Los importantes:
 
@@ -82,6 +96,8 @@ Lo demás se maneja con atajos de teclado. Los importantes:
 | Tapar o destapar la censura | Opción Comando C |
 | Redibujar la zona de censura | Shift Opción Comando C |
 | Prender o apagar el marcador sobre la pantalla | Opción Comando D |
+| Mostrar u ocultar el teleprompter | Opción Comando T |
+| Prender o apagar el círculo del cursor | Opción Comando A |
 | Cambiar el color del marcador | Opción Comando 0 |
 | Tablero blanco o negro | Opción Comando B |
 | Silenciar o activar tu micrófono | Opción Comando M |
@@ -95,6 +111,16 @@ Si se te olvida alguno a mitad de clase, mantené presionado Opción Comando H y
 ### Los tres modos
 
 Con los atajos 1, 2 y 3 saltás entre mostrar la pantalla, mostrarte a vos en grande, o un tablero para dibujar. El tablero puede ser blanco o negro, y se cambia en vivo con Opción Comando B. El cambio es instantáneo y la grabación no se corta ni pierde el audio. Típico flujo de clase: mostrás cómo se abre n8n en modo pantalla, saltás a cámara completa para explicar qué es, pasás al tablero para dibujar el concepto, y volvés a la pantalla a seguir con la demo.
+
+### El círculo del cursor se puede apagar
+
+El círculo amarillo que sigue al mouse y la ondita que sale al hacer clic se pueden apagar en mitad de la grabación con **Opción Comando A**, o con su botón en el widget expandido. Se apagan y se prenden los dos juntos.
+
+Sirve para los tramos donde lo que importa es lo que se ve en pantalla y no dónde está el mouse: leer un documento, mostrar un diseño, dejar corriendo un video. Volvés a apretar y vuelven.
+
+Como el círculo no está en tu pantalla sino solo en el video, la única forma de saber si está prendido es el botón del widget: apagado se ve gris.
+
+Dos cosas que conviene saber. La primera: se recuerda como lo hayas dejado, así que si lo apagás, la próxima grabación arranca apagado. La segunda: apagar el círculo **no** afecta al zoom automático de VideoFlow. El recorrido del mouse se sigue guardando igual en el archivo `.cursor.json`, así que podés grabar sin círculo y que la edición te haga el zoom lo mismo.
 
 ### Censura, para tapar cosas sensibles
 
@@ -112,6 +138,22 @@ La zona vive mientras la app esté abierta. Si la cerrás y volvés, hay que dib
 - **En el tablero** (Opción Comando 3): lienzo entero con las mismas herramientas. Lo que dibujás en el tablero y lo que dibujás sobre la pantalla son independientes: borrar uno no toca el otro.
 - El marcador tiene cinco colores (rojo, amarillo, verde, blanco, negro) y se rotan con Opción Comando 0. El color activo se ve en el widget, y también en un círculo arriba a la derecha mientras estás en el tablero. Sobre el tablero se saltea solo el color que no se vería: el blanco en tablero blanco, el negro en tablero negro.
 
+### El teleprompter, para leer el guion mientras grabás
+
+Una ventana con tu texto pasando solo, para no perder el hilo. **No sale en el video**: la ves vos y nadie más, igual que el widget.
+
+Se prende y se apaga con **Opción Comando T** o con su botón en el widget. No está siempre: aparece cuando la necesitás. Funciona en los tres modos, así que la podés tener mientras mostrás la pantalla, mientras estás en cámara completa o sobre el tablero.
+
+El texto lo dejás cargado antes de grabar, en el panel de configuración. Si a mitad de clase necesitás otro, el teleprompter tiene un botón de **editar**: lo abrís, pegás el texto nuevo, volvés a leer, y la grabación sigue corriendo todo el tiempo.
+
+**Moverlo y agrandarlo**: se arrastra como la burbuja de la cámara y se estira de las esquinas, en vivo. Arranca arriba y al centro. El texto ocupa todo el ancho del cuadro, así que para hacer las líneas más cortas o más largas se cambia el tamaño de la ventana.
+
+**Controlarlo**, desde sus propios botones o desde el widget: play y pausa, volver al principio, la velocidad y el tamaño de la letra. Cuando el guion se acaba, frena solo.
+
+Con el mouse encima del teleprompter también podés mover el texto con la rueda, o agarrarlo y arrastrarlo para ubicarte en otra parte del guion (eso pausa el avance automático). Y si esa ventana es la que tenés seleccionada, la **barra espaciadora** hace play y pausa y las **flechas arriba y abajo** cambian la velocidad. Esas teclas sueltas se desactivan solas mientras estás editando el texto, para que puedas escribir tranquilo.
+
+Un detalle de cómo funciona: **cada grabación arranca de cero**. Mientras estás grabando el teleprompter se acuerda de todo aunque lo apagues y lo prendas —dónde lo dejaste, de qué tamaño, a qué velocidad, con qué guion—, pero al detener la grabación vuelve a lo que diga el panel. Es a propósito: la clase siguiente casi nunca es el mismo guion.
+
 ### Cambiar el audio y la cámara sin cortar la grabación
 
 No todo queda congelado cuando arrancás. En mitad de la clase podés:
@@ -123,6 +165,14 @@ No todo queda congelado cuando arrancás. En mitad de la clase podés:
 El widget muestra bien visible qué está silenciado, para que no se te pase. Podés dejar las dos cosas calladas a la vez si querés un tramo mudo.
 
 Lo único que **no** se puede es al revés: si arrancaste eligiendo "solo el sonido del sistema", el micrófono no se puede sumar después. Es a propósito: la app solo abre tu micrófono si vos lo pediste antes de empezar, y no lo deja abierto "por si acaso".
+
+### Cambiar el fondo de tu cámara
+
+Esto no lo hace el Grabador: lo hace macOS, y funciona mejor. Si querés salir con un fondo distinto al cuarto donde estás, se prende una sola vez y sirve tanto en la burbuja como en modo cámara completa.
+
+Con la cámara prendida, mirá la barra de menú arriba a la derecha: aparece un **ícono de video verde**. Hacele clic, buscá la opción **Background** (Fondo) y elegí una imagen. Podés usar una tuya con "Añadir imagen". Queda puesto para todas las apps que usen la cámara, no solo para el Grabador.
+
+Dos cosas para saber de antemano: funciona con la cámara del propio Mac y con el iPhone por Continuity, **no** con cámaras externas tipo GoPro o webcam USB. Y como el cambio pasa antes de que la imagen llegue al Grabador, no le cuesta nada a la grabación.
 
 ### Pausar y reiniciar
 

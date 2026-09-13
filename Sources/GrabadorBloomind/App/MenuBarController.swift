@@ -120,6 +120,17 @@ final class MenuBarController {
         window.onRecordingStateChange = { [weak self] grabando, pausado in
             self?.actualizarIcono(grabando: grabando, pausado: pausado)
         }
+        // Con el atajo la tarjeta se muestra mientras se mantiene apretado; con
+        // el botón del widget no hay "soltar", así que ahí alterna.
+        window.onToggleShortcutCard = { [weak self] in
+            guard let self else { return }
+            if card.isVisible {
+                card.hide()
+            } else {
+                card.show(shortcuts: registry.shortcuts,
+                          recording: controlWindow?.recorder.isRecording ?? false)
+            }
+        }
         controlWindow = window
         return window
     }

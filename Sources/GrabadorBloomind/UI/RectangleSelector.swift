@@ -33,7 +33,7 @@ final class RectangleSelector: NSWindow {
 
         super.init(contentRect: screenFrame, styleMask: [.borderless], backing: .buffered, defer: false)
 
-        level = .modalPanel
+        level = WindowLayer.selector.level
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         backgroundColor = NSColor(white: 0, alpha: 0.35)
         isOpaque = false

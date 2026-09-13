@@ -444,3 +444,99 @@ que **no corre en un Mac Intel**. La Mac de Iván es M2, confirmado por Sebas, a
 se entrega así. El manual ahora lo declara en Requisitos, con cómo verificarlo en
 "Acerca de esta Mac". Si algún día hay que instalarlo en un Intel, se compila
 universal (`swift build --arch arm64 --arch x86_64`), no se toca nada más.
+
+## Adenda 1 (2026-09-06): teleprompter, botones en el widget y fondos
+
+**88. 2026-09-06 — El teleprompter se reimplementa nativo en Swift; el código React es la especificación, no el producto.**
+Existe un teleprompter funcionando en React con TypeScript y Tailwind (`teleprompter_codigo_completo.docx` en la raíz). De ahí se toma el comportamiento —el avance por tiempo transcurrido, los rangos de velocidad y de tamaño de letra, la línea de lectura, los degradados, la rueda y el arrastre, el frenado al final— y se escribe de nuevo con AppKit.
+Razón: incrustarlo en una vista web obligaría a meter npm y la cadena de build de Tailwind al proyecto, contra la decisión 14 de cero dependencias externas, y dejaría la conexión entre los botones nativos del widget y los controles del teleprompter atada a un puente JavaScript.
+Alternativa descartada: un `WKWebView` con el bundle web adentro. Más rápido de arrancar y peor todos los días siguientes: dos lenguajes, dos sistemas de estilo y un puente frágil justo en los controles que se usan en vivo.
+
+**89. 2026-09-06 — El teleprompter nunca aparece en el video.**
+Es una ventana propia y por lo tanto ya queda fuera de la captura, porque el filtro excluye la aplicación entera (decisión 22). En la matriz de visibilidad de 8.4 figura con "nunca" en las tres columnas.
+Razón: es una ayuda de lectura para quien graba; el que mira la clase no tiene por qué ver el guion.
+Consecuencia de diseño: el teleprompter **no toca el pipeline de composición**. No consume el compositor ni la conversión de coordenadas, y esa ausencia es la prueba de que la decisión se está cumpliendo.
+Va en la matriz y no fuera de ella para que quede escrito que no es una capa opcional que alguien pueda prender en el video más adelante.
+
+**90. 2026-09-06 — Se descarta el control de ancho de texto del original.**
+El texto llena todo el ancho del cuadro del teleprompter.
+Razón: el prototipo web vivía a pantalla completa y necesitaba una perilla para no leer líneas de punta a punta del monitor. Acá el cuadro es una ventana que se mueve y se redimensiona en vivo, así que el ancho ya se ajusta con la mano, y un control que hace lo mismo dos veces es un control de más en una barra que se usa dando clase.
+Alternativa descartada: mantener el deslizador de ancho. Ahorra un arrastre de ventana y agrega un estado más que recordar y que reiniciar entre grabaciones.
+
+**91. 2026-09-06 — El teleprompter recuerda dentro de la grabación y se reinicia entre grabaciones.**
+Mientras dura una grabación conserva posición, tamaño, velocidad, tamaño de letra y guion, aunque se apague y se prenda. Al terminar la grabación vuelve a los valores del panel de configuración previo.
+Razón: cada grabación es un guion distinto. Heredar el guion anterior significa arrancar la toma siguiente leyendo el texto equivocado, que es peor que arrancar en blanco.
+Lo que sí persiste en `config.json` es lo del panel: el guion cargado ahí, su velocidad y su tamaño de letra de arranque, con la misma memoria pegajosa que el resto de los campos.
+Alternativa descartada: persistir también el estado en vivo. Confunde dos cosas distintas —lo que elegiste antes de grabar y lo que ajustaste sobre la marcha— y deja al panel mintiendo sobre con qué se va a arrancar.
+
+**92. 2026-09-06 — Las teclas sueltas del teleprompter viven en la ventana, no en el registro de atajos.**
+Barra espaciadora para play y pausa, flechas arriba y abajo para la velocidad, activas **solo** mientras el teleprompter tiene el foco y **desactivadas** mientras el cuadro de edición del guion está abierto.
+Razón: pausar el guion con un dedo es el gesto que se hace veinte veces en una clase; obligar a tres modificadores para eso lo vuelve inservible. Y una tecla suelta capturada globalmente rompería la escritura en cualquier app, así que tiene que estar atada al foco de esa ventana.
+Alternativa descartada: pasar esos controles a atajos de tres modificadores del registro central. Coherente con el resto de la app y peor de usar justo donde importa.
+Precedente: es el mismo criterio del punto delicado 7 del plan, que ya rige para los cuadros de texto del motor de dibujo: el teclado se captura solo mientras hay algo abierto que lo necesita, y los atajos con modificadores siguen funcionando siempre.
+
+**93. 2026-09-06 — Los clics sobre el widget y el teleprompter con la capa de dibujo activa se resuelven con niveles de ventana.**
+El widget y el teleprompter pasan a un nivel de ventana superior al de la superficie de dibujo, y el sistema entrega el clic a la ventana que esté encima en ese punto. El orden de todas las ventanas propias queda declarado en un solo lugar.
+Razón: con la capa de anotación o el tablero prendidos, esa ventana cubre la pantalla entera y se queda con todo el mouse, que es justo el momento en que los botones del widget hacen más falta. Hoy las cinco ventanas propias comparten el nivel `.floating` y el orden efectivo lo decide quién se mostró último, o sea que el arreglo también saca de la penumbra una dependencia invisible que ya existía.
+Alternativa descartada: que la capa de dibujo ignore los eventos en las zonas donde está el widget o el teleprompter. Obliga a sincronizar posiciones de ventanas en cada arrastre y se rompe en silencio el día que una ventana se mueva sin avisar.
+Efecto secundario aceptado: lo que se dibuje debajo del widget o del teleprompter queda tapado en la pantalla de quien graba, aunque el trazo sí se compone en el video. No es un defecto; se corrige moviendo el widget.
+Riesgo asumido y cómo se controla: esta es la pieza que decide a quién le llega el mouse. Los criterios de aceptación del cambio incluyen reverificar el círculo del cursor, la capa de anotación, el tablero y la censura, no solo que el botón nuevo responda.
+
+**94. 2026-09-06 — Los fondos virtuales no se construyen: los pone macOS.**
+No se implementa reemplazo de fondo tipo Meet o Teams.
+Razón: macOS Sequoia ya trae reemplazo de fondo a nivel de sistema, con imágenes propias, y actúa sobre la cámara **antes** de que la imagen llegue a la app. Sirve igual en la burbuja y en modo cámara completa, sin costo de rendimiento para el pipeline y sin una línea de código nuestra. Probado por Sebas.
+Limitación conocida y aceptada: funciona con la cámara integrada del Mac y con el iPhone por Continuity, no con cámaras de terceros. Si algún día hacen falta fondos con una GoPro o una webcam externa, se reevalúa.
+Alternativa descartada: segmentar la persona con Vision y componer el fondo en cada frame. Es trabajo permanente en el pipeline de frames —la parte del proyecto con la regla de memoria más estricta— para igualar algo que el sistema operativo ya hace gratis y mejor.
+
+**95. 2026-09-06 — El foco de teclado lo toma la ventana que recibió el último clic.**
+Entre el teleprompter y la superficie de dibujo, el teclado se lo queda la última que se haya clickeado. Al pasar el foco al teleprompter, el cuadro de texto que estuviera abierto en el dibujo se cierra, exactamente como ya lo cierra hoy un clic en cualquier otro lado.
+Razón: los dos necesitan el foco y no puede ser de los dos a la vez. El espejo de dibujo lo necesita porque sin él los cuadros de texto se pierden en silencio (decisión 64); el teleprompter lo necesita para la barra espaciadora, las flechas y la edición del guion (decisión 92). Atarlo al último clic es la única regla que no obliga a acordarse de nada: mirás dónde tocaste último.
+Alternativa descartada: que el teleprompter nunca tome el foco mientras haya una superficie de dibujo prendida. Salva los cuadros de texto y a cambio deja al teleprompter sin espacio ni flechas justo en el modo tablero, que es donde más se lee un guion.
+Elegido por Sebas el 2026-09-06.
+
+**96. 2026-09-06 — La configuración se lee tolerante: un campo que falta toma su valor por defecto.**
+`Configuration` tiene su propio `init(from:)` con `decodeIfPresent` para cada campo, en vez de la decodificación sintetizada por Swift.
+Razón: la sintetizada exige que todos los campos no opcionales estén en el archivo, **aunque el struct los declare con un valor por defecto**, porque ese valor lo usa `init()` y no `init(from:)`. La consecuencia se descubrió en carne propia al agregar `widgetExpanded` en la Fase 14: el `config.json` que venía en uso quedó ilegible y la app arrancó de fábrica, apartando la configuración real —atajos, burbuja, última pantalla— como `config.json.dañado`. No se perdió nada gracias a la decisión 21, pero el arranque de fábrica no tenía ningún motivo.
+Lo peor del síntoma: pasa **una sola vez**, en la primera apertura después de actualizar, y de ahí en adelante todo se ve normal porque el archivo nuevo ya tiene el campo. O sea que es irreproducible después de que ocurrió, y el que lo sufre es Iván, en su Mac, con la versión nueva recién instalada.
+Alternativa descartada: declarar todos los campos como opcionales. Funciona y ensucia todo el código que los lee, obligando a repetir el valor por defecto en cada uso.
+Queda cubierto por una prueba automática (`./probar.sh`, bloque "configuracion"), que carga un `config.json` de la versión anterior y comprueba que no se pierde nada.
+
+**97. 2026-09-06 — El círculo del cursor y la onda del clic se prenden y se apagan juntos, con un solo interruptor.**
+Una sola acción (`resaltadoCursor`, ⌥⌘A) y un solo botón en el widget controlan los dos.
+Razón: son la misma ayuda visual y responden al mismo motivo. Cuando el círculo estorba —una demo donde lo que importa es el contenido y no dónde está el mouse— la onda del clic estorba igual. Dos interruptores serían dos botones más en el widget y dos combinaciones más que recordar en vivo, para separar algo que en la práctica se apaga junto.
+Alternativa descartada: un interruptor para cada uno. Da la combinación de clics visibles sin círculo, o al revés, a cambio de más superficie de control. Elegido por Sebas el 2026-09-06 sobre esa alternativa; si algún día hace falta separarlos, es dividir un caso del enum en dos.
+El estado se recuerda entre sesiones y arranca prendido, que es el comportamiento que tenía la app hasta ahora.
+
+**98. 2026-09-06 — Apagar el resaltado del cursor no toca el `.cursor.json`.**
+Con el círculo apagado, el compositor no recibe ni la posición ni los clics, pero el escritor del JSON los sigue recibiendo completos.
+Razón: son dos cosas distintas que comparten un dato. El círculo es una ayuda visual del video; el JSON es el insumo con el que VideoFlow hace el zoom automático en la edición (decisión 6). Que Sebas apague el círculo en un tramo no significa que renuncie al zoom de ese tramo, y descubrir esa pérdida recién en la edición sería el peor momento posible.
+Implementación: en `FramePipeline`, al compositor se le pasan `cursor` y `newClicks` en nil y vacío; a `cursorTrack.record` se le pasan los valores reales. El compositor no se enteró de que este feature existe.
+Alternativa descartada: filtrar antes, dejando de calcular la posición del cursor cuando el resaltado está apagado. Ahorra una conversión de coordenadas por frame, que no es un costo medible, y vacía el JSON sin que nadie lo haya pedido.
+Detalle de comportamiento: las ondas de clic que ya estaban en curso terminan de apagarse solas en su medio segundo, en vez de cortarse de golpe. Se ve mejor y sale gratis.
+
+**99. 2026-09-06 — Todos los botones del widget llevan su nombre a la vista, no solo el ícono.**
+Cada botón se dibuja con el símbolo arriba y una palabra abajo: Pausar, Detener, Reiniciar, Cam on/off, Micrófono, Sonido PC, Pantalla, Cám. full, Tablero, Cursor, Censura, Redibujar, Marcador, Color, Lienzo, Deshacer, Borrar, Atajos.
+Razón: pedido de Sebas el 2026-09-06, y tiene razón. Un ícono solo obliga a adivinar o a dejar el mouse quieto esperando el tooltip, y en mitad de una clase no hay tiempo para ninguna de las dos cosas. La app la usan dos personas que no son developers y varios de los íconos no son evidentes: el de censura, el del lienzo del tablero y el del resaltado del cursor no los adivina nadie.
+Costo aceptado: el widget pasa de 217×86 a 502×158 compacto y 502×392 expandido, ya con los títulos de grupo de la decisión 100. Es bastante más superficie en pantalla, y por eso mismo existe el modo compacto y el widget se arrastra a donde no moleste.
+El nombre del botón es **corto y propio del widget**, no el `label` del registro de atajos: ese sigue siendo el nombre largo y canónico que muestran la pantalla de preferencias y la tarjeta de atajos, y va en el tooltip de cada botón. Son dos usos distintos del mismo concepto y conviven sin duplicarse.
+Detalle: el botón de la cámara se llama "Cam on/off" y no "Cámara" a secas, porque el modo de cámara completa tiene el suyo propio abajo. Dos botones llamados igual haciendo cosas distintas es peor que no ponerles nombre. Nombre elegido por Sebas el 2026-09-06, sobre un "Burbuja" que decía qué se prendía pero no que ese mismo botón elige la cámara.
+Alternativa descartada: dejar solo íconos y confiar en el tooltip, que es lo que había. Ahorra pantalla y traslada el costo al peor momento posible.
+
+**100. 2026-09-06 — Los botones del widget van agrupados, con un título por grupo.**
+Cuatro grupos, cada uno con su título en el estilo de marca: **Comandos de grabación** (pausar, detener, reiniciar, cámara y los dos de audio), **Pantalla a grabar** (los tres modos de fuente), **Comandos** (cursor, censura, redibujar, marcador, color) y **Comandos tableros** (lienzo, deshacer, borrar, atajos).
+Razón: pedido de Sebas el 2026-09-06. Dieciocho botones seguidos son una pared aunque cada uno tenga su nombre; agrupados se encuentra lo que se busca sin leerlos todos. El nombre del grupo también desambigua botones que solos serían confusos: "Pantalla" bajo "Pantalla a grabar" se entiende como modo de fuente y no como "grabar la pantalla".
+El título del primer grupo se ve siempre, porque esa fila también está en el modo compacto. Los otros tres aparecen y desaparecen con sus filas.
+Costo: el expandido pasa de 195 a 392 px de alto, contando también la grilla pareja de la decisión 102. El compacto crece de 96 a 158, porque su fila también estrena título.
+
+**101. 2026-09-06 — Los botones del widget muestran su estado con el fondo lleno, no con el tinte del ícono.**
+Un botón prendido se pinta con el fondo Azul Lab y el texto en blanco; uno que está tapando o silenciando algo, con el fondo coral; uno apagado, con un fondo tenue. Lo usan la cámara, los tres modos, el resaltado del cursor, la censura, el marcador y los dos de audio.
+Razón: pedido de Sebas el 2026-09-06 —"¿cómo sé si el cursor está prendido?"— y era un agujero real. Hasta acá el estado se marcaba tiñendo el ícono, que cambia unos pocos píxeles del dibujito: a un metro de la pantalla, dando clase, los dos estados se ven iguales. El caso del cursor es el más grave de todos, porque el círculo **no está en la pantalla de quien graba**, solo en el video: si el botón no lo dice, no lo dice nadie.
+Detalle de implementación, para no volver a perder el tiempo: **`bezelColor` no funciona.** Se probó primero y macOS lo ignora con cualquier estilo de bezel que permita poner el ícono arriba del nombre. El fondo se pinta con la capa del botón (`isBordered = false` más `layer.backgroundColor`), que además deja los colores planos y sin degradado que pide la identidad de marca.
+Segunda señal, aparte del botón: la línea de estado del widget ahora dice **"sin cursor"** cuando el resaltado está apagado, igual que ya decía "🔇 micrófono" o "▓ censura". Dos señales para el mismo hecho, porque es un estado que no se puede ver en ningún otro lado.
+Alternativa descartada: `setButtonType(.pushOnPushOff)` y dejar que macOS dibuje el estado activado. Es lo nativo y pinta con el color de acento del sistema, que cada usuario configura distinto y que no es el de la marca.
+
+**102. 2026-09-06 — Los botones del widget tienen ancho, alto e ícono de tamaño fijo.**
+Todos miden 74×46 y todos los símbolos se dibujan con la misma configuración óptica (14 pt).
+Razón: pedido de Sebas —"los botones están súper descuadrados"— y las dos causas eran esas. Con ancho **mínimo** en vez de fijo, cada botón se estiraba lo que le pedía su palabra: "Cam on/off" quedaba más ancho que "Pausar", y las cuatro filas dejaban de alinearse entre sí aunque cada fila por dentro estuviera prolija. Y los símbolos del sistema no vienen todos al mismo tamaño óptico: la goma de borrar se dibuja notoriamente más grande que la flecha del cursor, así que la fila se veía despareja incluso con los botones parejos.
+El ancho lo manda la palabra más larga y todos los demás la acompañan. Si algún día una etiqueta no entra, se acorta la palabra antes que agrandar el botón: la grilla es lo que hace que cada cosa esté siempre en el mismo lugar y se encuentre sin leer.
+Detalle para no repetir el error: los íconos que cambian en vivo (pausar/reanudar, cámara con y sin, micrófono mudo) tienen que volver a pasar por la misma configuración de símbolo al cambiar, o vuelven al tamaño de fábrica y desparejan la fila otra vez. Por eso hay una sola función que arma íconos y nadie más llama a `NSImage(systemSymbolName:)` directo.

@@ -19,7 +19,7 @@ final class ShortcutCard: NSPanel {
         )
 
         isFloatingPanel = true
-        level = .floating
+        level = WindowLayer.tarjeta.level
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         backgroundColor = .clear
         isOpaque = false

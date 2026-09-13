@@ -81,6 +81,8 @@ final class FramePipeline {
     /// Cambio de modo pendiente de anotar en el JSON. Se anota con el tiempo del
     /// próximo frame y no con el del clic: el JSON habla en tiempo de video.
     private var _pendingModeChange: CaptureMode?
+    /// Si se compone el resaltado del cursor. Se alterna en vivo, como los demás.
+    private var _cursorHighlightOn = true
 
     init(converter: CoordinateConverter,
          compositor: FrameCompositor,
@@ -122,6 +124,18 @@ final class FramePipeline {
     func setAnnotationOn(_ on: Bool) {
         lock.lock()
         _annotationOn = on
+        lock.unlock()
+    }
+
+    /// Prende y apaga el círculo del cursor y la onda del clic.
+    ///
+    /// Apagarlo **no** afecta al `.cursor.json`: el recorrido y los clics se
+    /// siguen registrando completos, porque VideoFlow los usa para el zoom
+    /// automático y eso no tiene nada que ver con que el círculo se vea o no
+    /// (decisión 98).
+    func setCursorHighlight(_ on: Bool) {
+        lock.lock()
+        _cursorHighlightOn = on
         lock.unlock()
     }
 
@@ -203,6 +217,7 @@ final class FramePipeline {
         let boardColor = _boardColor
         let redactions = _redactions
         let modeChange = _pendingModeChange
+        let cursorHighlight = _cursorHighlightOn
         _pendingModeChange = nil
         lock.unlock()
 
@@ -217,10 +232,14 @@ final class FramePipeline {
             converter.pixelPoint(fromGlobal: $0.location)
         }
 
+        // Con el resaltado apagado el compositor no recibe ni cursor ni clics, y
+        // así no dibuja nada; el JSON de abajo sí los recibe completos. Las ondas
+        // que ya estaban en vuelo terminan de apagarse solas, que se ve mejor que
+        // cortarlas de golpe.
         compositor.draw(into: pixelBuffer,
                         mode: mode,
-                        cursor: cursor,
-                        newClicks: clicks,
+                        cursor: cursorHighlight ? cursor : nil,
+                        newClicks: cursorHighlight ? clicks : [],
                         camera: camera?.latestImage,
                         bubbleRect: bubbleRect,
                         whiteboard: whiteboard,

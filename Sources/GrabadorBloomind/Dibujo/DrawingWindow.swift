@@ -40,9 +40,11 @@ final class DrawingWindow: NSWindow {
             defer: false
         )
 
-        // Encima de todo, incluidas las apps en pantalla completa. Debajo del
-        // espejo de la burbuja, que tiene que seguir viéndose sobre el tablero.
-        level = .floating
+        // Encima de las demás apps, incluidas las que están en pantalla completa,
+        // y **debajo de todas las ventanas propias**: el widget, el teleprompter
+        // y la burbuja tienen que seguir siendo usables mientras se dibuja. El
+        // orden entero se decide en `WindowLayer`, no acá (decisión 93).
+        level = WindowLayer.dibujo.level
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isOpaque = background == .lienzo
         // La capa de anotación **no** puede tener el fondo del todo transparente.

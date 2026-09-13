@@ -30,7 +30,7 @@ final class CountdownWindow: NSPanel {
         )
 
         isFloatingPanel = true
-        level = .screenSaver
+        level = WindowLayer.countdown.level
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         backgroundColor = .clear
         isOpaque = false

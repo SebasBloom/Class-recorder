@@ -12,6 +12,7 @@ enum ShortcutAction: String, CaseIterable {
     case modoTablero = "modo_tablero"
     case pausar = "pausar"
     case capaAnotacion = "capa_anotacion"
+    case resaltadoCursor = "resaltado_cursor"
     case colorMarcador = "color_marcador"
     case colorTablero = "color_tablero"
     case deshacer = "deshacer"
@@ -31,6 +32,7 @@ enum ShortcutAction: String, CaseIterable {
         case .modoTablero:    return "Modo tablero"
         case .pausar:         return "Pausar / reanudar"
         case .capaAnotacion:  return "Capa de anotación"
+        case .resaltadoCursor: return "Resaltado del cursor"
         case .colorMarcador:  return "Rotar color del marcador"
         case .colorTablero:   return "Tablero blanco / negro"
         case .deshacer:       return "Deshacer último trazo"
@@ -64,6 +66,9 @@ enum ShortcutAction: String, CaseIterable {
         case .modoTablero:    return Shortcut(tecla: kVK_ANSI_3, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘3")
         case .pausar:         return Shortcut(tecla: kVK_ANSI_P, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘P")
         case .capaAnotacion:  return Shortcut(tecla: kVK_ANSI_D, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘D")
+        // A de apuntador: C es censura y P es pausar, las dos iniciales obvias
+        // ya estaban tomadas.
+        case .resaltadoCursor: return Shortcut(tecla: kVK_ANSI_A, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘A")
         case .colorMarcador:  return Shortcut(tecla: kVK_ANSI_0, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘0")
         case .colorTablero:   return Shortcut(tecla: kVK_ANSI_B, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘B")
         case .deshacer:       return Shortcut(tecla: kVK_ANSI_Z, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘Z")

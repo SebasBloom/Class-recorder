@@ -14,6 +14,11 @@ final class ControlWindow: NSWindowController {
     /// Avisa a la barra de menú para que cambie el estado del ícono.
     var onRecordingStateChange: ((Bool, Bool) -> Void)?
 
+    /// Muestra u oculta la tarjeta de atajos desde el botón del widget. La
+    /// tarjeta y el registro de atajos viven en la barra de menú, no acá, porque
+    /// tienen que existir aunque no haya ninguna grabación en curso.
+    var onToggleShortcutCard: (() -> Void)?
+
     private var displays: [CaptureDisplay] = []
     private let displayPopUp = NSPopUpButton()
 
@@ -95,6 +100,18 @@ final class ControlWindow: NSWindowController {
         widget.onCameraMenu = { [weak self] in self?.cameraMenu() }
         widget.onToggleMicrophone = { [weak self] in self?.recorder.toggleMute(.microphone) }
         widget.onToggleSystemAudio = { [weak self] in self?.recorder.toggleMute(.system) }
+        // Los botones del modo expandido van todos por el mismo camino que los
+        // atajos, sin lógica propia: `perform(_:)` es el punto único por donde
+        // pasa todo lo que se puede hacer con el teclado. La tarjeta es la
+        // excepción, porque no vive acá.
+        widget.onAction = { [weak self] action in
+            guard let self else { return }
+            if action == .tarjeta {
+                self.onToggleShortcutCard?()
+            } else {
+                self.recorder.perform(action)
+            }
+        }
         levelMeter.onLevel = { [weak self] level in
             self?.levelBar.level = CGFloat(level)
         }
@@ -770,6 +787,7 @@ final class ControlWindow: NSWindowController {
                       anotando: recorder.isAnnotationOn,
                       color: recorder.markerColor,
                       hayCamara: camera != nil,
+                      resaltadoCursor: recorder.isCursorHighlightOn,
                       audio: RecordingWidget.AudioState(
                           capturaMicrofono: recorder.capturesSource(.microphone),
                           capturaSistema: recorder.capturesSource(.system),

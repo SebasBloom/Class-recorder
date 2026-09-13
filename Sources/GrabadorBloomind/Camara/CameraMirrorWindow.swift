@@ -33,7 +33,7 @@ final class CameraMirrorWindow: NSPanel, NSWindowDelegate {
         )
 
         isFloatingPanel = true
-        level = .floating
+        level = WindowLayer.burbuja.level
         // Visible aunque Sebas cambie de escritorio o esté mostrando una app en
         // pantalla completa: la burbuja no se puede perder a mitad de clase.
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]

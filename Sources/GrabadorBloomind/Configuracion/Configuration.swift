@@ -45,6 +45,13 @@ struct Configuration: Codable, Equatable {
 
     var bubbleFrame: StoredRect?
     var widgetPosition: StoredPoint?
+    /// Widget con todos los botones a la vista, o solo los de siempre. Arranca
+    /// compacto: es lo que ocupa menos pantalla mientras se da clase.
+    var widgetExpanded: Bool = false
+
+    /// El círculo amarillo del cursor y la onda del clic. Arranca prendido: es
+    /// el comportamiento de siempre y lo que se quiere en un tutorial.
+    var cursorHighlightEnabled: Bool = true
 
     /// Atajos reasignados por el usuario: acción -> combinación. Vacío significa
     /// "todos en su valor por defecto".
@@ -54,6 +61,37 @@ struct Configuration: Codable, Equatable {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Movies/Grabador Bloomind", isDirectory: true)
             .path
+    }
+
+    init() {}
+
+    /// Lectura tolerante: **un campo que no está en el archivo toma su valor por
+    /// defecto** en vez de invalidar la configuración entera.
+    ///
+    /// Sin esto, la decodificación sintetizada de Swift exige que todos los
+    /// campos no opcionales estén presentes, aunque el struct los declare con un
+    /// valor por defecto: ese valor lo usa `init()`, no `init(from:)`. La
+    /// consecuencia práctica, ya vista en carne propia, es que **agregar un campo
+    /// manda a `config.json.dañado` la configuración de quien venía usando la
+    /// app**, con sus atajos y su burbuja adentro. No se pierde, porque la
+    /// decisión 21 la aparta en vez de pisarla, pero la app arranca de fábrica
+    /// sin motivo (decisión 96).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        outputFolder     = try c.decodeIfPresent(String.self, forKey: .outputFolder) ?? Configuration.defaultOutputFolder
+        countdownEnabled = try c.decodeIfPresent(Bool.self, forKey: .countdownEnabled) ?? true
+        lastDisplayID    = try c.decodeIfPresent(UInt32.self, forKey: .lastDisplayID)
+        lastAudioMode    = try c.decodeIfPresent(String.self, forKey: .lastAudioMode)
+        lastMicrophoneID = try c.decodeIfPresent(String.self, forKey: .lastMicrophoneID)
+        lastCameraID     = try c.decodeIfPresent(String.self, forKey: .lastCameraID)
+        lastSessionName  = try c.decodeIfPresent(String.self, forKey: .lastSessionName)
+        customArea       = try c.decodeIfPresent(StoredRect.self, forKey: .customArea)
+        boardColor       = try c.decodeIfPresent(String.self, forKey: .boardColor)
+        bubbleFrame      = try c.decodeIfPresent(StoredRect.self, forKey: .bubbleFrame)
+        widgetPosition   = try c.decodeIfPresent(StoredPoint.self, forKey: .widgetPosition)
+        widgetExpanded   = try c.decodeIfPresent(Bool.self, forKey: .widgetExpanded) ?? false
+        cursorHighlightEnabled = try c.decodeIfPresent(Bool.self, forKey: .cursorHighlightEnabled) ?? true
+        shortcuts        = try c.decodeIfPresent([String: Shortcut].self, forKey: .shortcuts) ?? [:]
     }
 }
 

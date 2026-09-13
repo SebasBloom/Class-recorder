@@ -41,6 +41,10 @@ final class RecordingController {
     /// entre sesiones.
     private(set) var boardColor: BoardColor = .blanco
 
+    /// El círculo amarillo del cursor y la onda del clic. Se alternan juntos con
+    /// un solo interruptor (decisión 97) y el estado se recuerda entre sesiones.
+    private(set) var isCursorHighlightOn = ConfigurationStore.shared.current.cursorHighlightEnabled
+
     /// La zona censurada. Vive mientras la app esté abierta y se dibuja de nuevo
     /// en cada sesión (decisión 74).
     private let redaction = RedactionSlot()
@@ -176,6 +180,7 @@ final class RecordingController {
             self.pipeline = pipeline
             pipeline.setBubbleFrame(bubbleFrame)
             pipeline.setBoardColor(boardColor)
+            pipeline.setCursorHighlight(isCursorHighlightOn)
             mouseTracker.start()
 
             // El frame llega en la cola de captura y se procesa ahí mismo. El
@@ -350,6 +355,7 @@ final class RecordingController {
         case .modoTablero:    setMode(.tablero)
         case .pausar:         togglePause()
         case .capaAnotacion:  toggleAnnotation()
+        case .resaltadoCursor: toggleCursorHighlight()
         case .colorMarcador:  rotateMarkerColor()
         case .colorTablero:   toggleBoardColor()
         case .deshacer:       undoDrawing()
@@ -650,6 +656,20 @@ final class RecordingController {
     ///
     /// Si el marcador activo quedara invisible sobre el fondo nuevo, se rota solo:
     /// pasar a tablero negro con el marcador negro dejaría dibujando en la nada.
+    /// Prende y apaga el resaltado del cursor: el círculo y la onda del clic van
+    /// juntos, son la misma ayuda visual (decisión 97).
+    ///
+    /// El `.cursor.json` no se toca: sigue registrando el recorrido y los clics
+    /// completos, porque VideoFlow los usa para el zoom y eso es independiente de
+    /// que el círculo se vea (decisión 98).
+    private func toggleCursorHighlight() {
+        isCursorHighlightOn.toggle()
+        ConfigurationStore.shared.update { $0.cursorHighlightEnabled = isCursorHighlightOn }
+        pipeline?.setCursorHighlight(isCursorHighlightOn)
+        Logger.shared.log("Resaltado del cursor \(isCursorHighlightOn ? "prendido" : "apagado")")
+        onStateChange?()
+    }
+
     private func toggleBoardColor() {
         guard isRecording else { return }
         boardColor = boardColor == .blanco ? .negro : .blanco

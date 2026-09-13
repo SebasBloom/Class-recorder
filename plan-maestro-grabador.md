@@ -88,6 +88,8 @@ Este es el mapa inicial. Está organizado por pieza compartida, no por feature, 
 - **Registro de acciones y atajos**: lo consumen todos los features operables con teclado, la pantalla de preferencias y la tarjeta de recordatorio.
 - **Configuración central**: la leen y escriben casi todos los módulos.
 - **Enumeración de dispositivos** (patrón común para micrófonos y cámaras): listas dinámicas que se actualizan en vivo al conectar o desconectar, con la resiliencia de la sección 5.
+- **Niveles y orden de ventanas** (adenda 1): quién queda encima de quién y, con eso, quién recibe el clic. Lo comparten todas las ventanas propias: widget, teleprompter, espejos de dibujo, espejo de la burbuja, tarjeta de atajos, selector de rectángulo, countdown y panel. Tenerlo repartido en cada archivo es lo que hace que un botón deje de responder sin que nadie sepa por qué.
+- **Teleprompter** (adenda 1): el motor de desplazamiento y su ventana. Consume el registro de acciones y atajos, la configuración central y la identidad visual. **No** consume el pipeline de composición ni la conversión de coordenadas: nunca toca el video.
 
 ## 7. Puntos técnicos delicados
 
@@ -101,6 +103,7 @@ Léelos completos antes de cada fase que los toque.
 6. **Exclusión de ventanas propias.** El filtro de captura excluye todas las ventanas de la app, y esa exclusión debe cubrir ventanas creadas después de iniciar la grabación (el espejo del tablero se abre a mitad de sesión, por ejemplo).
 7. **Atajos globales y captura de teclado.** Los atajos de grabación se registran globales solo mientras se graba, para no robarle combinaciones al sistema el resto del tiempo. El único global permanente mientras la app corre es iniciar/detener. En modos de dibujo, el teclado solo se captura mientras un cuadro de texto está activo; los atajos con modificadores siguen funcionando siempre.
 8. **Cambio de dispositivos en caliente.** Enumeraciones dinámicas y manejo del evento de desconexión sin detener la grabación.
+9. **Niveles de ventana y a quién le llega el clic** (adenda 1). Con una superficie de dibujo prendida, el mouse queda capturado por esa ventana en toda la pantalla. Que el widget y el teleprompter sigan siendo usables depende de una sola cosa: que estén en un nivel de ventana **superior** al de la superficie de dibujo, porque macOS entrega el evento a la ventana que esté más arriba en ese punto. Hoy todas las ventanas propias comparten el nivel `.floating` y el orden efectivo lo decide quién se mostró último, que es exactamente el tipo de dependencia invisible que se rompe sola. El orden queda declarado en un solo lugar, no repartido por los archivos de cada ventana.
 
 ## 8. Especificación funcional completa
 
@@ -128,6 +131,7 @@ Léelos completos antes de cada fase que los toque.
 - Burbuja: se compone en el frame, arrastrable y redimensionable durante la grabación (la interacción es sobre una ventana espejo excluida de la captura; la posición y tamaño se reflejan en la composición). Posición y tamaño persisten en configuración.
 - Botón de cámara en el widget: despliega un menú con las cámaras disponibles y, cuando hay una activa, la opción de apagarla. **Sirve también para prender la cámara habiendo arrancado la grabación sin ninguna**, porque la cámara no es una pista del archivo ni una fuente del stream de captura: se compone sobre cada frame, así que puede nacer y morir a mitad de grabación (decisión 82). Si el permiso de cámara no se dio todavía, se pide en ese momento y la grabación sigue corriendo pase lo que pase.
 - Apagar la cámara estando en modo cámara completa devuelve el fondo a modo pantalla, para no dejar el video en negro (decisión 83).
+- **Fondos virtuales: no se construyen.** macOS Sequoia trae reemplazo de fondo a nivel de sistema, con imágenes propias, y se aplica a la cámara antes de que la imagen llegue a la app, así que sirve igual en la burbuja y en modo cámara completa sin costo de rendimiento para nosotros (decisión 94). Limitación aceptada: funciona con la cámara integrada y con el iPhone por Continuity, no con cámaras de terceros.
 
 ### 8.4 Modos de fuente y matriz de visibilidad
 
@@ -137,19 +141,24 @@ Matriz de visibilidad de capas (esto se implementa tal cual, no se improvisa):
 
 | Capa | Pantalla | Cámara completa | Tablero |
 |---|---|---|---|
-| Círculo de cursor | Sí | No | Sí |
-| Efecto de clic | Sí | No | Sí |
+| Círculo de cursor | Sí, si está prendido | No | Sí, si está prendido |
+| Efecto de clic | Sí, si está prendido | No | Sí, si está prendido |
 | Burbuja de cámara | Sí | No | Sí |
 | Censura (ambos slots) | Sí | No | No |
 | Capa de anotación de pantalla | Sí, si está prendida | No | No |
 | Contenido del tablero | No | No | Sí |
+| Teleprompter | **Nunca** | **Nunca** | **Nunca** |
 
 El estado de cada capa (censura prendida, anotaciones existentes) se conserva al cambiar de modo; la matriz solo define qué se compone en cada momento.
+
+El teleprompter está en la matriz con "nunca" en las tres columnas a propósito, y no fuera de ella: es la forma de que quede escrito que **no es una capa opcional del compositor sino una ventana propia excluida de la captura** (decisión 89). El compositor no lo conoce y no debe conocerlo. En la pantalla de Sebas, en cambio, se ve en los tres modos: la matriz habla del archivo, no de lo que ve el operador.
 
 ### 8.5 Cursor, clics y JSON para VideoFlow
 
 - Círculo amarillo #FFD700, semitransparente (relleno entre 55 y 65 por ciento de opacidad, borde algo más opaco), tamaño proporcional a la resolución.
 - Efecto de clic: animación breve tipo onda al hacer clic, visualmente distinta del círculo fijo.
+- **Se prenden y se apagan en vivo, los dos juntos, con un solo interruptor**: su atajo y su botón en el widget (decisión 97). Son la misma ayuda visual y cuando una estorba, la otra también. El estado se recuerda entre sesiones y arranca prendido.
+- **Apagar el resaltado no toca el `.cursor.json`** (decisión 98). El recorrido y los clics se siguen registrando completos: VideoFlow los usa para el zoom automático, y eso es independiente de que el círculo se haya visto o no en el video. Apagar el círculo y perder el zoom de la edición sería un efecto secundario que nadie pidió.
 - En modo Pantalla, si el mouse se va al monitor no grabado, el círculo desaparece del video y el JSON registra el evento de salida.
 - Junto a cada video se escribe `<mismo nombre>.cursor.json` con este esquema:
 
@@ -185,6 +194,44 @@ Coordenadas en píxeles del video final (ya convertidas, VideoFlow no necesita s
 - **Capa de anotación sobre pantalla real**: un atajo la prende y apaga. Prendida: ventana transparente (excluida de la captura) sobre el monitor grabado donde se dibuja y escribe; el contenido se compone en el frame; el mouse va a la capa, no a la app de abajo. Apagada: la ventana se oculta, el mouse vuelve a la app real, y el contenido queda guardado, listo para reaparecer al prenderla de nuevo.
 - Borrar es siempre una acción deliberada con su atajo, y borra únicamente la superficie de dibujo activa en ese momento (tablero si estás en el tablero, capa si la capa está prendida). Nunca borra ambas. Sin confirmación, porque interrumpiría la clase, pero con deshacer disponible.
 
+### 8.7-bis Teleprompter
+
+Agregado por la adenda 1 (2026-09-06). Va numerado como "bis" y no corrido a 8.8 para no invalidar las decenas de referencias a "8.8", "8.9" y siguientes que ya existen en el código y en los documentos históricos.
+
+Una ventana para leer el guion mientras se graba. Es una ayuda de lectura para el operador y **nunca aparece en el video**: es una ventana propia y por lo tanto queda excluida de la captura igual que el widget y los espejos de dibujo (decisión 89). No toca el pipeline de composición de frames en absoluto.
+
+**Origen del código.** Existe una implementación previa en React con TypeScript y Tailwind (`teleprompter_codigo_completo.docx` en la raíz del repositorio) que se usa **como especificación de comportamiento, no como código a incrustar**: se reimplementa nativa en Swift (decisión 88).
+
+#### Comportamiento
+
+- **Se prende y se apaga a voluntad**, con su atajo y con su botón en el widget. No está visible siempre.
+- **Visible en los tres modos**: pantalla, cámara completa y tablero.
+- **Movible y redimensionable en vivo durante la grabación**, con el mismo patrón que la burbuja de cámara: un panel sin barra de título, que no activa la app, arrastrable por su fondo y con esquina de redimensión. Posición inicial arriba y al centro de la pantalla que se está grabando.
+- **Memoria dentro de la grabación, reinicio entre grabaciones.** Mientras dura una grabación recuerda posición, tamaño, velocidad, tamaño de letra y guion cargado, aunque se apague y se prenda. Al terminar la grabación todo eso se reinicia; los valores de arranque salen del panel de configuración previo (decisión 91).
+- **El guion se carga en el panel previo y también se puede cambiar a mitad de grabación.** Para eso el teleprompter tiene dos estados, **leer** y **editar**, con un botón propio adentro para pasar de uno al otro.
+- El texto llena todo el ancho del cuadro. **No hay control de ancho de texto**: el ajuste se hace moviendo y redimensionando la ventana (decisión 90).
+
+#### Desplazamiento
+
+- La animación avanza **por tiempo transcurrido entre cuadros, no por cantidad de cuadros**, para que la velocidad sea la misma sin importar cuánto esté rindiendo la máquina en ese momento. Un intervalo entre cuadros se cuenta como máximo 100 ms: si la máquina se traba, el texto no pega un salto.
+- Velocidad de **0.3 a 10**, con la misma sensación de avance que el original: la velocidad multiplicada por 40 son los puntos que el texto sube por segundo.
+- Tamaño de letra de **16 a 120 px**, interlineado 1.8.
+- **Línea de lectura** tenue en el centro vertical del área de texto.
+- **Degradados de desvanecido** arriba y abajo del área de texto.
+- Relleno de media altura del cuadro arriba y abajo del guion, para que la primera línea arranque en la línea de lectura y la última pueda llegar hasta ella.
+- **Desplazamiento manual con la rueda del mouse y arrastrando**. Arrastrar pausa el avance automático.
+- **Frenado automático al llegar al final** del guion, y botón de reiniciar al principio.
+
+#### Controles
+
+Play y pausa, reiniciar al principio, velocidad, tamaño de letra y editar el guion. Están **en el propio teleprompter y también replicados como botones en el widget** (8.9).
+
+Además, y **solo mientras el teleprompter tiene el foco**: barra espaciadora para play y pausa, flechas arriba y abajo para subir y bajar la velocidad de a 0.5. Estas teclas sueltas **se desactivan mientras el cuadro de edición del guion está abierto**, para no interferir con la escritura (decisión 92). Los atajos de tres modificadores del resto de la app no tienen ese problema y siguen funcionando siempre, como ya pasa con los cuadros de texto del motor de dibujo (punto delicado 7).
+
+#### Aspecto
+
+Sigue la identidad Bloomind de 8.13, como toda la interfaz de la app: fondo Azul Profundo, texto blanco, la línea de lectura y los controles en Azul Lab. No hereda la paleta del prototipo web.
+
 ### 8.8 Atajos de teclado
 
 Sistema central: registro único de acciones, cada una con su combinación. Pantalla de preferencias con la lista completa, clic sobre una combinación y tecleo de la nueva para reasignar, con detección de conflictos entre atajos propios. Todo persiste en la configuración.
@@ -202,6 +249,8 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 | Censura on/off | Opción Comando C | Durante grabación |
 | Redibujar la zona censurada | Shift Opción Comando C | Durante grabación |
 | Capa de anotación on/off | Opción Comando D | Durante grabación |
+| Teleprompter on/off | Opción Comando T | Durante grabación |
+| Resaltado del cursor on/off | Opción Comando A | Durante grabación |
 | Rotar color del marcador | Opción Comando 0 | Durante grabación |
 | Deshacer último trazo | Opción Comando Z | Modos de dibujo |
 | Borrar superficie de dibujo activa | Opción Comando Delete | Modos de dibujo |
@@ -211,12 +260,22 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 
 - La tarjeta de atajos: mientras se mantiene presionada la combinación, aparece una tarjeta translúcida en una esquina con la lista de atajos activos y sus teclas. Al soltar desaparece. Es una ventana propia: excluida de la captura, invisible en el video.
 - Fuera de grabación no se registra ningún atajo global salvo iniciar/detener, para no robarle combinaciones al resto del sistema.
+- Los controles del teleprompter (play y pausa con espacio, velocidad con las flechas) **no** son atajos de este registro: son teclas sueltas que solo existen mientras esa ventana tiene el foco, y se desactivan al editar el guion (8.7-bis). Todo lo demás del teleprompter se maneja con sus botones, replicados en el widget.
 
 ### 8.9 Control de grabación
 
 - Cuenta regresiva 3, 2, 1 antes de arrancar (configurable on/off). El archivo empieza después del conteo.
-- Widget flotante durante la grabación: pequeño, arrastrable, siempre encima, excluido de la captura. Muestra tiempo transcurrido, estado (grabando o pausado), modo activo, indicador de censura activa, color del marcador cuando aplica, y **qué fuentes de audio están silenciadas**. Botones: pausar/reanudar, detener, reiniciar toma, cámara (menú de selección y apagado), silenciar micrófono, silenciar audio del sistema.
-- Los dos botones de audio quedan deshabilitados para las fuentes que no se eligieron antes de arrancar: no son un atajo para encenderlas, solo para callarlas.
+- Widget flotante durante la grabación: pequeño, arrastrable, siempre encima, excluido de la captura. Muestra tiempo transcurrido, estado (grabando o pausado), modo activo, indicador de censura activa, color del marcador cuando aplica, y **qué fuentes de audio están silenciadas**.
+- **Todas las acciones que tienen atajo tienen también botón en el widget**, más los controles del teleprompter (8.7-bis). Los atajos siguen funcionando igual: los botones son una vía alternativa, nunca un reemplazo.
+- **Cada botón lleva su nombre escrito debajo del ícono** (decisión 99). Un ícono solo obliga a adivinar o a esperar el tooltip, y en vivo no hay tiempo para ninguna de las dos cosas. El nombre es corto y propio del widget; el nombre largo del registro de acciones queda en el tooltip, la tarjeta de atajos y las preferencias.
+- **Los botones van agrupados y cada grupo lleva su título** (decisión 100): *Comandos de grabación*, *Pantalla a grabar*, *Comandos* y *Comandos tableros*. El primero se ve también en el modo compacto; los otros tres aparecen con sus filas al expandir.
+- **Los botones que tienen estado lo muestran con el fondo lleno** (decisión 101): azul de marca lo que está prendido (cámara, modo activo, resaltado del cursor, marcador), coral lo que está tapando o silenciando (censura, micrófono o sistema en mudo), fondo tenue lo apagado. El resaltado del cursor además se anuncia como "sin cursor" en la línea de estado: es lo único que no se puede ver en la pantalla de quien graba, porque el círculo solo existe en el video.
+- **Dos modos, con un botón para alternar entre ellos:**
+  - **Compacto:** tiempo y estado, más el grupo *Comandos de grabación*: pausar/reanudar, detener, reiniciar toma, cámara on/off (con su menú de selección), silenciar micrófono, silenciar audio del sistema, y el teleprompter on/off.
+  - **Expandido:** todo lo anterior más tres grupos. *Pantalla a grabar*: los tres modos de fuente. *Comandos*: resaltado del cursor, censura on/off, redibujar la zona, capa de anotación, rotar color del marcador. *Comandos tableros*: tablero blanco/negro, deshacer, borrar la superficie activa, la tarjeta de atajos. Y la fila del teleprompter (play y pausa, reiniciar al principio, velocidad, tamaño de letra, editar el guion).
+  - El modo elegido se recuerda en la configuración. El reparto exacto de botones entre compacto y expandido se cierra con Sebas al construirlo, sobre esta base.
+- Los dos botones de audio quedan deshabilitados para las fuentes que no se eligieron antes de arrancar: no son un atajo para encenderlas, solo para callarlas. Los controles del teleprompter quedan deshabilitados mientras el teleprompter está apagado.
+- **Los botones tienen que seguir siendo clicables con la capa de dibujo activa.** Con la capa de anotación o el tablero prendidos el mouse queda capturado por esa ventana en toda la pantalla, y ahí es justo donde más falta hacen los botones. Se resuelve con **niveles de ventana**: el widget y el teleprompter viven en un nivel superior al de la superficie de dibujo, y el sistema entrega el clic a la ventana que esté encima en ese punto (decisión 93). No se resuelve con zonas de exclusión en la capa de dibujo. Efecto secundario aceptado: lo que se dibuje debajo del widget o del teleprompter queda tapado en la pantalla del operador, aunque el trazo sí se compone en el video; se corrige moviendo el widget.
 - Pausar congela todos los tracks coherentemente; reanudar es inmediato, sin conteo.
 - Reiniciar toma: detiene, manda el archivo actual a la Papelera, arranca una toma nueva de inmediato con la misma configuración. El nombre de archivo incluye la hora de inicio, así que nunca colisiona.
 - Al detener: notificación con el nombre del archivo y acceso directo a la carpeta.
@@ -224,7 +283,9 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 
 ### 8.10 Panel de configuración pre grabación
 
-Aparece al iniciar una grabación (o desde el menu bar). Contiene: display o área personalizada, modo de audio y dispositivo de micrófono con su indicador de nivel en vivo, cámara, nombre de la sesión, carpeta de salida, countdown on/off. Todo con memoria pegajosa: cada campo recuerda el último valor usado y arranca ahí. Elegir una vez, grabar muchas.
+Aparece al iniciar una grabación (o desde el menu bar). Contiene: display o área personalizada, modo de audio y dispositivo de micrófono con su indicador de nivel en vivo, cámara, nombre de la sesión, carpeta de salida, countdown on/off, y el **guion del teleprompter con su velocidad y su tamaño de letra de arranque**. Todo con memoria pegajosa: cada campo recuerda el último valor usado y arranca ahí. Elegir una vez, grabar muchas.
+
+El guion es la excepción a la memoria pegajosa por el lado contrario: se guarda como cualquier otro campo, pero lo que **no** se hereda de una grabación a otra son los cambios hechos en vivo. Cada grabación arranca con lo que dice el panel (decisión 91).
 
 ### 8.11 Menu bar
 
@@ -349,6 +410,38 @@ Contenido:
 Piezas compartidas que toca, todas con sus consumidores a reverificar: mezcla de audio, pipeline de composición, cámara, registro de acciones y atajos.
 
 Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 13".
+
+### Fase 14. Niveles de ventana y widget completo
+
+Agregada el 2026-09-06 por la adenda 1, y aprobada por Sebas ese mismo día.
+
+**Ubicación en el orden de trabajo.** Igual que la Fase 13: entra **antes** de dar por cerrada la Fase 12, que no está validada. La prueba de fuego de 60 minutos y la entrega a Iván se hacen una sola vez, con todo adentro.
+
+**Va antes que la Fase 15** porque el teleprompter necesita las dos cosas que esta fase construye: su lugar en el orden de ventanas y la fila de botones del widget donde se replican sus controles. Al revés habría que construirlo dos veces.
+
+Contenido:
+
+1. **Pieza nueva de niveles de ventana**, con el orden de todas las ventanas propias declarado en un solo lugar (decisión 93). Hoy cinco ventanas se ponen `.floating` cada una en su archivo y el orden efectivo lo decide quién se mostró último, que es por lo que los botones del widget son inalcanzables con el tablero o la capa de anotación prendidos.
+2. **Orden, de arriba hacia abajo:** countdown, selector de rectángulo, tarjeta de atajos, widget, espejo de la burbuja, teleprompter, superficie de dibujo. El selector va por encima del widget porque si no, no se puede trazar una zona de censura debajo del widget. La burbuja va por encima del teleprompter porque es la única ventana que refleja lo que sí va al video, y perderla de vista es peor que taparse dos renglones del guion.
+3. **El foco de teclado lo toma la ventana que recibió el último clic** (decisión 95). Es lo que permite que el teleprompter tenga sus teclas sueltas sin romper los cuadros de texto del motor de dibujo, que necesitan el foco para recibir lo que se tipea (decisión 64).
+4. **Widget con modo compacto y modo expandido**, con su botón para alternar y el modo recordado en la configuración.
+5. **Un botón por cada acción del registro de atajos**, ruteadas todas por `RecordingController.perform(_:)`, que ya es el punto único por donde pasa todo lo que se puede hacer con el teclado. Sin lógica nueva y sin duplicar la existente.
+6. **Interruptor del resaltado del cursor**: el círculo amarillo y la onda del clic se prenden y se apagan juntos, con la acción `resaltadoCursor` (⌥⌘A) y su botón en el modo expandido. Agregado el 2026-09-06 a pedido de Sebas, dentro de esta fase porque el widget se estaba construyendo igual y así se valida todo en una sola pasada (decisiones 97 y 98).
+7. La fila de controles del teleprompter en el widget llega con la Fase 15, no acá.
+
+Piezas compartidas que toca, todas con sus consumidores a reverificar: niveles y orden de ventanas (nueva), motor de dibujo, cámara, registro de acciones y atajos, configuración central, y el pipeline de composición de frames (solo para dejar de dibujar el círculo, sin tocar buffers).
+
+Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 14". **No alcanza con que los botones nuevos funcionen:** los criterios incluyen reverificar explícitamente el círculo del cursor, la capa de anotación, el tablero y la censura.
+
+### Fase 15. Teleprompter
+
+Agregada el 2026-09-06 por la adenda 1, y aprobada por Sebas ese mismo día. Entra después de la Fase 14 y antes de cerrar la Fase 12.
+
+Contenido: el teleprompter completo según 8.7-bis, reimplementado nativo en Swift a partir del prototipo en React (decisión 88). Su ventana, el motor de desplazamiento por tiempo transcurrido, los dos estados de leer y editar, los controles propios y su fila replicada en el widget, la acción `teleprompter` en el registro de atajos con ⌥⌘T, el guion y sus valores de arranque en el panel de configuración, y el reinicio al terminar cada grabación.
+
+Piezas compartidas que toca: niveles y orden de ventanas, registro de acciones y atajos, configuración central, identidad visual y el widget. **No toca el pipeline de composición**, y eso es parte de lo que se verifica: el teleprompter no puede aparecer en ningún video.
+
+Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 15".
 
 ## 10. Protocolo de trabajo por sesión
 

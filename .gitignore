@@ -9,3 +9,6 @@ Package.resolved
 
 # macOS
 .DS_Store
+
+# Material de referencia, no del proyecto
+*.docx

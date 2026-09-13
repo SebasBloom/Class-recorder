@@ -50,6 +50,8 @@ Consumidores actuales: `WhiteboardWindow` para mostrar y editar, `FrameComposito
 
 Consumidores previstos: el widget (Fase 11, que muestra el color activo).
 
+`DrawingWindow` participa además de la pieza **Niveles y orden de ventanas**, y desde la Fase 14 va **debajo** de todas las ventanas propias: es lo que hace que los botones del widget respondan mientras se dibuja. Cualquier cambio de su nivel o de su `present()` se lee primero allá.
+
 Cuidado al tocarlo:
 
 - **`DrawingRenderer` es uno solo para el espejo y para el video, a propósito.** Si se dibujara distinto en cada lado, la diferencia aparecería recién al revisar el video.
@@ -68,6 +70,50 @@ Consumidores actuales: `ControlWindow`.
 Consumidores previstos: absolutamente toda la UI que venga. El panel de configuración y el widget flotante (Fase 11), la pantalla de preferencias (Fase 9), la tarjeta de atajos (Fase 9), el countdown (Fase 11) y los avisos de disco.
 
 Cuidado al tocarlo: los colores son tokens de marca compartidos con CLM, whatasAPI y Bloomind Oficinas. No se inventan valores nuevos acá; si hace falta un color que no está, se resuelve con la guía del CLM. El turquesa es exclusivo de éxito y no se usa como decoración.
+
+Consumidor previsto nuevo: el teleprompter (adenda 1), que **no** hereda la paleta del prototipo web del que sale su comportamiento.
+
+## Niveles y orden de ventanas
+
+**Fase 14. Existe.** `UI/WindowLevels.swift`.
+
+Quién queda encima de quién entre las ventanas propias y, como consecuencia directa, **quién recibe el clic**: macOS entrega el evento a la ventana que esté más arriba en ese punto de la pantalla.
+
+El orden, de abajo hacia arriba, y todo declarado en el enum `WindowLayer`:
+
+| Ventana | Archivo | Capa |
+|---|---|---|
+| Espejo de dibujo (tablero y anotación) | `Dibujo/DrawingWindow.swift` | `.dibujo` |
+| Teleprompter (Fase 15) | pendiente | `.teleprompter` |
+| Espejo de la burbuja | `Camara/CameraMirrorWindow.swift` | `.burbuja` |
+| Widget de grabación | `UI/RecordingWidget.swift` | `.widget` |
+| Tarjeta de atajos | `UI/ShortcutCard.swift` | `.tarjeta` |
+| Selector de rectángulo | `UI/RectangleSelector.swift` | `.selector` |
+| Countdown | `UI/CountdownWindow.swift` | `.countdown` |
+
+De dónde viene: antes de la Fase 14 las cinco ventanas que existían se ponían `.floating` cada una en su archivo, y con todas en el mismo nivel el orden efectivo lo decidía quién se hubiera mostrado último. Como `DrawingWindow.present()` activa la app y se hace ventana principal, la superficie de dibujo terminaba arriba y, cubriendo la pantalla entera, **se quedaba con todos los clics**: los botones del widget no respondían con el tablero o el marcador prendidos (decisión 93).
+
+El panel de configuración no está acá: es una ventana normal y ya se esconde sola cuando aparece una superficie de dibujo.
+
+Consumidores: las siete ventanas de la tabla.
+
+**Tiene prueba automática** (`./probar.sh`, bloque "ventanas"), que comprueba que la pila esté estrictamente ordenada y que nadie empate con nadie. Si se toca esta pieza, correrla: el error que produce no se ve mirando la pantalla, se ve como "el botón no hace nada, a veces".
+
+Cuidado al tocarla: es la pieza que decide a quién le llega el mouse. Cambiarla obliga a reverificar, con la grabación corriendo y a ojo sobre el video, que siguen funcionando **el círculo del cursor, la capa de anotación, el tablero y la censura**, y no solo lo que se estaba agregando. Dos trampas ya escritas en el código que un cambio de niveles puede despertar: la capa de anotación necesita un alfa mínimo para recibir clics (decisión 63), y el espejo de dibujo necesita ser la ventana con el teclado para que los cuadros de texto reciban lo que se tipea (decisión 64).
+
+## Teleprompter
+
+**Adenda 1. Pendiente.** Carpeta prevista: `UI/` o `Teleprompter/`.
+
+El motor de desplazamiento y su ventana. Ayuda de lectura para el operador; nunca entra al video.
+
+Consume: el registro de acciones y atajos (su acción de prender y apagar), la configuración central (guion, velocidad y tamaño de arranque), la identidad visual y la pieza de niveles de ventana.
+
+**No consume el pipeline de composición ni la conversión de coordenadas**, y esa ausencia es la garantía de la decisión 89: si algún día aparece un `import` del compositor acá, alguien está por meter el teleprompter en el video.
+
+Consumidores: el widget, que replica sus controles, y `RecordingController`, que lo reinicia al terminar cada grabación.
+
+Cuidado al tocarlo: el avance va por tiempo transcurrido entre cuadros y no por cantidad de cuadros; si se cambia a contar cuadros, la velocidad pasa a depender de cuánto esté rindiendo la máquina y el mismo guion tarda distinto cada vez.
 
 ## Selector de rectángulo en pantalla
 
@@ -102,6 +148,8 @@ La matriz de visibilidad de la sección 8.4 está implementada tal cual en la fu
 Consume: conversión de coordenadas, tracking de mouse y la cámara.
 Alimenta: el escritor de video y el escritor del JSON de cursor.
 
+**Consumidor nuevo desde la Fase 14:** el interruptor del resaltado del cursor. Está implementado en `FramePipeline`, que le pasa al compositor `cursor` en nil y la lista de clics vacía cuando está apagado. **`FrameCompositor` no sabe que este feature existe**, y así conviene que siga: la capa se apaga cortándole la entrada, no agregándole condiciones.
+
 Cuidado al tocarlo: dibuja dentro del mismo buffer de la captura, sin crear uno nuevo por frame. No cambiar eso sin leer la decisión 28.
 
 ## Escritor del JSON de cursor
@@ -113,6 +161,8 @@ Escribe el `<mismo nombre>.cursor.json` que VideoFlow usa para el zoom automáti
 Consumidores actuales: `FramePipeline`.
 
 Cuidado al tocarlo: las coordenadas van en píxeles del video final y los tiempos en segundos del video final, descontando pausas. VideoFlow no sabe nada de macOS, ni de escalas, ni de pausas, y así tiene que seguir.
+
+**El interruptor del resaltado del cursor (Fase 14) no lo afecta a propósito** (decisión 98): con el círculo apagado, esta pieza sigue recibiendo la posición y los clics completos. El día que alguien "optimice" dejando de calcular el cursor cuando el resaltado está apagado, el zoom automático de VideoFlow se queda sin datos y nadie se entera hasta la edición.
 
 Desde la Fase 6 escribe también los eventos de cambio de modo (`{"tipo": "modo", "valor": "camara"}`). El cambio se anota con el tiempo del frame siguiente y no con el del atajo: el JSON habla en tiempo de video, no en tiempo de reloj.
 
@@ -144,13 +194,17 @@ Cuidado al tocarlo: el manejador de Carbon es uno solo para toda la app y repart
 
 ## Registro de acciones y atajos
 
-**Fase 9. Pendiente.** Carpeta prevista: `EntradaGlobal/`.
+**Fase 9. Existe.** `EntradaGlobal/ShortcutRegistry.swift` y `EntradaGlobal/Shortcut.swift`.
 
-El registro reasignable con su pantalla de preferencias y la detección de conflictos. Se construye encima de `HotKey`; lo que falta es traducir una combinación tecleada por el usuario a código de tecla y máscara de Carbon.
+El registro reasignable con su pantalla de preferencias y la detección de conflictos, construido encima de `HotKey`.
 
-Consumidores: todos los features operables con teclado, la pantalla de preferencias y la tarjeta de recordatorio.
+Consumidores: todos los features operables con teclado, la pantalla de preferencias, la tarjeta de recordatorio y, desde la adenda 1, el widget, que muestra un botón por cada acción del registro.
 
-Hasta la Fase 9 cada fase usa atajos fijos temporales, que se migran acá cuando la pieza nace.
+**Consumidores nuevos:** la Fase 14 suma la acción `resaltadoCursor` (⌥⌘A) y el teleprompter suma `teleprompter` (⌥⌘T). Agregar una acción es agregar un caso al enum `ShortcutAction` con su etiqueta y su combinación; el `rawValue` es lo que se guarda en `config.json`, así que no se cambia después.
+
+Cuidado nuevo desde la adenda 1: las teclas sueltas del teleprompter (espacio y flechas) **no pasan por acá**. Son eventos de la ventana enfocada, activos solo mientras el teleprompter tiene el foco y apagados mientras se edita el guion (decisión 92). Meterlas al registro las volvería globales y romperían la escritura en cualquier app.
+
+Hasta la Fase 9 cada fase usó atajos fijos temporales, ya migrados acá.
 
 ## Cámara
 
@@ -163,6 +217,10 @@ Consumidores actuales: `ControlWindow`, que la enciende al elegir cámara; `Fram
 Consumidores previstos: el menú de cámara del widget en la Fase 13, que puede **crear** una `CameraCapture` con la grabación ya corriendo.
 
 Cuidado al tocarlo: la sesión vive mientras haya una cámara elegida, no solo mientras se graba. Y la proporción de la ventana espejo está clavada a la de la cámara a propósito: es lo que hace que lo que se ve en pantalla sea exactamente lo que queda en el video.
+
+`CameraMirrorWindow` participa de la pieza **Niveles y orden de ventanas**, y es además el patrón que copia la ventana del teleprompter: panel sin barra de título que no activa la app, arrastrable por el fondo, redimensionable, con la posición guardada al quedarse quieta la mano.
+
+Sobre los fondos virtuales: no se construyen, se usa el reemplazo de fondo nativo de macOS Sequoia, que actúa antes de que la imagen llegue a la app (decisión 94). Esta pieza no tiene nada que hacer al respecto.
 
 Cuidado nuevo desde la Fase 13: `FramePipeline` guardaba la cámara como constante, fijada al construirse. Al poder prenderla y apagarla en vivo pasa a ser mutable bajo el mismo lock que los demás ajustes en vivo (`setBoardColor`, `setAnnotationOn`, `setBubbleFrame`). Todo lo que lea la cámara desde la cola de captura tiene que hacerlo por ese lock: la cola de frames corre 30 veces por segundo y el cambio llega desde el hilo principal.
 
@@ -211,7 +269,11 @@ Consumidores actuales: `AppDelegate` (la carga al arrancar), `RecordingControlle
 
 Consumidores previstos: casi todos los módulos. Cada fase que agregue un campo lo agrega al struct `Configuration` con su valor por defecto, para que un archivo viejo siga cargando.
 
+**Campos nuevos:** el modo del widget (compacto o expandido) y el resaltado del cursor, los dos de la Fase 14; el guion del teleprompter con su velocidad y su tamaño de letra de arranque, de la Fase 15. Lo que **no** va acá es el estado en vivo del teleprompter —posición, tamaño, velocidad y guion mientras se graba—: eso vive en memoria y muere con la grabación (decisión 91).
+
 Cuidado: los campos son opcionales a propósito. Nulo significa "todavía no se eligió", no "vacío".
+
+**Cuidado nuevo desde la Fase 14:** la lectura es tolerante a propósito (`init(from:)` propio con `decodeIfPresent`). Un campo que no está en el archivo toma su valor por defecto en vez de invalidar la configuración entera. Sin eso, agregar un campo manda a `config.json.dañado` la configuración de quien venía usando la app y la hace arrancar de fábrica, una sola vez y sin forma de reproducirlo después (decisión 96). **Tiene prueba automática** (`./probar.sh`, bloque "configuracion"): si se toca la decodificación, correrla.
 
 ## Registro (logging)
 

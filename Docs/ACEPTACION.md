@@ -374,7 +374,7 @@ Con la capa prendida y con contenido, pasá a **cámara completa** y al **tabler
 4. **La capa se mostraba en modo cámara**, donde no se compone: una ventana invisible comiéndose el mouse sin dejar rastro en el video.
 5. **La ventana de control se veía a través de la capa**, porque activar la app la traía adelante y la capa es transparente. Ahora se esconde mientras hay una superficie de dibujo a la vista.
 
-## Fase 9. Sistema de atajos y tarjeta de recordatorio — PARCIALMENTE VALIDADA el 2026-08-01
+## Fase 9. Sistema de atajos y tarjeta de recordatorio — VALIDADA el 2026-09-11
 
 Los diez atajos sueltos de las fases anteriores ahora son un registro único, reasignable y persistente. En el menú de la barra hay una entrada nueva: **Atajos…**
 
@@ -510,7 +510,7 @@ El log ahora también anota cada atajo que llega ("Atajo: Censura on / off") y c
 
 Los dos slots del plan se redujeron a **uno solo sin persistencia** a pedido de Sebas (decisión 74). Con eso desaparecieron un atajo, dos campos de `config.json` y el rectángulo de una zona sensible guardado en disco.
 
-## Fase 11. Panel, widget, countdown y flujo completo — PENDIENTE
+## Fase 11. Panel, widget, countdown y flujo completo — VALIDADA el 2026-09-11
 
 ### 1. El flujo completo, de punta a punta
 
@@ -583,7 +583,7 @@ Copiale el `.app`, y que **siga el README solo, sin que vos le expliques nada**.
 
 **Tiene que:** lograrlo sin ayuda. Si se traba en algún paso, ese paso está mal escrito en el README y hay que arreglarlo. Es la prueba de verdad del manual.
 
-## Fase 13. Controles en vivo de audio y cámara — PENDIENTE
+## Fase 13. Controles en vivo de audio y cámara — VALIDADA el 2026-09-11
 
 Lo que cambia: hoy todo lo que elegís en el panel queda congelado al arrancar. Desde esta fase podés silenciar el micrófono o el audio del sistema en mitad de la clase, y prender, cambiar o apagar la cámara aunque hayas empezado sin ninguna.
 
@@ -658,3 +658,109 @@ Esta fase cambia el camino del audio para **todos** los modos, no solo el mixto,
 Silenciá el micrófono, detené la grabación y arrancá otra.
 
 **Tiene que:** la toma nueva arrancar con el micrófono **activo**. El silencio no se hereda (decisión 84).
+
+## Fase 14. Niveles de ventana y widget completo — VALIDADA el 2026-09-11
+
+Lo que cambia: el widget pasa a tener un botón por cada cosa que hoy solo se puede hacer con un atajo, en dos tamaños que se alternan con un botón. Y se arregla algo que estaba roto sin que nadie lo hubiera reportado: con el tablero o el marcador prendidos, los botones del widget no respondían, porque la superficie de dibujo se quedaba con todos los clics de la pantalla.
+
+Los pasos 4 a 7 son de reverificación: esta fase toca a quién le llega el mouse, así que hay que comprobar que lo que ya funcionaba sigue funcionando. **Que los botones nuevos anden no alcanza para dar la fase por buena.**
+
+### 1. Los botones del widget con el marcador prendido
+
+Arrancá una grabación en modo pantalla y prendé el marcador con **Opción + Comando + D**. Con el marcador prendido, tocá con el mouse los botones del widget: pausar, reanudar, y el de cambiar de color.
+
+**Tiene que:** responder cada botón, con el marcador prendido todo el tiempo. Antes de esta fase no respondía ninguno.
+
+Repetilo en modo tablero (**Opción + Comando + 3**), que cubre la pantalla entera.
+
+### 2. Dibujar debajo del widget
+
+Con el marcador prendido, dibujá un trazo que pase por debajo del widget.
+
+**Tiene que:** verse el trazo cortado en tu pantalla, tapado por el widget, y **completo en el video**. Es el efecto secundario aceptado del arreglo, no un defecto: si el trazo tampoco está en el video, la fase falla.
+
+### 3. El widget compacto y expandido
+
+Tocá el botón de expandir del widget.
+
+**Tiene que:** aparecer el resto de los botones (los tres modos, censura, marcador, colores, tablero blanco y negro, deshacer, borrar y la tarjeta de atajos), sin que el widget se salga de la pantalla ni tape lo que estás mostrando más de lo necesario.
+
+Probá cada botón nuevo y comprobá que hace lo mismo que su atajo. Después contraelo, detené la grabación, cerrá la app, abrila y grabá de nuevo.
+
+**Tiene que:** arrancar en el tamaño en que lo dejaste.
+
+### 4. Reverificación: el círculo del cursor
+
+Grabá dos minutos moviendo el mouse por toda la pantalla y haciendo clics.
+
+**Tiene que:** el círculo seguir al cursor sin desfase y los clics mostrar su onda, igual que siempre.
+
+### 5. Reverificación: la capa de anotación
+
+Prendé el marcador, dibujá una flecha y escribí un texto con el teclado sobre una app real. Apagalo y volvé a prenderlo.
+
+**Tiene que:** dibujarse el trazo, **escribirse el texto con el teclado** (este es el que más riesgo corre con este cambio), volver el mouse a la app de abajo al apagar la capa, y seguir ahí lo dibujado al prenderla de nuevo.
+
+### 6. Reverificación: el tablero
+
+Pasá al tablero, dibujá, escribí un cuadro de texto, cambiá el color, deshacé un trazo, borralo y volvé a modo pantalla.
+
+**Tiene que:** funcionar todo igual que en la Fase 7, y la app de abajo tiene que volver a responder al mouse al salir del tablero.
+
+### 7. Reverificación: la censura
+
+Con **Opción + Comando + C** dibujá una zona de censura, y hacelo una vez **arrastrando el rectángulo por encima del widget**.
+
+**Tiene que:** dejarte trazar la zona aunque el rectángulo pase por donde está el widget. Si el widget se come el arrastre, la fase falla. Después comprobá en el video que la zona quedó tapada mientras la censura estuvo activa.
+
+### 8. La burbuja no se pierde
+
+Con la cámara prendida y el tablero activo, mirá la burbuja en tu pantalla.
+
+**Tiene que:** seguir visible por encima del tablero, no debajo.
+
+### 9. Prender y apagar el círculo del cursor
+
+Agregado el 2026-09-06, dentro de esta misma fase.
+
+Grabá un minuto en modo pantalla moviendo el mouse y haciendo clics. A mitad, apretá **Opción + Comando + A**. Seguí moviéndote y haciendo clics otro rato, y volvé a apretarlo antes de terminar.
+
+**Tiene que:** en el video, desaparecer el círculo amarillo **y** la ondita del clic en el tramo del medio, y volver los dos al final. En tu pantalla no vas a notar nada, porque el círculo nunca estuvo ahí: la señal es el botón del widget expandido, que se ve gris cuando está apagado.
+
+Probalo también desde ese botón, no solo con el atajo.
+
+### 10. El archivo de VideoFlow no se ve afectado
+
+Con la grabación del paso anterior, abrí el archivo `.cursor.json` que quedó al lado del video (doble clic, se abre como texto).
+
+**Tiene que:** tener eventos de movimiento y de clic **también en el tramo donde el círculo estuvo apagado**, con los tiempos corriendo sin huecos. Si ese tramo quedó vacío, la fase falla: el zoom automático de VideoFlow depende de esos datos y apagar el círculo no tiene que costarlo (decisión 98).
+
+### 11. Se recuerda como lo dejaste
+
+Apagá el círculo, detené la grabación, cerrá la app, abrila y grabá de nuevo.
+
+**Tiene que:** arrancar con el círculo apagado. Prendelo y repetí: la grabación siguiente tiene que arrancar prendido.
+
+### 12. Los botones se entienden sin adivinar
+
+Agregado el 2026-09-06 a pedido de Sebas.
+
+Expandí el widget y mirá los dieciocho botones.
+
+**Tiene que:** leerse el nombre de cada uno debajo del dibujito, sin que ninguno quede cortado ni encimado con el de al lado, y sin que el widget se salga de la pantalla. Todos los botones tienen que medir lo mismo y quedar alineados en columnas de una fila a la otra. El compacto mide 502×158 y el expandido 502×392.
+
+Si algún nombre no te dice lo que hace el botón, decilo: son palabras y se cambian en un renglón.
+
+### 13. Se ve qué está prendido y qué no
+
+Agregado el 2026-09-06 a pedido de Sebas.
+
+Con el widget expandido, andá prendiendo y apagando cosas: la cámara, los tres modos, el círculo del cursor, el marcador, la censura, y silenciá el micrófono.
+
+**Tiene que:** ponerse **azul** el botón de lo que quedó prendido (cámara, modo activo, cursor, marcador), **coral** el de lo que está tapando o callando (censura, micrófono o sonido en mudo), y gris lo apagado. El cambio tiene que notarse de reojo, sin acercarse a la pantalla.
+
+En particular, apagá el círculo del cursor y mirá el widget: el botón "Cursor" tiene que quedar gris **y** la línea de estado de arriba tiene que decir **"sin cursor"**. Es el único estado que no podés comprobar mirando tu pantalla, porque el círculo solo existe en el video.
+
+## Fase 15. Teleprompter — PENDIENTE
+
+Los pasos se escriben al construir la fase.
