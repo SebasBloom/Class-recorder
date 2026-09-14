@@ -60,7 +60,7 @@ Al tocar "Iniciar grabación" se abre un panel con todo lo que hay que decidir:
 - **Cámara**: elegí entre las que estén disponibles, incluida la del iPhone.
 - **Nombre de la sesión**: ponele nombre a la grabación (por ejemplo "Clase Supabase parte 1") para encontrarla fácil después.
 - **Carpeta de destino**: dónde se guarda el video.
-- **Guion del teleprompter**: si vas a leer algo, pegalo acá, junto con la velocidad y el tamaño de letra con que querés que arranque. Se puede dejar vacío, y también se puede cambiar después, en plena grabación.
+- **Guion del teleprompter**: si vas a leer algo, pegalo acá o traelo con **Cargar archivo…** desde un Word, un texto o un RTF. Si tu guion está en Google Docs, bajalo primero con Archivo → Descargar → Word (.docx): la app no se conecta a internet, así que no puede ir a buscarlo sola. Va junto, junto con la velocidad y el tamaño de letra con que querés que arranque. Esos dos los podés arrastrar con la barra, escribirlos directo en el cuadrito o moverlos de a un paso con los botones − y +. Se puede dejar vacío, y también se puede cambiar todo después, en plena grabación.
 
 La app recuerda lo último que elegiste en todo. La segunda vez que grabes, el panel ya viene configurado como la vez anterior.
 
@@ -76,12 +76,15 @@ Los botones están agrupados y cada grupo dice de qué es:
 
 - **Comandos de grabación** (se ve siempre, en los dos tamaños): pausar, detener, reiniciar la toma, prender y apagar la cámara, callar el micrófono, callar el sonido del computador y prender el teleprompter.
 - **Pantalla a grabar** (solo expandido): los tres modos, o sea qué se está viendo en el video: tu pantalla, vos en cámara completa o el tablero.
-- **Comandos** (solo expandido): el círculo del cursor, la censura, redibujar la zona censurada, el marcador y su color.
-- **Comandos tableros** (solo expandido): tablero blanco o negro, deshacer, borrar y la tarjeta con todos los atajos.
+- **Comandos tableros** (solo expandido, al lado del anterior): tablero blanco o negro, deshacer y borrar.
+- **Comandos** (solo expandido): el círculo del cursor, la censura, redibujar la zona censurada, el marcador, su color y la tarjeta con todos los atajos.
+- **Teleprompter** (solo expandido): play y pausa, volver al principio, más lento, más rápido, letra más chica, letra más grande y editar el guion.
 
 **Los botones te dicen qué está prendido.** El que está activo se pone **azul**: la cámara, el modo en el que estás, el círculo del cursor, el marcador. El que está tapando o callando algo se pone **coral**: la censura, o el micrófono y el sonido del computador cuando los silenciaste. Los que están apagados quedan grises. Así no tenés que acordarte de nada, mirás y ya.
 
 Se queda con el tamaño que hayas elegido la última vez. Y los botones te siguen funcionando aunque tengas el marcador o el tablero prendidos, que es cuando el mouse está ocupado dibujando: el widget queda por encima. Lo único: si dibujás justo debajo del widget, no vas a ver ese pedazo del trazo en tu pantalla, aunque en el video sí queda. Movés el widget y listo.
+
+Si el widget te tapa algo justo cuando lo estás mostrando, **Opción Comando W** lo esconde y lo trae de vuelta. Los atajos siguen funcionando con el widget escondido.
 
 Lo demás se maneja con atajos de teclado. Los importantes:
 
@@ -142,13 +145,15 @@ La zona vive mientras la app esté abierta. Si la cerrás y volvés, hay que dib
 
 Una ventana con tu texto pasando solo, para no perder el hilo. **No sale en el video**: la ves vos y nadie más, igual que el widget.
 
-Se prende y se apaga con **Opción Comando T** o con su botón en el widget. No está siempre: aparece cuando la necesitás. Funciona en los tres modos, así que la podés tener mientras mostrás la pantalla, mientras estás en cámara completa o sobre el tablero.
+Si dejaste el guion cargado en el panel, **aparece sola al empezar a grabar**: no tenés que pedirle nada. Si el campo del guion está vacío, no aparece. En cualquier momento la prendés y la apagás con **Opción Comando T** o con el botón "Guion" del widget. Funciona en los tres modos, así que la podés tener mientras mostrás la pantalla, mientras estás en cámara completa o sobre el tablero.
 
-El texto lo dejás cargado antes de grabar, en el panel de configuración. Si a mitad de clase necesitás otro, el teleprompter tiene un botón de **editar**: lo abrís, pegás el texto nuevo, volvés a leer, y la grabación sigue corriendo todo el tiempo.
+El texto lo dejás cargado antes de grabar, en el panel de configuración. **Podés cargar varios guiones de una** —intro, desarrollo, cierre— y cambiar entre ellos con las pestañas de arriba del teleprompter, sin parar la grabación. Y si a mitad de clase necesitás otro texto, el teleprompter tiene un botón de **editar**: lo abrís, pegás lo nuevo, volvés a leer.
 
 **Moverlo y agrandarlo**: se arrastra como la burbuja de la cámara y se estira de las esquinas, en vivo. Arranca arriba y al centro. El texto ocupa todo el ancho del cuadro, así que para hacer las líneas más cortas o más largas se cambia el tamaño de la ventana.
 
 **Controlarlo**, desde sus propios botones o desde el widget: play y pausa, volver al principio, la velocidad y el tamaño de la letra. Cuando el guion se acaba, frena solo.
+
+No hace falta aprenderse nada: la propia barra del teleprompter te dice, a la derecha, con qué teclas se esconde y se le da play, y a qué velocidad y tamaño está. Si cambiás el atajo en Atajos…, ahí se actualiza solo.
 
 Con el mouse encima del teleprompter también podés mover el texto con la rueda, o agarrarlo y arrastrarlo para ubicarte en otra parte del guion (eso pausa el avance automático). Y si esa ventana es la que tenés seleccionada, la **barra espaciadora** hace play y pausa y las **flechas arriba y abajo** cambian la velocidad. Esas teclas sueltas se desactivan solas mientras estás editando el texto, para que puedas escribir tranquilo.
 

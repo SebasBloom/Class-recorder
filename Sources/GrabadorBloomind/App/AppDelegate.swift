@@ -14,6 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         ConfigurationStore.shared.load()
 
+        // Sin esto no funciona Cmd+V en ningún campo de la app.
+        EditMenu.install()
+
         menuBar = MenuBarController()
         Logger.shared.log("Ícono de la barra de menú listo")
 

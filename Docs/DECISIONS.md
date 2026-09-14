@@ -540,3 +540,123 @@ Todos miden 74×46 y todos los símbolos se dibujan con la misma configuración 
 Razón: pedido de Sebas —"los botones están súper descuadrados"— y las dos causas eran esas. Con ancho **mínimo** en vez de fijo, cada botón se estiraba lo que le pedía su palabra: "Cam on/off" quedaba más ancho que "Pausar", y las cuatro filas dejaban de alinearse entre sí aunque cada fila por dentro estuviera prolija. Y los símbolos del sistema no vienen todos al mismo tamaño óptico: la goma de borrar se dibuja notoriamente más grande que la flecha del cursor, así que la fila se veía despareja incluso con los botones parejos.
 El ancho lo manda la palabra más larga y todos los demás la acompañan. Si algún día una etiqueta no entra, se acorta la palabra antes que agrandar el botón: la grilla es lo que hace que cada cosa esté siempre en el mismo lugar y se encuentre sin leer.
 Detalle para no repetir el error: los íconos que cambian en vivo (pausar/reanudar, cámara con y sin, micrófono mudo) tienen que volver a pasar por la misma configuración de símbolo al cambiar, o vuelven al tamaño de fábrica y desparejan la fila otra vez. Por eso hay una sola función que arma íconos y nadie más llama a `NSImage(systemSymbolName:)` directo.
+
+## Fase 15 (2026-09-13): el teleprompter
+
+**103. 2026-09-13 — El motor de desplazamiento va aparte de la ventana, sin AppKit adentro.**
+`Teleprompter/TeleprompterEngine.swift` tiene la posición, la velocidad, el tamaño de letra, el tope de 100 ms y el frenado al final; `TeleprompterWindow` solo copia esa posición a la vista.
+Razón: es la única parte del teleprompter donde un error es silencioso. Que el texto suba se ve; que suba 20 puntos de más por segundo cuando la máquina va cargada no se ve, y el síntoma aparece en vivo, dando clase, sin forma de reproducirlo después. Separado se prueba solo con `swiftc` sin levantar interfaz (`./probar.sh`, bloque "teleprompter").
+Regla que impone: **la vista nunca mueve el texto por su cuenta**. La rueda y el arrastre le piden al motor, y el motor le dice a la vista dónde quedar. Dos fuentes de verdad sobre la misma posición es el error clásico acá.
+
+**104. 2026-09-13 — El avance lo lleva un temporizador a 60 Hz que mide el tiempo real, no un `CVDisplayLink`.**
+Un `Timer` de 1/60 en el modo `.common` del run loop, y cada paso mide con `CACurrentMediaTime()` cuánto pasó de verdad desde el anterior.
+Razón: el requisito es que la velocidad no dependa de lo que rinda la máquina, y eso lo da medir el tiempo transcurrido, no la puntualidad del temporizador. Un `CVDisplayLink` sincroniza con el refresco de la pantalla y a cambio entrega su callback en un hilo propio, que para tocar vistas hay que saltar al principal igual. Más piezas para el mismo resultado.
+El modo `.common` no es un detalle: sin él, el texto se congela mientras se arrastra la ventana o se mantiene apretado un botón.
+
+**105. 2026-09-13 — Sobre el texto, arrastrar mueve el guion; la ventana se mueve desde la barra de controles.**
+El teleprompter es movible por su fondo como la burbuja, pero el área de texto se queda con el arrastre para desplazar el guion, y el fondo que arrastra la ventana es el de la barra de abajo.
+Razón: el plan pide las dos cosas —ventana movible por su fondo y desplazamiento manual arrastrando el texto— y sobre el mismo píxel no pueden convivir. El gesto que se hace en vivo, veinte veces por clase, es mover el guion; mover la ventana se hace una vez al acomodarla.
+Alternativa descartada: mover la ventana con una tecla modificadora apretada. Un gesto más que recordar para el caso que menos se usa.
+
+**106. 2026-09-13 — Una capa propia encima del texto se queda con la rueda, el arrastre, la línea de lectura y los degradados.**
+`EscenarioView` cubre el área de texto en estado leer; el `NSTextView` va sin editar ni seleccionar y no maneja mouse. Al editar, la capa se esconde y los clics llegan al texto como en cualquier cuadro.
+Razón: un `NSTextView` consume clics y arrastres para seleccionar aunque esté en modo lectura, y pelearle evento por evento es más código que taparlo. De paso la capa es el lugar natural para lo que se dibuja encima y no recibe mouse.
+Detalle que cuesta encontrar: en estado leer, el primer respondedor tiene que ser **la ventana y no el cuadro de texto**, porque un `NSTextView` se queda con la barra espaciadora para pasar de página aunque no sea editable, y el play y pausa no funcionaría.
+
+**107. 2026-09-13 — Los degradados de desvanecido son la excepción a "colores planos".**
+La identidad manda colores planos y cero degradados (8.13); el teleprompter tiene dos, arriba y abajo del área de texto.
+Razón: no son decoración, son función. Sin ellos el texto aparece y desaparece cortado en seco contra el borde de la ventana, y el ojo se va al corte en vez de a la línea de lectura. Es el único lugar de la app donde hay uno, y el plan los pide explícitamente en 8.7-bis.
+
+**108. 2026-09-13 — El guion del panel se guarda al salir del cuadro de texto, no al arrancar la grabación.**
+El resto de los campos del panel se persisten al iniciar la grabación; el guion también se guarda al terminar de editarlo.
+Razón: es el único campo donde el trabajo perdido dolería. Alguien pega el guion, cierra la app y se va: con la regla general, ese texto se perdió sin haber grabado nunca. Escribirlo en cada tecla, en cambio, serían cientos de escrituras a disco por párrafo.
+
+**109. 2026-09-13 — El teleprompter on/off va en la fila compacta del widget y sus controles en una fila expandida de siete.**
+La fila compacta pasa a siete botones (se suma "Guion") y la fila nueva del grupo *Teleprompter* tiene otros siete: Play, Al inicio, Más lento, Más rápido, Letra −, Letra +, Editar. Las dos filas de siete son las que mandan el ancho del widget, que crece de 502 a 582: queda en **582×158 compacto y 582×470 expandido**.
+Razón: prenderlo y apagarlo es de lo que más se hace en vivo, y el plan lo pone en el compacto (8.9). Los controles, en cambio, solo sirven con el teleprompter abierto, así que van en el expandido y quedan deshabilitados mientras está apagado.
+Por qué siete y no partir la fila en dos: dos filas de siete dejan el widget más angosto que una de siete y otra de cuatro, y sobre todo lo dejan parejo. La alternativa de repartir los controles en dos filas sumaba 46 px de alto al expandido para ganar 0 de ancho.
+Los controles del teleprompter **no** son acciones del registro de atajos (decisión 92): son los únicos botones del widget que no se rutean por `RecordingController.perform(_:)`, sino directo a la ventana del teleprompter.
+
+**110. 2026-09-13 — El teleprompter se suelta entero al terminar la grabación.**
+No se esconde ni se reinicia campo por campo: la ventana se cierra y se descarta, y la grabación siguiente construye una nueva leyendo el panel.
+Razón: es la forma más barata de cumplir la decisión 91 sin listas de cosas que reiniciar. Todo lo que vive en esa ventana —posición, tamaño, velocidad, letra, guion editado en vivo, offset— muere con ella, y no hay forma de que quede un estado viejo colgado porque alguien se olvidó de agregarlo a un `reset()`.
+
+**111. 2026-09-13 — Las filas del widget van 7, 6, 6 y 7, y los dos grupos chicos comparten fila.**
+La fila de modos de fuente (3) y la de comandos de tablero (3, después de mover "Atajos") van en el mismo renglón, cada una con su título encima de su tramo. La tarjeta de atajos pasa del grupo *Comandos tableros* al grupo *Comandos*.
+Razón: pedido de Sebas —"cuadrá los botones, siguen feos, como descuadrados"— y mirando el widget armado tenía razón. Con filas de 7, 3, 5, 4 y 7 el borde derecho quedaba dentado, con huecos de cuatro, dos y tres botones en el medio del bloque: cada fila empezaba alineada y terminaba donde se le ocurría. Con 7, 6, 6 y 7 el bloque se lee como un rectángulo, los huecos son de una sola columna y quedan simétricos entre la segunda y la tercera fila.
+De paso arregla una agrupación que estaba mal: la tarjeta de atajos no es un comando de tablero.
+Alternativa descartada: estirar los botones de las filas cortas para que llenen el ancho. Rompe la grilla vertical, que es justo lo que la decisión 102 ya había tenido que arreglar una vez.
+Alternativa descartada: centrar las filas cortas. Emparejaría el borde pero movería cada botón de lugar según cuántos tenga su fila, y lo que hace que un botón se encuentre sin leer es que esté siempre en la misma columna.
+Efecto secundario bueno: el expandido baja de 470 a 392 px de alto, el mismo que tenía antes de que existiera la fila del teleprompter.
+
+**112. 2026-09-13 — Cada ícono del widget se redibuja encajado en un cuadro de 20×20.**
+Ya no alcanza con pedir el símbolo con el mismo `pointSize`: se toma la imagen del sistema, se escala lo necesario para que entre en el cuadro y se dibuja centrada en una imagen de 20×20 marcada como plantilla.
+Razón: el `pointSize` fija la caja tipográfica, no lo que el dibujo llena adentro. La tortuga y la liebre de los controles de velocidad son anchas y se comían el botón; el micrófono es alto y angosto; el cuadrado de detener llenaba una fracción. La fila se veía despareja aunque las cajas midieran todas lo mismo.
+Lo que arregla además, y es lo que más se nota: **el nombre de todos los botones queda a la misma altura**. AppKit apila el ícono y el título y centra el conjunto, así que un ícono más alto empuja su palabra hacia abajo, y esa diferencia de dos o tres píxeles entre botones vecinos es exactamente lo que se lee como "descuadrado" sin poder señalar qué.
+Detalle: la imagen resultante hay que marcarla `isTemplate = true` o deja de tomar el color del botón y los estados prendido/apagado se pierden.
+
+**113. 2026-09-13 — Una sola gramática de botón para el widget y para la barra del teleprompter.**
+`UI/CommandButton.swift` concentra el tamaño, el ícono encajado, el nombre a la vista y el pintado de estado. Las dos superficies que se manejan con la grabación corriendo la usan; ninguna define botones por su cuenta.
+Razón: la barra del teleprompter había nacido con botones de 30×26, solo ícono, sin nombre y con separaciones distintas según el grupo, mientras el widget tenía botones de 74×46 con nombre y estado a color. Dos gramáticas de botón a diez centímetros una de otra es lo que se ve como "descuadrado" sin poder señalar qué, y además la barra rompía la decisión 99 —el nombre siempre a la vista— justo en los controles que se usan leyendo en voz alta.
+Efecto: la barra del teleprompter pasa a tener los mismos siete botones que su fila en el widget, con los mismos nombres. Se aprende una vez y sirve en los dos lados.
+Costo aceptado: el ancho mínimo de la ventana del teleprompter lo manda ahora la barra (610 pt), y por eso arranca ocupando el 56% del ancho de la pantalla en vez del 46%.
+Los números de velocidad y tamaño van a la derecha de la barra y **se esconden enteros** cuando la ventana se angosta, en vez de recortarse: "velocidad !" a medio cortar se ve peor que no estar.
+
+**114. 2026-09-13 — La línea de estado del widget no lleva emojis.**
+El altavoz tachado y el bloque de censura se reemplazan por palabras, y lo que distingue un estado de alerta es el color coral, el mismo de los botones.
+Razón: los emojis se dibujan a color y con otro trazo que los símbolos monocromos del resto de la interfaz, así que ensuciaban el único renglón de texto del widget. Y decían lo mismo dos veces: el botón de micrófono ya se pinta coral cuando está mudo.
+De paso, el cronómetro y la palabra de estado pasan a alinearse por **línea de base** y no por el centro de su caja: el número es casi el doble de grande, y centrados "GRABANDO" quedaba flotando a media altura en vez de apoyado sobre el mismo renglón. El botón de alternar tamaño también pasa a centrarse contra las dos líneas de la cabecera en vez de colgar de la primera.
+
+**115. 2026-09-13 — Velocidad y tamaño de letra del panel se pueden arrastrar, escribir y mover de a pasos.**
+`UI/NumberRow.swift`: una fila con etiqueta, botón de menos, barra, campo donde se escribe el número y botón de más. Los tres caminos se reflejan entre sí.
+Razón: pedido de Sebas el 2026-09-13. La barra sola sirve para tantear, pero cuando ya sabés que querés velocidad 4.5 no hay forma de clavarla: arrastrando se llega a 4.4 o a 4.7 y la barra no perdona. Los botones son para el ajuste fino de a un paso (0.5 la velocidad, 4 la letra, los mismos pasos que tienen las flechas y los botones adentro del teleprompter).
+Lo que se escribe se acomoda al rango antes de guardarse, así que no hay forma de dejar un valor que el teleprompter después no sepa usar; y entiende tanto "4.5" como "4,5", porque en un teclado latinoamericano la coma es lo que sale natural. Un texto que no es número devuelve el campo a lo que había en vez de guardar basura en silencio.
+La etiqueta lleva ancho fijo: con el ancho que le pide su palabra, "Velocidad" y "Tamaño de letra" arrancaban su barra en lugares distintos. Es la misma regla de grilla de la decisión 102.
+**Tiene prueba automática** (`./probar.sh`, bloque "teleprompter"): el parseo con coma y punto y el acomodo al rango.
+
+**116. 2026-09-13 — El teleprompter aparece solo al arrancar la grabación si hay guion cargado.**
+Con texto en el campo del panel, la ventana se abre sola al empezar a grabar. Con el campo vacío no aparece. Después se prende y se apaga a voluntad, y si se apaga no vuelve a asomarse sola en esa grabación.
+Razón: Sebas arrancó a grabar con el guion cargado y reportó que "el prompter no sale". El log mostró que ni el atajo ni el botón se habían tocado: no era un defecto, era que la app esperaba una orden que nadie tenía motivo para dar. Si alguien se tomó el trabajo de pegar el guion antes de grabar, ya dijo que lo quiere leer; obligarlo a pedirlo otra vez con la grabación corriendo es pedir lo mismo dos veces.
+Cambia lo que decía 8.7-bis del plan ("no está visible siempre"), y el plan quedó actualizado con la fecha.
+Alternativa descartada: una casilla de "abrir el teleprompter al empezar" en el panel. Es un control más para decidir algo que el propio campo del guion ya contesta: vacío es no, lleno es sí.
+De paso quedaron dos líneas nuevas en el log —una cuando se pide prenderlo sin grabación en curso y otra cuando no arranca solo por guion vacío—, porque "el teleprompter no sale" y "la orden nunca llegó" se ven idénticos desde afuera y esta vez costó una grabación de prueba distinguirlos.
+
+**117. 2026-09-13 — La app necesita un menú principal aunque no muestre menús.**
+`App/EditMenu.swift` instala un `mainMenu` con Edición —deshacer, cortar, copiar, pegar, seleccionar todo— y un menú de aplicación mínimo.
+Razón: Sebas no podía pegar el guion. La causa no estaba en el campo de texto sino en que la app no tenía `mainMenu`: macOS resuelve Cmd+C, Cmd+V, Cmd+X, Cmd+A y Cmd+Z recorriendo el menú principal en busca de la combinación, y sin menú no hay a quién preguntarle. El atajo no falla ni avisa: no pasa nada.
+Alcance real del defecto: **todos** los campos de la app, desde la Fase 0. El nombre de la sesión y los cuadros de texto del tablero tenían el mismo problema; nadie lo había notado porque ahí se escribe a mano en vez de pegar.
+Verificado que el menú **no se dibuja**: con `setActivationPolicy(.accessory)` la barra sigue siendo la de la app de adelante. Era la única duda seria del arreglo, porque una barra de menú propia apareciendo a mitad de una clase saldría en el video.
+Los ítems van sin target a propósito: la acción viaja por la cadena de respondedores hasta el campo que tenga el cursor, que es lo que hace que sirva en cualquier ventana.
+
+**118. 2026-09-13 — El guion se puede traer de un archivo de Word, texto, Markdown, RTF u OpenDocument.**
+`Teleprompter/ScriptFile.swift` y un botón "Cargar archivo…" al lado del guion en el panel. Lo lee `NSAttributedString`, que ya abre todos esos formatos, así que no hay que descomprimir el `.docx` a mano ni sumar una librería (decisión 14: cero dependencias).
+Razón: pedido de Sebas el 2026-09-13. Los guiones viven en Google Docs, y pegarlos a mano en un campo de texto es el paso que nadie quiere hacer antes de cada clase.
+**Google Docs no se lee directo**: pediría red y una cuenta, y la app no toca la red. El camino es Archivo → Descargar → Word (.docx) y cargar ese archivo; lo dice el propio cuadro de elegir archivo, que es donde hace falta saberlo, y lo repite el aviso de error.
+Del documento se toma solo el texto: el teleprompter no muestra negritas ni tamaños, y arrastrar el formato ajeno obligaría a pelearlo justo cuando lo único que se quiere es leer.
+Un archivo que no trae texto —un PDF escaneado, una imagen— no carga un guion vacío en silencio: avisa.
+**Tiene prueba automática** (`./probar.sh`, bloque "teleprompter"). Detalle para no repetir el error: el `.docx` se prueba contra un archivo hecho por Word de verdad, no contra uno escrito con `fileWrapper(.officeOpenXML)`, que genera una carpeta de 192 bytes que ni el propio AppKit vuelve a abrir. Esa prueba de ida y vuelta daba rojo con el código bueno.
+
+**119. 2026-09-13 — La barra del teleprompter muestra sus propias teclas.**
+A la derecha de los botones, en dos renglones: arriba "⌥⌘T esconder · espacio play", abajo la velocidad y el tamaño de letra actuales.
+Razón: pedido de Sebas. El atajo para esconderlo y la barra espaciadora son las dos teclas que se usan a cada rato mientras se lee, y un atajo que hay que aprenderse de memoria no lo usa nadie más que quien lo programó. Escrito en la propia ventana, se ve y ya.
+**La combinación sale del registro de atajos, no de una constante**: si se reasigna desde Preferencias, la barra muestra la nueva. Una ayuda que miente es peor que no tener ayuda.
+Mientras se edita el guion la línea solo nombra el atajo para esconder, porque ahí las teclas sueltas están apagadas a propósito (decisión 92) y nombrarlas sería mentir.
+La columna lleva ancho fijo y trunca: apoyada solo en el espaciador se desbordaba por el borde derecho de la ventana y el último número salía cortado. Por debajo de un ancho de ventana en que no entre, la columna entera se esconde.
+
+**120. 2026-09-14 — El widget se esconde y se muestra con su atajo (⌥⌘W).**
+Acción nueva en el registro central, activa solo durante la grabación, reasignable como todas.
+Razón: pedido de Sebas. El widget ocupa 582 px de ancho y a veces tapa justo lo que se está mostrando en clase; moverlo es un arrastre, esconderlo es una tecla.
+La decisión de esconderlo se respeta hasta que se vuelva a pedir: sin una bandera propia, el primer cambio de estado de la grabación lo haría reaparecer, porque el refresco lo muestra cada vez que algo cambia. **Entre grabaciones se olvida**: cada toma arranca con el widget a la vista, que es lo que evita que alguien crea que la app se rompió.
+Es el único atajo que puede dejar la pantalla sin ninguna referencia visible, así que el camino de vuelta tiene que ser fácil: es la misma combinación, y además la tarjeta de atajos (⌥⌘H) la lista sola por estar en el registro central.
+
+**121. 2026-09-14 — Varios guiones a la vez, y se elige entre ellos desde el teleprompter.**
+El panel carga uno o varios archivos de una, y el teleprompter muestra arriba una pestaña por guion: lo escrito a mano en el panel —si hay algo— y después cada archivo, con su nombre sin extensión.
+Razón: pedido de Sebas. Una clase suele tener intro, desarrollo y cierre en archivos separados, y cambiar de guion a mitad de grabación pegando texto en un cuadro no es algo que se pueda hacer hablando.
+**La elección va en el teleprompter y no en el panel** (pedido explícito): el panel se elige antes de grabar y el teleprompter es lo único que queda a mano con la grabación corriendo.
+Lo que se edita en vivo se guarda en la pestaña de donde salió, así que ir y volver no pierde los cambios. Cargar dos veces el mismo archivo lo reemplaza en su lugar en vez de dejar dos pestañas iguales.
+Con un solo guion la fila de pestañas no se muestra: no hay entre qué elegir y es alto de pantalla que se le devuelve al texto. Con muchos, la fila se desplaza con dos dedos en vez de obligar a una ventana gigante.
+
+**122. 2026-09-14 — El interlineado del guion va como espacio debajo de cada renglón, no como multiplicador de la caja de línea.**
+`lineSpacing` en vez de `lineHeightMultiple`, calculado sobre la altura natural de la fuente para que el 1.8 que se ve sea el mismo.
+Razón: con el multiplicador, el aire extra se agrega **arriba** del glifo, así que el primer renglón del guion aparecía medio renglón por debajo de la línea de lectura en vez de apoyado en ella. Se notaba en cada cambio de guion y al reiniciar, que es cuando el ojo va derecho a esa línea.
+Detalle relacionado, del mismo día: el relleno de media altura se recalcula **después** de forzar el layout. Calculado antes, usa el alto viejo del cuadro y el guion arranca en cualquier lado; pasaba al abrir la ventana y al cambiar de guion, que son los dos momentos en que el alto acaba de cambiar.

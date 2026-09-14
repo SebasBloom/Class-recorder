@@ -763,4 +763,156 @@ En particular, apagá el círculo del cursor y mirá el widget: el botón "Curso
 
 ## Fase 15. Teleprompter — PENDIENTE
 
-Los pasos se escriben al construir la fase.
+Lo que cambia: una ventana con tu guion pasando solo mientras grabás, que **no sale en el video**. Se prende con **Opción + Comando + T** o con el botón "Guion" del widget, funciona en los tres modos, y se controla desde sus propios botones o desde la fila nueva del widget expandido.
+
+El guion se carga antes de grabar, en el panel. Y se puede cambiar en plena grabación con el botón de editar.
+
+Los pasos 12 y 13 son de reverificación: esta fase mete una ventana nueva en la pila y le pelea el teclado al espejo de dibujo, así que hay que comprobar que lo de antes sigue igual.
+
+### 1. Cargar el guion en el panel
+
+Abrí el panel de "Iniciar grabación". Abajo de la cámara hay un campo nuevo, **Guion del teleprompter**, con dos deslizadores: velocidad y tamaño de letra.
+
+Pegá ahí un texto largo de verdad —dos o tres páginas, no tres renglones— con **Comando + V**. Esto antes no funcionaba en ningún campo de la app, así que probá pegar también en el nombre de la sesión.
+
+Después probá el botón **Cargar archivos…**: bajá **tres** guiones tuyos de Google Docs con Archivo → Descargar → Word (.docx) y cargalos **todos juntos** en una sola vez. Tiene que aparecer debajo del cuadro la línea "3 guiones cargados" con sus nombres, y el botón Quitar que los saca todos. Probá también con un archivo que no sea texto: tiene que avisarte cuál no se pudo, sin perder los otros.
+
+Las dos filas de abajo, **Velocidad** y **Tamaño de letra**, se manejan de tres formas y las tres tienen que quedar en el mismo número: arrastrando la barra, escribiendo directo en el campo, o con los botones **−** y **+** (la velocidad se mueve de a 0.5 y la letra de a 4). Probá también escribir algo imposible —"rápido", 999, vacío—: tiene que volver solo a un valor válido, nunca quedarse con lo que escribiste.
+
+Cerrá la app entera y volvé a abrirla.
+
+**Tiene que:** estar el guion ahí, con la misma velocidad y el mismo tamaño. Si tuviste que volver a pegarlo, la fase falla.
+
+### 2. La barra del teleprompter
+
+Mirá la barra de abajo del teleprompter, que se rehízo el 2026-09-13.
+
+**Tiene que:** tener los mismos siete botones que la fila del widget, con los mismos nombres y el mismo tamaño: Play, Al inicio, Más lento, Más rápido, Letra −, Letra +, Editar. A la derecha, en dos renglones, **"⌥⌘T esconder · espacio play"** y "velocidad 5.0 · letra 38".
+
+Andá a **Atajos…** en el menú de la barra, reasigná el del teleprompter a otra combinación y volvé a abrirlo. **Tiene que:** mostrar la combinación nueva, no la vieja.
+
+Achicá la ventana del teleprompter todo lo que te deje. **Tiene que:** frenar antes de que los botones se corten, y los números de la derecha desaparecen enteros cuando ya no caben — nunca a medias.
+
+### 3. Prenderlo y leerlo
+
+Con el guion cargado en el panel, arrancá a grabar en modo pantalla.
+
+**Tiene que:** aparecer el teleprompter **solo**, sin que le pidas nada. Apagalo y prendelo con **Opción + Comando + T**: tiene que responder, y una vez que lo apagaste no puede volver a aparecer solo en esa misma grabación.
+
+Después probá lo mismo con el campo del guion **vacío**: ahí no tiene que aparecer nada al arrancar, y **Opción + Comando + T** tiene que abrirlo igual, en blanco y listo para que le pegues el texto con el botón de editar.
+
+**Tiene que:** aparecer el teleprompter arriba y al centro de la pantalla que estás grabando, con tu texto, fondo azul oscuro y una línea fina azul cruzando por la mitad. Arriba y abajo el texto se desvanece en vez de cortarse contra el borde.
+
+Tocá **Play**. El texto sube solo. Apretá **Pausa** y frena.
+
+**Tiene que:** subir parejo, sin tirones ni saltos, y la primera línea del guion tiene que arrancar a la altura de la línea del medio, no pegada al borde de arriba.
+
+### 4. Cambiar de guion sin parar la grabación
+
+Con los tres guiones cargados, arrancá a grabar y mirá la fila de arriba del teleprompter: hay una pestaña por guion, con el nombre del archivo, más una que dice **Escrito** si dejaste texto en el cuadro del panel.
+
+**Tiene que:** cambiar de guion al tocar su pestaña, arrancando desde el principio y con el texto empezando **en la línea de lectura**, no debajo. La pestaña activa se ve azul.
+
+Editá un guion con el botón Editar, cambiate a otra pestaña y volvé. **Tiene que:** estar tu edición ahí, no el texto original.
+
+Con un solo guion cargado, la fila de pestañas no tiene que aparecer.
+
+### 5. Esconder el menú de grabación
+
+Grabando, apretá **Opción + Comando + W**.
+
+**Tiene que:** desaparecer el widget entero, y volver con la misma combinación. Mientras está escondido, los atajos tienen que seguir funcionando igual —probá cambiar de modo o pausar—. Al detener y arrancar otra grabación, el widget tiene que estar a la vista de nuevo.
+
+### 6. Que no salga en el video
+
+Este es el criterio que importa más que todos los demás juntos.
+
+Con el teleprompter abierto y el texto corriendo, grabá un minuto: medio en modo pantalla, y cambiá a modo tablero (**Opción + Comando + 3**) con el teleprompter todavía a la vista. Detené y abrí el video.
+
+**Tiene que:** no aparecer ni un pedazo del teleprompter en ningún cuadro, en ninguno de los dos modos. Si se ve, la fase falla y no hay nada más que revisar.
+
+Aprovechá y probá también el modo cámara completa, que es el tercero.
+
+### 7. Controlarlo con las teclas
+
+Con el teleprompter a la vista, hacele clic encima para que quede seleccionado.
+
+- **Barra espaciadora**: play y pausa.
+- **Flecha arriba y flecha abajo**: más rápido y más lento, de a 0.5. El número se ve en la barra de abajo.
+
+**Tiene que:** responder las tres teclas, y el número de velocidad tiene que quedar con un decimal limpio (5.5, 6.0), no con una cola de decimales.
+
+### 8. Moverlo, estirarlo y manejar el texto a mano
+
+Con la grabación corriendo:
+
+- **Arrastrá el texto** con el mouse hacia arriba y hacia abajo. El guion se mueve con la mano y el avance automático se pausa solo.
+- **Rueda del mouse** encima del texto: también mueve el guion.
+- **Arrastrá la ventana** desde la barra de abajo, la de los botones. Ahí sí se mueve la ventana entera.
+- **Estirala** desde una esquina o un borde.
+
+**Tiene que:** hacer cada cosa en su lugar: sobre el texto se mueve el texto, sobre la barra se mueve la ventana. Y al agrandar o achicar la ventana, el texto tiene que seguir arrancando en la línea del medio.
+
+Si la rueda te mueve el guion al revés de lo que esperás, decilo: es un signo menos en un renglón.
+
+### 9. Cambiar el guion a mitad de clase
+
+Con la grabación corriendo, tocá **Editar** en la barra del teleprompter. Escribí encima o pegá otro texto. La barra espaciadora y las flechas ahora tienen que **escribir y moverse por el texto**, no hacer play ni cambiar la velocidad. Volvé a **Leer**.
+
+**Tiene que:** quedar el texto nuevo listo para leer desde el principio, con la grabación corriendo todo el tiempo, sin cortes.
+
+### 10. Que frene al final y vuelva al principio
+
+Llevá el guion hasta el final, con velocidad alta o arrastrando.
+
+**Tiene que:** frenar solo al llegar a la última línea, sin seguir subiendo hasta dejar la pantalla en blanco. La última línea tiene que poder llegar hasta la línea del medio.
+
+Tocá **Al inicio**: vuelve arriba de todo y queda pausado.
+
+### 11. Los botones del widget
+
+Expandí el widget. Abajo de "Comandos tableros" hay un grupo nuevo, **Teleprompter**, con siete botones.
+
+**Tiene que:**
+- Con el teleprompter apagado, los siete están grises y no responden. El botón **Guion** de la fila de arriba también está gris.
+- Al prenderlo, el botón **Guion** se pone azul y los siete se habilitan.
+- Cada uno hace lo mismo que su botón en la ventana: Play, Al inicio, Más lento, Más rápido, Letra −, Letra +, Editar.
+- El de Play se pone azul y dice "Pausa" mientras el guion está subiendo.
+
+Fijate también que el widget entero se vea **cuadrado**, que es lo que se rehizo el 2026-09-13:
+
+- Las filas tienen **7, 6, 6 y 7 botones**, en ese orden. El borde derecho tiene que verse simétrico, no en escalera.
+- Los modos de fuente y los comandos de tablero ahora **comparten fila**, cada uno con su título encima de su tramo.
+- La tarjeta de **Atajos** se pasó al grupo *Comandos*: es una ayuda general, no un comando de tablero.
+- Todos los dibujitos tienen que verse del mismo tamaño, y el nombre de todos los botones a la misma altura.
+- El widget pasa a medir **582×140 compacto y 582×374 expandido**.
+- En la cabecera, "01:15" y "GRABANDO" tienen que estar apoyados en el mismo renglón, y el botón de Más/Menos centrado contra las dos líneas.
+- El renglón de estado ya no lleva emojis: dice "Pantalla · sonido mudo", con lo que está callado o tapando en **coral**.
+
+Ninguna palabra puede quedar cortada ni encimada, todos los botones tienen que seguir alineados en columnas de una fila a la otra, y el widget no puede salirse de la pantalla.
+
+### 12. Reverificación: los cuadros de texto del tablero
+
+Este es el punto donde el teleprompter puede romper algo que ya andaba: los dos necesitan el teclado.
+
+Grabando en modo tablero, con el teleprompter abierto:
+
+1. Hacé un clic seco en el tablero: se abre un cuadro de texto. Escribí algo.
+2. Sin cerrarlo, hacé clic en el teleprompter y apretá la barra espaciadora.
+3. Volvé a hacer clic en el tablero y escribí de nuevo.
+
+**Tiene que:** el paso 2 hacer play en el guion y cerrar el cuadro de texto dejando escrito lo que ya habías tipeado; el paso 3 volver a escribir en el tablero normalmente. En ningún momento se pueden perder letras ni quedar un cuadro escribiendo en el vacío.
+
+### 13. Reverificación: el widget y el dibujo siguen respondiendo
+
+Con el marcador prendido (**Opción + Comando + D**) y el teleprompter abierto encima:
+
+**Tiene que:** seguir respondiendo los botones del widget, seguir pudiéndose dibujar en toda la pantalla, y el teleprompter tiene que quedar **por encima** del marcador pero **por debajo** de la burbuja de la cámara.
+
+### 14. Cada grabación arranca de cero
+
+Con la grabación corriendo, cambiá el guion desde el botón de editar, movelo, agrandalo y subile la velocidad. Detené la grabación.
+
+**Tiene que:** desaparecer el teleprompter al detener. Arrancá otra grabación y prendelo de nuevo: tiene que volver con el guion del panel, la velocidad del panel, el tamaño del panel y en su posición de arranque, arriba y al centro. Nada de lo que ajustaste en la grabación anterior puede sobrevivir.
+
+Y dentro de una misma grabación es al revés: apagalo y prendelo con Opción + Comando + T, y tiene que volver **exactamente como lo dejaste**, incluso en la parte del guion donde ibas.

@@ -204,7 +204,7 @@ Una ventana para leer el guion mientras se graba. Es una ayuda de lectura para e
 
 #### Comportamiento
 
-- **Se prende y se apaga a voluntad**, con su atajo y con su botón en el widget. No está visible siempre.
+- **Aparece solo al arrancar la grabación si hay un guion cargado** en el panel, y no aparece si el campo está vacío (agregado el 2026-09-13 a pedido de Sebas, decisión 116). De ahí en adelante **se prende y se apaga a voluntad**, con su atajo y con su botón en el widget.
 - **Visible en los tres modos**: pantalla, cámara completa y tablero.
 - **Movible y redimensionable en vivo durante la grabación**, con el mismo patrón que la burbuja de cámara: un panel sin barra de título, que no activa la app, arrastrable por su fondo y con esquina de redimensión. Posición inicial arriba y al centro de la pantalla que se está grabando.
 - **Memoria dentro de la grabación, reinicio entre grabaciones.** Mientras dura una grabación recuerda posición, tamaño, velocidad, tamaño de letra y guion cargado, aunque se apague y se prenda. Al terminar la grabación todo eso se reinicia; los valores de arranque salen del panel de configuración previo (decisión 91).

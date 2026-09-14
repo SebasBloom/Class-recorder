@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 /// Ventana temporal de la Fase 1: elegir pantalla, iniciar y detener.
 ///
@@ -7,7 +8,7 @@ import AppKit
 /// lleva la identidad visual de `BloomindStyle` para que la cara del producto
 /// sea la misma desde el primer día.
 @MainActor
-final class ControlWindow: NSWindowController {
+final class ControlWindow: NSWindowController, NSTextViewDelegate {
 
     let recorder = RecordingController()
 
@@ -49,6 +50,27 @@ final class ControlWindow: NSWindowController {
     private let countdownCheck = NSButton(checkboxWithTitle: "Cuenta regresiva 3, 2, 1", target: nil, action: nil)
 
     private let widget = RecordingWidget()
+
+    /// La fila que lista los guiones cargados. Se esconde cuando no hay ninguno.
+    private var filaLista: NSStackView!
+
+    /// El teleprompter existe solo mientras dura una grabación: al terminar se
+    /// suelta, y con él se van posición, tamaño, velocidad, letra y guion en
+    /// vivo. Los valores de arranque salen siempre del panel (decisión 91).
+    private var teleprompter: TeleprompterWindow?
+
+    /// El widget se escondió a mano con su atajo. Vuelve solo en la grabación
+    /// siguiente: cada toma arranca con el widget a la vista.
+    private var widgetEscondido = false
+
+    private let scriptView = NSTextView()
+    private let scriptLoadButton = NSButton()
+    private let scriptClearButton = NSButton()
+    private let scriptListLabel = NSTextField(labelWithString: "")
+    /// Velocidad y tamaño de letra de arranque del teleprompter. Se pueden
+    /// arrastrar, escribir o mover de a pasos con los botones (decisión 115).
+    private var speedRow: NumberRow!
+    private var fontRow: NumberRow!
 
     private let actionButton = BloomindButton(title: "Iniciar grabación")
     private let pauseButton = BloomindButton(title: "Pausar", kind: .ghost)
@@ -112,6 +134,13 @@ final class ControlWindow: NSWindowController {
                 self.recorder.perform(action)
             }
         }
+        widget.onTeleprompterControl = { [weak self] control in
+            self?.teleprompter?.aplicar(control)
+            self?.tick()
+        }
+        // El atajo ⌥⌘T entra por el mismo lugar que el botón del widget.
+        recorder.onTeleprompterRequested = { [weak self] in self?.toggleTeleprompter() }
+        recorder.onWidgetRequested = { [weak self] in self?.toggleWidget() }
         levelMeter.onLevel = { [weak self] level in
             self?.levelBar.level = CGFloat(level)
         }
@@ -227,6 +256,82 @@ final class ControlWindow: NSWindowController {
         }
         refreshAreaLabels()
 
+        let scriptLabel = NSTextField(labelWithString: "Guion del teleprompter")
+        scriptLabel.font = BloomindStyle.ui(12)
+        scriptLabel.textColor = BloomindStyle.muted
+
+        scriptLoadButton.title = "Cargar archivos…"
+        scriptLoadButton.bezelStyle = .rounded
+        scriptLoadButton.font = BloomindStyle.ui(12)
+        scriptLoadButton.toolTip = "Traer uno o varios guiones de Word, texto o RTF"
+        scriptLoadButton.target = self
+        scriptLoadButton.action = #selector(cargarGuionDesdeArchivo)
+
+        scriptClearButton.title = "Quitar"
+        scriptClearButton.bezelStyle = .rounded
+        scriptClearButton.font = BloomindStyle.ui(12)
+        scriptClearButton.toolTip = "Sacar todos los guiones cargados de archivos"
+        scriptClearButton.target = self
+        scriptClearButton.action = #selector(quitarGuionesCargados)
+
+        scriptListLabel.font = BloomindStyle.ui(11)
+        scriptListLabel.textColor = BloomindStyle.muted
+        scriptListLabel.lineBreakMode = .byTruncatingTail
+
+        let espaciadorGuion = NSView()
+        espaciadorGuion.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let filaGuion = NSStackView(views: [scriptLabel, espaciadorGuion, scriptLoadButton])
+        filaGuion.orientation = .horizontal
+        filaGuion.alignment = .centerY
+        filaGuion.spacing = BloomindStyle.Space.tight
+
+        let espaciadorLista = NSView()
+        espaciadorLista.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let filaLista = NSStackView(views: [scriptListLabel, espaciadorLista, scriptClearButton])
+        filaLista.orientation = .horizontal
+        filaLista.alignment = .centerY
+        filaLista.spacing = BloomindStyle.Space.tight
+        self.filaLista = filaLista
+        refrescarListaDeGuiones()
+
+        scriptView.string = ConfigurationStore.shared.current.teleprompterScript ?? ""
+        scriptView.font = BloomindStyle.ui(12)
+        scriptView.textColor = BloomindStyle.ink
+        scriptView.backgroundColor = BloomindStyle.deep
+        scriptView.isRichText = false
+        scriptView.isVerticallyResizable = true
+        scriptView.autoresizingMask = [.width]
+        scriptView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        scriptView.textContainer?.widthTracksTextView = true
+        scriptView.delegate = self
+
+        let scriptScroll = NSScrollView()
+        scriptScroll.documentView = scriptView
+        scriptScroll.hasVerticalScroller = true
+        scriptScroll.borderType = .lineBorder
+        scriptScroll.drawsBackground = true
+        scriptScroll.backgroundColor = BloomindStyle.deep
+        scriptScroll.translatesAutoresizingMaskIntoConstraints = false
+        scriptScroll.heightAnchor.constraint(equalToConstant: 88).isActive = true
+
+        speedRow = NumberRow(titulo: "Velocidad",
+                             minimo: TeleprompterEngine.velocidadMinima,
+                             maximo: TeleprompterEngine.velocidadMaxima,
+                             paso: 0.5, decimales: 1,
+                             valor: ConfigurationStore.shared.current.teleprompterSpeed)
+        speedRow.onChange = { valor in
+            ConfigurationStore.shared.update { $0.teleprompterSpeed = valor }
+        }
+
+        fontRow = NumberRow(titulo: "Tamaño de letra",
+                            minimo: TeleprompterEngine.letraMinima,
+                            maximo: TeleprompterEngine.letraMaxima,
+                            paso: 4, decimales: 0,
+                            valor: ConfigurationStore.shared.current.teleprompterFontSize)
+        fontRow.onChange = { valor in
+            ConfigurationStore.shared.update { $0.teleprompterFontSize = valor }
+        }
+
         let sessionLabel = NSTextField(labelWithString: "Nombre de la sesión")
         sessionLabel.font = BloomindStyle.ui(12)
         sessionLabel.textColor = BloomindStyle.muted
@@ -274,6 +379,7 @@ final class ControlWindow: NSWindowController {
             audioModeLabel, audioModePopUp,
             microphoneLabel, microphonePopUp, levelBar,
             cameraLabel, cameraPopUp,
+            filaGuion, scriptScroll, filaLista, speedRow, fontRow,
             sessionLabel, sessionField,
             folderTitle, folderLabel, folderButton,
             countdownCheck
@@ -285,6 +391,7 @@ final class ControlWindow: NSWindowController {
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: audioModePopUp)
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: levelBar)
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: cameraPopUp)
+        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: fontRow)
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: sessionField)
         cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: folderButton)
         self.microphoneLabel = microphoneLabel
@@ -300,6 +407,11 @@ final class ControlWindow: NSWindowController {
             microphonePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             levelBar.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             cameraPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            filaGuion.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            filaLista.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            scriptScroll.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            speedRow.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
+            fontRow.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             sessionField.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
             folderLabel.widthAnchor.constraint(equalTo: cardStack.widthAnchor)
         ])
@@ -394,6 +506,9 @@ final class ControlWindow: NSWindowController {
                 $0.lastMicrophoneID = microphone?.uniqueID
                 $0.lastCameraID = camera?.device.uniqueID
                 $0.lastSessionName = sessionName
+                $0.teleprompterScript = self.scriptView.string
+                $0.teleprompterSpeed = self.speedRow.value
+                $0.teleprompterFontSize = self.fontRow.value
             }
 
             guard checkDiskBeforeStarting() else {
@@ -424,6 +539,186 @@ final class ControlWindow: NSWindowController {
                 arrancar()
             }
         }
+    }
+
+    // MARK: - Teleprompter
+
+    /// Trae el guion de un archivo: Word, texto plano, Markdown, RTF o
+    /// OpenDocument (decisión 118).
+    ///
+    /// Un documento de Google Docs no se puede leer directo —eso pediría red y
+    /// una cuenta, y la app no toca la red (decisión 14)—, así que el camino es
+    /// bajarlo con Archivo → Descargar → Word (.docx) y cargar ese archivo. Lo
+    /// dice el propio cuadro de elegir archivo, que es donde hace falta saberlo.
+    @objc private func cargarGuionDesdeArchivo() {
+        let panel = NSOpenPanel()
+        panel.message = "Elegí uno o varios archivos con guiones. Un Google Docs se baja primero con Archivo → Descargar → Word (.docx)."
+        panel.prompt = "Cargar"
+        // Varios de una: en una clase suele haber intro, desarrollo y cierre en
+        // archivos separados, y se elige entre ellos desde el teleprompter
+        // (decisión 121).
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = ScriptFile.tiposSoportados
+
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+
+        var cargados: [StoredScript] = ConfigurationStore.shared.current.teleprompterScripts
+        var fallados: [String] = []
+
+        for url in panel.urls {
+            guard let texto = ScriptFile.texto(de: url) else {
+                fallados.append(url.lastPathComponent)
+                Logger.shared.log("ERROR: no se pudo leer el guion de \(url.lastPathComponent)")
+                continue
+            }
+            let nombre = url.deletingPathExtension().lastPathComponent
+            // Cargar dos veces el mismo archivo lo reemplaza en su lugar, en vez
+            // de dejar dos pestañas con el mismo nombre.
+            if let yaEstaba = cargados.firstIndex(where: { $0.nombre == nombre }) {
+                cargados[yaEstaba].texto = texto
+            } else {
+                cargados.append(StoredScript(nombre: nombre, texto: texto))
+            }
+            Logger.shared.log("Guion cargado de \(url.lastPathComponent): \(texto.count) caracteres")
+        }
+
+        ConfigurationStore.shared.update { $0.teleprompterScripts = cargados }
+        refrescarListaDeGuiones()
+
+        guard !fallados.isEmpty else { return }
+        let alerta = NSAlert()
+        alerta.messageText = fallados.count == 1 ? "No se pudo leer ese archivo" : "No se pudieron leer algunos archivos"
+        alerta.informativeText = fallados.joined(separator: ", ")
+            + "\n\nSi es un Google Docs, bajalo con Archivo → Descargar → Word (.docx). Si es un PDF o una imagen escaneada, copiá el texto a mano: de ahí no se puede sacar."
+        alerta.alertStyle = .warning
+        alerta.runModal()
+    }
+
+    @objc private func quitarGuionesCargados() {
+        ConfigurationStore.shared.update { $0.teleprompterScripts = [] }
+        refrescarListaDeGuiones()
+        Logger.shared.log("Guiones cargados: lista vaciada")
+    }
+
+    /// La línea que dice qué guiones hay cargados. Sin ninguno, la fila entera
+    /// desaparece: no hay nada que contar.
+    private func refrescarListaDeGuiones() {
+        let guiones = ConfigurationStore.shared.current.teleprompterScripts
+        filaLista.isHidden = guiones.isEmpty
+        guard !guiones.isEmpty else { return }
+        let nombres = guiones.map(\.nombre).joined(separator: " · ")
+        scriptListLabel.stringValue = guiones.count == 1
+            ? "1 guion cargado: \(nombres)"
+            : "\(guiones.count) guiones cargados: \(nombres)"
+    }
+
+    /// Todo lo que el teleprompter puede mostrar: lo escrito a mano en el panel,
+    /// si hay algo, y después cada archivo cargado.
+    private func guionesParaElTeleprompter() -> [(nombre: String, texto: String)] {
+        var lista: [(nombre: String, texto: String)] = []
+        let escrito = scriptView.string
+        if !escrito.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lista.append((nombre: "Escrito", texto: escrito))
+        }
+        lista += ConfigurationStore.shared.current.teleprompterScripts.map {
+            (nombre: $0.nombre, texto: $0.texto)
+        }
+        return lista
+    }
+
+    /// El guion se guarda al salir del cuadro, no en cada tecla: es un texto
+    /// largo y escribirlo entero en disco cincuenta veces por renglón no tiene
+    /// sentido. Guardarlo solo al arrancar la grabación tampoco: el que escribe
+    /// el guion y cierra la app sin grabar lo perdería.
+    func textDidEndEditing(_ notification: Notification) {
+        guard (notification.object as? NSTextView) === scriptView else { return }
+        ConfigurationStore.shared.update { $0.teleprompterScript = scriptView.string }
+    }
+
+    /// Prende y apaga el teleprompter. La ventana se crea la primera vez que se
+    /// prende en esta grabación y se conserva apagada y prendida, con lo que se
+    /// haya movido y ajustado; se suelta al terminar la grabación.
+    private func toggleTeleprompter() {
+        guard recorder.isRecording else {
+            // Queda escrito que la orden llegó y no hizo nada: sin esto, "el
+            // teleprompter no sale" y "el atajo no llega" se ven igual desde
+            // afuera.
+            Logger.shared.log("Teleprompter: se pidió prenderlo sin grabación en curso")
+            return
+        }
+
+        if let teleprompter {
+            if teleprompter.isVisible {
+                teleprompter.setVisible(false)
+            } else {
+                teleprompter.setVisible(true)
+            }
+            tick()
+            return
+        }
+
+        let pantalla = recorder.recordingScreenFrame()
+            ?? NSScreen.main?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let ventana = TeleprompterWindow(guiones: guionesParaElTeleprompter(),
+                                         velocidad: speedRow.value,
+                                         tamañoLetra: fontRow.value,
+                                         pantalla: pantalla)
+        ventana.onChange = { [weak self] in self?.tick() }
+        // El teclado no puede ser de los dos a la vez: al pasar el foco al
+        // teleprompter, el cuadro de texto abierto en el dibujo se cierra
+        // (decisión 95).
+        ventana.onFocus = { [weak self] in self?.recorder.closeDrawingTextBox() }
+        // La combinación que lo esconde, escrita en su propia barra: nadie
+        // debería tener que acordarse de un atajo que se usa dos veces por clase.
+        ventana.atajoParaEsconder = recorder.etiquetaDeAtajo(.teleprompter)
+        teleprompter = ventana
+        ventana.setVisible(true)
+        Logger.shared.log("Teleprompter abierto: \(ventana.guion.count) caracteres de guion, velocidad \(ventana.velocidad), letra \(Int(ventana.tamañoLetra))")
+        tick()
+    }
+
+    /// Esconde y muestra el widget con su atajo (decisión 120).
+    ///
+    /// La decisión de esconderlo se respeta hasta que se vuelva a pedir: sin la
+    /// bandera, el primer cambio de estado de la grabación lo haría reaparecer,
+    /// porque `refresh()` lo muestra cada vez que algo cambia.
+    private func toggleWidget() {
+        guard recorder.isRecording else {
+            Logger.shared.log("Widget: se pidió esconderlo sin grabación en curso")
+            return
+        }
+        widgetEscondido.toggle()
+        if widgetEscondido { widget.hide() } else { widget.present() }
+        Logger.shared.log("Widget \(widgetEscondido ? "escondido" : "a la vista")")
+    }
+
+    /// Si hay guion cargado en el panel, el teleprompter aparece **solo** al
+    /// arrancar la grabación (decisión 116). Con el campo vacío no aparece: no
+    /// hay nada que leer.
+    ///
+    /// Una sola vez por grabación: si después se apaga con su atajo, la ventana
+    /// sigue existiendo escondida y no vuelve a asomarse sola.
+    private func abrirTeleprompterSiHayGuion() {
+        guard teleprompter == nil else { return }
+        guard !guionesParaElTeleprompter().isEmpty else {
+            Logger.shared.log("Teleprompter: no arranca solo porque no hay ningún guion cargado")
+            return
+        }
+        toggleTeleprompter()
+    }
+
+    /// Al terminar la grabación el teleprompter se va entero: la toma siguiente
+    /// arranca con lo que diga el panel, no con el guion de la anterior
+    /// (decisión 91).
+    private func releaseTeleprompter() {
+        guard let teleprompter else { return }
+        teleprompter.setVisible(false)
+        teleprompter.close()
+        self.teleprompter = nil
+        Logger.shared.log("Teleprompter cerrado y reiniciado")
     }
 
     // MARK: - Panel
@@ -730,6 +1025,11 @@ final class ControlWindow: NSWindowController {
         cameraPopUp.isEnabled = !recorder.isRecording
         areaButton.isEnabled = !recorder.isRecording
         sessionField.isEnabled = !recorder.isRecording
+        scriptView.isEditable = !recorder.isRecording
+        scriptLoadButton.isEnabled = !recorder.isRecording
+        scriptClearButton.isEnabled = !recorder.isRecording
+        speedRow.setEnabled(!recorder.isRecording)
+        fontRow.setEnabled(!recorder.isRecording)
         folderButton.isEnabled = !recorder.isRecording
         // Durante la grabación el micrófono lo tiene la captura, así que el
         // medidor no puede leerlo: la barra se queda quieta a propósito.
@@ -740,11 +1040,14 @@ final class ControlWindow: NSWindowController {
         pauseButton.title = recorder.isPaused ? "Reanudar" : "Pausar"
 
         if recorder.isRecording {
-            widget.present()
+            if !widgetEscondido { widget.present() }
             // El panel se va del medio: el widget es lo que se usa en vivo.
             window?.orderOut(nil)
+            abrirTeleprompterSiHayGuion()
         } else {
             widget.hide()
+            widgetEscondido = false
+            releaseTeleprompter()
         }
         onRecordingStateChange?(recorder.isRecording, recorder.isPaused)
 
@@ -788,6 +1091,10 @@ final class ControlWindow: NSWindowController {
                       color: recorder.markerColor,
                       hayCamara: camera != nil,
                       resaltadoCursor: recorder.isCursorHighlightOn,
+                      teleprompter: RecordingWidget.TeleprompterState(
+                          visible: teleprompter?.isVisible ?? false,
+                          corriendo: teleprompter?.corriendo ?? false,
+                          editando: teleprompter?.editando ?? false),
                       audio: RecordingWidget.AudioState(
                           capturaMicrofono: recorder.capturesSource(.microphone),
                           capturaSistema: recorder.capturesSource(.system),

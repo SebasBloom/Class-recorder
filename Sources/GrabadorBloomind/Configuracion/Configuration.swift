@@ -15,6 +15,13 @@ struct StoredPoint: Codable, Equatable {
     var y: Double
 }
 
+/// Un guion cargado desde un archivo, con el nombre que se muestra en su
+/// pestaña dentro del teleprompter.
+struct StoredScript: Codable, Equatable {
+    var nombre: String
+    var texto: String
+}
+
 /// Configuración central de la app. Un solo archivo, en
 /// ~/Library/Application Support/Grabador Bloomind/config.json.
 ///
@@ -52,6 +59,16 @@ struct Configuration: Codable, Equatable {
     /// El círculo amarillo del cursor y la onda del clic. Arranca prendido: es
     /// el comportamiento de siempre y lo que se quiere en un tutorial.
     var cursorHighlightEnabled: Bool = true
+
+    /// Guion del teleprompter y sus valores de arranque. Es lo que se carga en
+    /// el panel antes de grabar: lo que se ajuste con la grabación corriendo
+    /// vive solo mientras dura esa grabación (decisión 91).
+    var teleprompterScript: String?
+    /// Guiones traídos de archivos, en el orden en que se van a ver. El guion
+    /// escrito a mano en el panel va aparte, en `teleprompterScript`.
+    var teleprompterScripts: [StoredScript] = []
+    var teleprompterSpeed: Double = 5
+    var teleprompterFontSize: Double = 38
 
     /// Atajos reasignados por el usuario: acción -> combinación. Vacío significa
     /// "todos en su valor por defecto".
@@ -91,6 +108,10 @@ struct Configuration: Codable, Equatable {
         widgetPosition   = try c.decodeIfPresent(StoredPoint.self, forKey: .widgetPosition)
         widgetExpanded   = try c.decodeIfPresent(Bool.self, forKey: .widgetExpanded) ?? false
         cursorHighlightEnabled = try c.decodeIfPresent(Bool.self, forKey: .cursorHighlightEnabled) ?? true
+        teleprompterScript   = try c.decodeIfPresent(String.self, forKey: .teleprompterScript)
+        teleprompterScripts  = try c.decodeIfPresent([StoredScript].self, forKey: .teleprompterScripts) ?? []
+        teleprompterSpeed    = try c.decodeIfPresent(Double.self, forKey: .teleprompterSpeed) ?? 5
+        teleprompterFontSize = try c.decodeIfPresent(Double.self, forKey: .teleprompterFontSize) ?? 38
         shortcuts        = try c.decodeIfPresent([String: Shortcut].self, forKey: .shortcuts) ?? [:]
     }
 }

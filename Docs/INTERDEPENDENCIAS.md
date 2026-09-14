@@ -59,6 +59,16 @@ Cuidado al tocarlo:
 - Las coordenadas van normalizadas, no en píxeles (decisión 56). Por eso esta pieza **no** consume el módulo de conversión de coordenadas.
 - El modelo lo escribe el hilo principal y lo lee la cola de captura: todo pasa por el candado interno.
 
+## Gramática de botón de comando
+
+**Fase 15. Existe.** `UI/CommandButton.swift`.
+
+El tamaño fijo (74×46), el ícono encajado en su cuadro de 20×20, el nombre siempre a la vista y el pintado de estado —azul prendido, coral callando o tapando, gris apagado—. Es lo que hace que todo lo que se toca con la grabación corriendo se vea como una sola cosa.
+
+Consumidores: el widget de grabación y la barra del teleprompter.
+
+Cuidado al tocarla: el ancho del botón decide el ancho del widget (siete columnas) y el ancho mínimo de la ventana del teleprompter. Cambiarlo mueve las dos. Y los íconos que cambian en vivo tienen que volver a pasar por `CommandButton.icono`, o vuelven al tamaño de fábrica y desparejan la fila (decisión 102).
+
 ## Identidad visual
 
 **Fase 1. Existe.** `UI/BloomindStyle.swift` y la fuente en `Recursos/Fuentes/`.
@@ -84,7 +94,7 @@ El orden, de abajo hacia arriba, y todo declarado en el enum `WindowLayer`:
 | Ventana | Archivo | Capa |
 |---|---|---|
 | Espejo de dibujo (tablero y anotación) | `Dibujo/DrawingWindow.swift` | `.dibujo` |
-| Teleprompter (Fase 15) | pendiente | `.teleprompter` |
+| Teleprompter | `Teleprompter/TeleprompterWindow.swift` | `.teleprompter` |
 | Espejo de la burbuja | `Camara/CameraMirrorWindow.swift` | `.burbuja` |
 | Widget de grabación | `UI/RecordingWidget.swift` | `.widget` |
 | Tarjeta de atajos | `UI/ShortcutCard.swift` | `.tarjeta` |
@@ -103,15 +113,21 @@ Cuidado al tocarla: es la pieza que decide a quién le llega el mouse. Cambiarla
 
 ## Teleprompter
 
-**Adenda 1. Pendiente.** Carpeta prevista: `UI/` o `Teleprompter/`.
+**Fase 15. Existe.** `Teleprompter/TeleprompterEngine.swift` y `Teleprompter/TeleprompterWindow.swift`.
 
 El motor de desplazamiento y su ventana. Ayuda de lectura para el operador; nunca entra al video.
+
+Están partidos a propósito (decisión 103): el motor no importa AppKit y lleva toda la lógica —posición, velocidad, tamaño de letra, el tope de 100 ms por cuadro y el frenado al final—; la ventana solo copia la posición del motor a la vista. **La vista nunca mueve el texto por su cuenta**: la rueda y el arrastre le piden al motor.
+
+**Tiene prueba automática** (`./probar.sh`, bloque "teleprompter"). Si se toca el motor, correrla.
 
 Consume: el registro de acciones y atajos (su acción de prender y apagar), la configuración central (guion, velocidad y tamaño de arranque), la identidad visual y la pieza de niveles de ventana.
 
 **No consume el pipeline de composición ni la conversión de coordenadas**, y esa ausencia es la garantía de la decisión 89: si algún día aparece un `import` del compositor acá, alguien está por meter el teleprompter en el video.
 
-Consumidores: el widget, que replica sus controles, y `RecordingController`, que lo reinicia al terminar cada grabación.
+Consumidores: el widget, que replica sus controles en el grupo *Teleprompter* del modo expandido, y `ControlWindow`, que es la dueña de la ventana: la crea al prenderla, la conserva prendida y apagada mientras dura la grabación, y la **suelta entera** al terminar (decisión 110). `RecordingController` solo rutea la acción `teleprompter` hacia afuera, porque el teleprompter no es asunto suyo.
+
+Cuidado con el foco: esta ventana y el espejo de dibujo se pelean el teclado y no puede ser de los dos a la vez. Se lo queda la última clickeada, y al tomarlo el teleprompter cierra el cuadro de texto que estuviera abierto en el dibujo (decisión 95), llamando a `RecordingController.closeDrawingTextBox()`.
 
 Cuidado al tocarlo: el avance va por tiempo transcurrido entre cuadros y no por cantidad de cuadros; si se cambia a contar cuadros, la velocidad pasa a depender de cuánto esté rindiendo la máquina y el mismo guion tarda distinto cada vez.
 

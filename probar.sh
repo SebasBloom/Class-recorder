@@ -9,6 +9,10 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 
+# La raíz del proyecto viaja a las pruebas: alguna necesita un archivo de
+# ejemplo del repo y todas corren desde un directorio temporal.
+export RAIZ="$(pwd)"
+
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 FALLOS=0
@@ -43,6 +47,13 @@ correr dibujo \
 correr ventanas \
 	"$FUENTES/UI/WindowLevels.swift" \
 	Pruebas/ventanas/main.swift
+
+correr teleprompter \
+	"$FUENTES/Teleprompter/TeleprompterEngine.swift" \
+	"$FUENTES/UI/NumberRow.swift" \
+	"$FUENTES/Teleprompter/ScriptFile.swift" \
+	"$FUENTES/UI/BloomindStyle.swift" \
+	Pruebas/teleprompter/main.swift
 
 correr configuracion \
 	"$FUENTES/Configuracion/Configuration.swift" \

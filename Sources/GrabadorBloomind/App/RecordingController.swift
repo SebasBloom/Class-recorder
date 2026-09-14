@@ -78,6 +78,14 @@ final class RecordingController {
     /// el espejo en pantalla confundiría.
     var onModeChange: ((CaptureMode) -> Void)?
 
+    /// Muestra o esconde el widget de grabación. Lo atiende la ventana de
+    /// control, que es la dueña del widget.
+    var onWidgetRequested: (() -> Void)?
+
+    /// Prende o apaga el teleprompter. Lo atiende la ventana de control, que es
+    /// la dueña de esa ventana.
+    var onTeleprompterRequested: (() -> Void)?
+
     /// Reiniciar toma pide confirmación, y eso lo muestra quien tenga la interfaz
     /// a mano: descartar una clase en curso no puede pasar por un tecleo suelto.
     var onRestartRequested: (() -> Void)?
@@ -345,6 +353,13 @@ final class RecordingController {
         self.registry = registry
     }
 
+    /// La combinación que tiene hoy una acción, para poder mostrarla en la
+    /// interfaz. Sale del registro y no de una constante: los atajos son
+    /// reasignables, y una ayuda que miente es peor que no tenerla.
+    func etiquetaDeAtajo(_ accion: ShortcutAction) -> String? {
+        registry?.shortcuts[accion]?.etiqueta
+    }
+
     /// Ejecuta la acción de un atajo. Todo lo que se puede hacer con el teclado
     /// pasa por acá, así que agregar una acción nueva es agregar un caso.
     func perform(_ action: ShortcutAction) {
@@ -365,6 +380,11 @@ final class RecordingController {
         case .redibujarCensura: toggleRedaction(forceDraw: true)
         case .silenciarMicrofono: toggleMute(.microphone)
         case .silenciarSistema:   toggleMute(.system)
+        // El teleprompter no es asunto del grabador: no toca la captura ni el
+        // pipeline de composición (decisión 89). La ventana la maneja quien
+        // tiene la interfaz, igual que la tarjeta de atajos.
+        case .teleprompter:       onTeleprompterRequested?()
+        case .widget:             onWidgetRequested?()
         }
     }
 
@@ -571,7 +591,10 @@ final class RecordingController {
 
     /// El marco de la pantalla que se está grabando, no el de la principal: lo
     /// que se dibuja y lo que sale en el video tienen que ser el mismo lugar.
-    private func recordingScreenFrame() -> NSRect? {
+    /// El marco de la pantalla que se está grabando. Lo usan el espejo de
+    /// dibujo y el teleprompter, que tienen que aparecer ahí y no en la
+    /// principal.
+    func recordingScreenFrame() -> NSRect? {
         guard let display = recordingDisplay else { return nil }
         return NSScreen.screens.first {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
@@ -650,6 +673,13 @@ final class RecordingController {
 
     private func refreshDrawingMirror() {
         activeMirror?.refresh()
+    }
+
+    /// Cierra el cuadro de texto que estuviera abierto en el dibujo. Lo llama el
+    /// teleprompter al quedarse con el teclado: los dos lo necesitan y no puede
+    /// ser de los dos a la vez (decisión 95).
+    func closeDrawingTextBox() {
+        activeMirror?.closeTextBox()
     }
 
     /// Alterna el lienzo entre blanco y negro, sin cortar la grabación.

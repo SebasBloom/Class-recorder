@@ -22,6 +22,8 @@ enum ShortcutAction: String, CaseIterable {
     case redibujarCensura = "redibujar_censura"
     case silenciarMicrofono = "silenciar_microfono"
     case silenciarSistema = "silenciar_sistema"
+    case teleprompter = "teleprompter"
+    case widget = "widget"
     case tarjeta = "tarjeta"
 
     var label: String {
@@ -42,6 +44,8 @@ enum ShortcutAction: String, CaseIterable {
         case .redibujarCensura:     return "Redibujar la zona censurada"
         case .silenciarMicrofono:   return "Silenciar / activar micrófono"
         case .silenciarSistema:     return "Silenciar / activar audio del sistema"
+        case .teleprompter:         return "Teleprompter on / off"
+        case .widget:               return "Mostrar / esconder el menú de grabación"
         case .tarjeta:        return "Tarjeta de atajos (mantener)"
         }
     }
@@ -80,6 +84,11 @@ enum ShortcutAction: String, CaseIterable {
         case .redibujarCensura: return Shortcut(tecla: kVK_ANSI_C, modificadores: optionKey | cmdKey | shiftKey, etiqueta: "⇧⌥⌘C")
         case .silenciarMicrofono: return Shortcut(tecla: kVK_ANSI_M, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘M")
         case .silenciarSistema:   return Shortcut(tecla: kVK_ANSI_S, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘S")
+        case .teleprompter:   return Shortcut(tecla: kVK_ANSI_T, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘T")
+        // W de widget. Es el único atajo que puede dejar la pantalla sin ninguna
+        // referencia visible, así que conviene que sea fácil de recordar: es el
+        // mismo que lo hizo desaparecer.
+        case .widget:         return Shortcut(tecla: kVK_ANSI_W, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘W")
         case .tarjeta:        return Shortcut(tecla: kVK_ANSI_H, modificadores: optionKey | cmdKey, etiqueta: "⌥⌘H")
         }
     }
