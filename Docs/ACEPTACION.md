@@ -761,7 +761,7 @@ Con el widget expandido, andá prendiendo y apagando cosas: la cámara, los tres
 
 En particular, apagá el círculo del cursor y mirá el widget: el botón "Cursor" tiene que quedar gris **y** la línea de estado de arriba tiene que decir **"sin cursor"**. Es el único estado que no podés comprobar mirando tu pantalla, porque el círculo solo existe en el video.
 
-## Fase 15. Teleprompter — PENDIENTE
+## Fase 15. Teleprompter — VALIDADA el 2026-09-16
 
 Lo que cambia: una ventana con tu guion pasando solo mientras grabás, que **no sale en el video**. Se prende con **Opción + Comando + T** o con el botón "Guion" del widget, funciona en los tres modos, y se controla desde sus propios botones o desde la fila nueva del widget expandido.
 
