@@ -164,10 +164,32 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
             self?.mirror?.setVisible(mode != .camara)
             self?.tick()
         }
+        // El medidor tiene el micrófono abierto mientras la ventana está a la
+        // vista, y esta ventana vive para siempre (`MenuBarController` la
+        // guarda), así que su `deinit` nunca llega: sin esto el punto naranja de
+        // macOS queda prendido después de cerrarla, hasta que se mate la app.
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(ventanaCerrada),
+                                               name: NSWindow.willCloseNotification,
+                                               object: window)
+
         Task { await loadDisplays() }
         loadMicrophones()
         loadCameras()
         sizeWindowToFit()
+    }
+
+    @objc private func ventanaCerrada() {
+        levelMeter.stop()
+        levelBar.level = 0
+    }
+
+    /// Al volver a mostrarse, el medidor arranca de nuevo con el micrófono
+    /// elegido. Durante la grabación no, que ahí el micrófono lo tiene la
+    /// captura.
+    override func showWindow(_ sender: Any?) {
+        super.showWindow(sender)
+        if !recorder.isRecording { audioModeChanged() }
     }
 
     /// Ajusta la ventana al alto exacto de su contenido y le prohíbe encogerse

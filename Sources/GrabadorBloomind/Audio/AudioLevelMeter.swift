@@ -70,6 +70,7 @@ final class AudioLevelMeter: NSObject, AVCaptureAudioDataOutputSampleBufferDeleg
         guard let session else { return }
         self.session = nil
         smoothedLevel = 0
+        Logger.shared.log("Medidor: micrófono liberado")
         queue.async { session.stopRunning() }
     }
 
