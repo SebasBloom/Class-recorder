@@ -558,7 +558,9 @@ Grabá dos minutos y matá la app a la fuerza desde Monitor de Actividad.
 
 Ese aviso aparece **una sola vez**: si volvés a abrir la app, ya no molesta.
 
-## Fase 12. Endurecimiento y entrega — PENDIENTE
+## Fase 12. Endurecimiento y entrega — VALIDADA el 2026-10-05
+
+Cerrada por uso real en vez de la prueba sintética: Sebas grabó unas diez clases con todo el flujo (cámara, cambios de modo, audio) y los logs no registran ningún error. Sebas confirmó que la toma larga y la instalación en la Mac de Iván están bien. La validación cubre también el arreglo del medidor que suelta el micrófono al cerrar el panel (commit f0f6d9b).
 
 Lo de código ya está (aviso de grabación interrumpida, umbrales de disco, README revisado contra el comportamiento real). Lo que falta es la prueba de fuego, y esa la corrés vos.
 
