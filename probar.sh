@@ -21,7 +21,10 @@ correr() {
 	local nombre="$1"; shift
 	echo ""
 	echo "── $nombre"
-	if ! swiftc -O "$@" -o "$TMP/$nombre" 2>&1 | head -20; then :; fi
+	# La salida va a un archivo y recién ahí se recorta: recortarla con un
+	# pipe a head mata al compilador apenas pasa de 20 líneas, y desde macOS 27
+	# los avisos de AVFoundation solos ya pasan de 20.
+	swiftc -O "$@" -o "$TMP/$nombre" > "$TMP/$nombre.log" 2>&1 || head -20 "$TMP/$nombre.log"
 	if [ ! -x "$TMP/$nombre" ]; then
 		echo "  ✗ no compiló"; FALLOS=$((FALLOS+1)); return
 	fi

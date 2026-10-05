@@ -134,6 +134,7 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
                 self.recorder.perform(action)
             }
         }
+        widget.etiquetaDeAtajo = { [weak self] accion in self?.recorder.etiquetaDeAtajo(accion) }
         widget.onTeleprompterControl = { [weak self] control in
             self?.teleprompter?.aplicar(control)
             self?.tick()
@@ -1111,6 +1112,7 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
                       censura: recorder.isRedacting,
                       anotando: recorder.isAnnotationOn,
                       color: recorder.markerColor,
+                      lienzo: recorder.boardColor,
                       hayCamara: camera != nil,
                       resaltadoCursor: recorder.isCursorHighlightOn,
                       teleprompter: RecordingWidget.TeleprompterState(

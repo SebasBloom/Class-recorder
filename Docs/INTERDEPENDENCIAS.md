@@ -65,7 +65,7 @@ Cuidado al tocarlo:
 
 El tamaño fijo (74×46), el ícono encajado en su cuadro de 20×20, el nombre siempre a la vista y el pintado de estado —azul prendido, coral callando o tapando, gris apagado—. Es lo que hace que todo lo que se toca con la grabación corriendo se vea como una sola cosa.
 
-Consumidores: el widget de grabación y la barra del teleprompter.
+Consumidores: la barra del teleprompter, y su función `icono` también la cápsula del widget. **Desde la Fase 16 el widget ya no usa esta gramática**: tiene la suya en `UI/CapsuleButton.swift` (decisión 124). El ancho del botón ya no decide el ancho del widget. Cuando el teleprompter se rediseñe, esta pieza probablemente se va.
 
 Cuidado al tocarla: el ancho del botón decide el ancho del widget (siete columnas) y el ancho mínimo de la ventana del teleprompter. Cambiarlo mueve las dos. Y los íconos que cambian en vivo tienen que volver a pasar por `CommandButton.icono`, o vuelven al tamaño de fábrica y desparejan la fila (decisión 102).
 
@@ -76,6 +76,8 @@ Cuidado al tocarla: el ancho del botón decide el ancho del widget (siete column
 Paleta, espaciado, tipografía y el botón plano de la marca. Es la traducción a AppKit de la guía de estilo del CLM.
 
 Consumidores actuales: `ControlWindow`.
+
+**Desde la Fase 16** convive con la paleta clara del rediseño, `BloomindStyle.Claro` (decisión 123), y con `BloomindStyle.reloj` para el cronómetro. Consumidores de la clara: el widget (`RecordingWidget`, `CapsuleButton`). La oscura se borra cuando la última pantalla esté migrada.
 
 Consumidores previstos: absolutamente toda la UI que venga. El panel de configuración y el widget flotante (Fase 11), la pantalla de preferencias (Fase 9), la tarjeta de atajos (Fase 9), el countdown (Fase 11) y los avisos de disco.
 

@@ -1,15 +1,17 @@
 import AppKit
 
-/// Widget flotante durante la grabación.
+/// Widget flotante durante la grabación: una cápsula blanca (decisión 124).
 ///
-/// Chiquito, arrastrable, siempre encima y excluido de la captura (plan, 8.9).
-/// Es lo que reemplaza a tener que buscar la ventana de control: muestra tiempo,
-/// estado, modo activo, si hay censura puesta y con qué color se está dibujando,
-/// y tiene un botón por cada cosa que se puede hacer en vivo.
+/// A la vista va lo que se toca a cada rato —el cronómetro con su frase de
+/// estado, pausar, detener, reiniciar, los dos audios y la cámara— y todo lo
+/// demás en cuatro botones de grupo con un menú chico cada uno, con el atajo
+/// escrito al lado de cada acción. Lo del tablero y la pausa del guion aparecen
+/// sueltos en la cápsula solo mientras aplican.
 ///
-/// **Dos modos:** compacto con lo que se usa a cada rato, y expandido con todo.
-/// El modo se recuerda en la configuración. Los atajos siguen funcionando igual:
-/// los botones son una vía alternativa, nunca un reemplazo.
+/// Se achica a una pastilla con solo el cronómetro (decisión 125), y cada
+/// alerta grave es una pastilla coral bajo la cápsula que se deshace al tocarla
+/// (decisión 126). La esquina de arriba a la derecha es la que se queda quieta
+/// cuando cambia el ancho: es la que está contra el borde de la pantalla.
 ///
 /// Es un `NSPanel` que no activa la app: tocarle un botón no le roba el foco a lo
 /// que se está mostrando en clase. Vive por encima de la superficie de dibujo
@@ -17,9 +19,6 @@ import AppKit
 /// tablero o el marcador prendidos (decisión 93).
 @MainActor
 final class RecordingWidget: NSPanel {
-
-    /// La gramática de botón, compartida con la barra del teleprompter.
-    private typealias Boton = CommandButton
 
     var onPause: (() -> Void)?
     var onStop: (() -> Void)?
@@ -33,472 +32,15 @@ final class RecordingWidget: NSPanel {
     /// Los controles del teleprompter replicados acá (plan, 8.9): disparan
     /// exactamente lo mismo que los botones de su propia ventana.
     var onTeleprompterControl: ((TeleprompterWindow.Control) -> Void)?
-    /// Todo lo demás: cada botón dispara la misma acción que su atajo, y el
-    /// ruteo lo hace `RecordingController.perform(_:)`, que ya es el punto único
-    /// por donde pasa todo lo que se puede hacer con el teclado.
+    /// Todo lo demás: cada acción dispara lo mismo que su atajo, y el ruteo lo
+    /// hace `RecordingController.perform(_:)`.
     var onAction: ((ShortcutAction) -> Void)?
-
-    private let tiempo = NSTextField(labelWithString: "00:00")
-    private let estado = NSTextField(labelWithString: "")
-    private let detalle = NSTextField(labelWithString: "")
-    private let puntoColor = NSView()
-
-    private let pausar = NSButton()
-    private let detener = NSButton()
-    private let reiniciar = NSButton()
-    private let burbuja = NSButton()
-    private let microfono = NSButton()
-    private let sistema = NSButton()
-    private let alternarTamaño = NSButton()
-
-    /// Los controles del teleprompter, con el control que dispara cada uno.
-    /// No van por `ShortcutAction` porque no son atajos del registro central:
-    /// sus teclas son sueltas y viven en la ventana del teleprompter
-    /// (decisión 92).
-    private var porControl: [(boton: NSButton, control: TeleprompterWindow.Control)] = []
-    private var filaTeleprompter: NSStackView?
-
-    /// Los botones del modo expandido, uno por acción del registro de atajos.
-    private var porAccion: [ShortcutAction: NSButton] = [:]
-    /// Las filas que solo se ven expandido.
-    private var filasExpandidas: [NSView] = []
-
-    private var expandido = ConfigurationStore.shared.current.widgetExpanded
-
-    /// Si hay una cámara encendida ahora mismo. No se puede leer del botón,
-    /// porque el botón está siempre habilitado: sin cámara sigue sirviendo para
-    /// prender una.
-    private var hayCamaraPrendida = false
-
-    /// Qué acciones van en cada fila del modo expandido, con su símbolo y el
-    /// nombre que se lee debajo del ícono.
-    ///
-    /// Es la lista entera de lo que el registro de atajos sabe hacer, menos lo
-    /// que ya tiene botón propio arriba: iniciar/detener es el botón de detener,
-    /// pausar y reiniciar toma están en la fila compacta, y los dos de audio
-    /// también.
-    ///
-    /// **Todo botón lleva su nombre a la vista** (decisión 99). El nombre es
-    /// corto y propio del widget, no el `label` del registro de atajos: ese es el
-    /// nombre largo y canónico que muestran las preferencias y la tarjeta, y va
-    /// igual en el tooltip. Acá lo que importa es que entre en una fila y se lea
-    /// de reojo en mitad de una clase.
-    /// **Las filas miden 7, 6, 6 y 7 botones**, en ese orden, y esa simetría no
-    /// es casual: es lo que hace que el bloque se lea como un rectángulo y no
-    /// como una escalera (decisión 111). Antes eran 7, 3, 5, 4 y 7, y el borde
-    /// derecho quedaba dentado.
-    ///
-    /// Los dos grupos chicos —los tres modos de fuente y los tres de tablero—
-    /// comparten fila, cada uno con su título arriba de su tramo.
-    private static let filaModosYTablero: [(ShortcutAction, String, String)] = [
-        (.modoPantalla, "display",           "Pantalla"),
-        (.modoCamara,   "video.fill",        "Cám. full"),
-        (.modoTablero,  "square.and.pencil", "Tablero"),
-        (.colorTablero,     "circle.lefthalf.filled", "Lienzo"),
-        (.deshacer,         "arrow.uturn.backward",   "Deshacer"),
-        (.borrar,           "eraser.fill",            "Borrar")
-    ]
-
-    /// Cuántos de la fila de arriba son del primer grupo. Lo usan los dos
-    /// títulos para saber dónde arranca el segundo.
-    private static let columnasDeModos = 3
-
-    /// La tarjeta de atajos vive acá y no con los del tablero: es una ayuda
-    /// general, no un comando de tablero, y de paso es lo que deja las dos filas
-    /// del medio parejas en seis.
-    private static let filaAyudas: [(ShortcutAction, String, String)] = [
-        (.resaltadoCursor,  "cursorarrow.rays",       "Cursor"),
-        (.censura,          "eye.slash.fill",         "Censura"),
-        (.redibujarCensura, "rectangle.dashed",       "Redibujar"),
-        (.capaAnotacion,    "pencil.tip.crop.circle", "Marcador"),
-        (.colorMarcador,    "paintpalette.fill",      "Color"),
-        (.tarjeta,          "questionmark.circle",    "Atajos")
-    ]
-
-    init() {
-        super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 96),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-
-        isFloatingPanel = true
-        level = WindowLayer.widget.level
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        isMovableByWindowBackground = true
-        backgroundColor = .clear
-        isOpaque = false
-        hasShadow = true
-
-        construir()
-        aplicarTamaño(manteniendoArriba: false)
-        colocar()
-    }
-
-    // MARK: - Construcción
-
-    private func construir() {
-        let fondo = NSVisualEffectView()
-        fondo.material = .hudWindow
-        fondo.blendingMode = .behindWindow
-        fondo.state = .active
-        fondo.wantsLayer = true
-        fondo.layer?.cornerRadius = BloomindStyle.cornerRadius
-        fondo.layer?.masksToBounds = true
-
-        tiempo.font = BloomindStyle.mono(20, weight: .medium)
-        tiempo.textColor = BloomindStyle.ink
-
-        estado.font = BloomindStyle.ui(11, weight: .semibold)
-        estado.textColor = BloomindStyle.lab
-
-        detalle.font = BloomindStyle.ui(11)
-        detalle.textColor = BloomindStyle.muted
-
-        puntoColor.wantsLayer = true
-        puntoColor.layer?.cornerRadius = 5
-        puntoColor.layer?.borderWidth = 1
-        puntoColor.layer?.borderColor = CGColor(gray: 0.6, alpha: 1)
-        puntoColor.isHidden = true
-        puntoColor.translatesAutoresizingMaskIntoConstraints = false
-        puntoColor.widthAnchor.constraint(equalToConstant: 10).isActive = true
-        puntoColor.heightAnchor.constraint(equalToConstant: 10).isActive = true
-
-        configurar(alternarTamaño, simbolo: "chevron.down", nombre: "Más",
-                   ayuda: "Mostrar todos los botones", accion: #selector(tocarAlternarTamaño))
-
-        let espaciador = NSView()
-        espaciador.setContentHuggingPriority(.defaultLow, for: .horizontal)
-
-        // Por línea de base y no por centro: el cronómetro es casi el doble de
-        // grande que la palabra de al lado, y centrados por su caja "GRABANDO"
-        // queda flotando a media altura del número en vez de apoyado en él.
-        let fila1 = NSStackView(views: [tiempo, estado])
-        fila1.orientation = .horizontal
-        fila1.spacing = BloomindStyle.Space.tight
-        fila1.alignment = .firstBaseline
-
-        let fila2 = NSStackView(views: [puntoColor, detalle])
-        fila2.orientation = .horizontal
-        fila2.spacing = 6
-        fila2.alignment = .centerY
-
-        let textoCabecera = NSStackView(views: [fila1, fila2])
-        textoCabecera.orientation = .vertical
-        textoCabecera.alignment = .leading
-        textoCabecera.spacing = 6
-
-        // El botón de alternar tamaño va centrado contra las **dos** líneas, no
-        // colgado de la primera: pegado arriba dejaba la cabecera con un vacío
-        // en diagonal entre el cronómetro y él.
-        let cabecera = NSStackView(views: [textoCabecera, espaciador, alternarTamaño])
-        cabecera.orientation = .horizontal
-        cabecera.alignment = .centerY
-        cabecera.spacing = BloomindStyle.Space.tight
-
-        configurar(pausar, simbolo: "pause.fill", nombre: "Pausar", ayuda: "Pausar", accion: #selector(tocarPausa))
-        configurar(detener, simbolo: "stop.fill", nombre: "Detener", ayuda: "Detener", accion: #selector(tocarDetener))
-        configurar(reiniciar, simbolo: "arrow.counterclockwise", nombre: "Reiniciar", ayuda: "Reiniciar toma", accion: #selector(tocarReiniciar))
-        // "Cam on/off" y no "Cámara" a secas: el botón prende y apaga la cámara,
-        // y el modo de cámara completa tiene el suyo propio abajo. Dos botones
-        // llamados igual haciendo cosas distintas es peor que no ponerles nombre.
-        configurar(burbuja, simbolo: "person.crop.circle", nombre: "Cam on/off", ayuda: "Cámara", accion: #selector(tocarBurbuja))
-        // Mantener presionado el botón: el menú de cámaras, haya o no una prendida.
-        let menuLargo = NSPressGestureRecognizer(target: self, action: #selector(mostrarMenuDeCamara))
-        menuLargo.minimumPressDuration = 0.35
-        burbuja.addGestureRecognizer(menuLargo)
-        configurar(microfono, simbolo: "mic.fill", nombre: "Micrófono", ayuda: "Silenciar micrófono", accion: #selector(tocarMicrofono))
-        configurar(sistema, simbolo: "speaker.wave.2.fill", nombre: "Sonido PC", ayuda: "Silenciar audio del sistema", accion: #selector(tocarSistema))
-
-        // El teleprompter on/off va en la fila compacta (plan, 8.9): prenderlo y
-        // apagarlo es de lo que más se hace en vivo. Es una acción del registro
-        // de atajos, así que se rutea igual que los botones de abajo.
-        let teleprompter = NSButton()
-        configurar(teleprompter, simbolo: "text.line.first.and.arrowtriangle.forward",
-                   nombre: "Guion", ayuda: ShortcutAction.teleprompter.label,
-                   accion: #selector(tocarAccion(_:)))
-        teleprompter.tag = ShortcutAction.allCases.firstIndex(of: .teleprompter) ?? 0
-        porAccion[.teleprompter] = teleprompter
-
-        let botones = NSStackView(views: [pausar, detener, reiniciar, burbuja, microfono, sistema, teleprompter])
-        botones.orientation = .horizontal
-        botones.spacing = Boton.separacion
-
-        let modos = filaDeAcciones(Self.filaModosYTablero)
-        let ayudas = filaDeAcciones(Self.filaAyudas)
-
-        // Cada fila con su título encima: dieciocho botones seguidos son una
-        // pared, y agrupados se encuentra lo que se busca sin leerlos todos
-        // (decisión 100). El título del primer grupo se ve siempre, porque esa
-        // fila también está en el modo compacto.
-        let tituloGrabacion = titulo("Comandos de grabación")
-        // Dos títulos en un renglón, cada uno arrancando en la columna de su
-        // grupo: los modos de fuente y los del tablero comparten fila.
-        let titulosDelMedio = dosTitulos("Pantalla a grabar", "Comandos tableros",
-                                         columnasDelPrimero: Self.columnasDeModos)
-        let tituloComandos = titulo("Comandos")
-        let tituloTeleprompter = titulo("Teleprompter")
-        let teleprompterFila = filaDeControles()
-        filaTeleprompter = teleprompterFila
-        filasExpandidas = [titulosDelMedio, modos, tituloComandos, ayudas,
-                           tituloTeleprompter, teleprompterFila]
-
-        let todo = NSStackView(views: [cabecera, tituloGrabacion, botones,
-                                       titulosDelMedio, modos,
-                                       tituloComandos, ayudas,
-                                       tituloTeleprompter, teleprompterFila])
-        todo.orientation = .vertical
-        todo.alignment = .leading
-        todo.spacing = 4
-        // Aire extra **antes** de cada título, o sea después de lo que lo precede:
-        // es lo que hace que los grupos se lean como grupos y no como cuatro
-        // filas seguidas. El título queda pegado a su fila, no a la de arriba.
-        for anterior in [cabecera, botones, modos, ayudas] {
-            todo.setCustomSpacing(BloomindStyle.Space.normal, after: anterior)
-        }
-        todo.translatesAutoresizingMaskIntoConstraints = false
-        fondo.addSubview(todo)
-
-        NSLayoutConstraint.activate([
-            cabecera.widthAnchor.constraint(equalTo: todo.widthAnchor),
-            todo.leadingAnchor.constraint(equalTo: fondo.leadingAnchor, constant: BloomindStyle.Space.normal),
-            todo.trailingAnchor.constraint(lessThanOrEqualTo: fondo.trailingAnchor, constant: -BloomindStyle.Space.normal),
-            todo.topAnchor.constraint(equalTo: fondo.topAnchor, constant: BloomindStyle.Space.tight),
-            todo.bottomAnchor.constraint(equalTo: fondo.bottomAnchor, constant: -BloomindStyle.Space.tight)
-        ])
-
-        contentView = fondo
-    }
-
-    /// El título de un grupo de botones, con el estilo de marca.
-    private func titulo(_ texto: String) -> NSTextField {
-        let etiqueta = NSTextField(labelWithString: "")
-        etiqueta.attributedStringValue = BloomindStyle.eyebrow(texto)
-        return etiqueta
-    }
-
-    /// Dos títulos en el mismo renglón, el segundo arrancando justo encima de
-    /// su primera columna. El ancho del primero se calcula con la misma grilla
-    /// que los botones, así que si cambia el ancho del botón esto acompaña solo.
-    private func dosTitulos(_ primero: String, _ segundo: String, columnasDelPrimero: Int) -> NSStackView {
-        let izquierda = titulo(primero)
-        izquierda.translatesAutoresizingMaskIntoConstraints = false
-        izquierda.widthAnchor.constraint(
-            equalToConstant: CGFloat(columnasDelPrimero) * (Boton.ancho + Boton.separacion)
-        ).isActive = true
-
-        let fila = NSStackView(views: [izquierda, titulo(segundo)])
-        fila.orientation = .horizontal
-        fila.alignment = .firstBaseline
-        fila.spacing = 0
-        return fila
-    }
-
-    /// Una fila de botones, uno por acción, todos ruteados a `onAction`.
-    private func filaDeAcciones(_ acciones: [(ShortcutAction, String, String)]) -> NSStackView {
-        let fila = NSStackView()
-        fila.orientation = .horizontal
-        fila.spacing = Boton.separacion
-
-        for (accion, simbolo, nombre) in acciones {
-            let boton = NSButton()
-            // El nombre corto se lee en el botón; en el tooltip va la etiqueta
-            // del registro, que es la misma que muestran la tarjeta de atajos y
-            // la pantalla de preferencias.
-            configurar(boton, simbolo: simbolo, nombre: nombre, ayuda: accion.label, accion: #selector(tocarAccion(_:)))
-            boton.tag = ShortcutAction.allCases.firstIndex(of: accion) ?? 0
-            porAccion[accion] = boton
-            fila.addArrangedSubview(boton)
-        }
-        return fila
-    }
-
-    /// Los controles del teleprompter. Son siete y quedan parejos con la fila
-    /// compacta, que también tiene siete: las dos mandan el ancho del widget.
-    private static let controlesTeleprompter: [(TeleprompterWindow.Control, String, String, String)] = [
-        (.playPausa,      "play.fill",         "Play",     "Play y pausa del guion"),
-        (.reiniciar,      "arrow.uturn.left",  "Al inicio", "Volver al principio del guion"),
-        (.menosVelocidad, "tortoise.fill",     "Más lento", "Bajar la velocidad del guion"),
-        (.masVelocidad,   "hare.fill",         "Más rápido", "Subir la velocidad del guion"),
-        // Menos y más pelados: los símbolos de "texto más chico" y "texto más
-        // grande" del sistema se dibujan los dos como una A del mismo tamaño, o
-        // sea que no distinguen nada.
-        (.menosLetra,     "minus.circle",      "Letra −", "Letra más chica"),
-        (.masLetra,       "plus.circle",       "Letra +", "Letra más grande"),
-        (.editar,         "pencil",            "Editar",   "Editar el guion")
-    ]
-
-    private func filaDeControles() -> NSStackView {
-        let fila = NSStackView()
-        fila.orientation = .horizontal
-        fila.spacing = Boton.separacion
-
-        for (indice, (control, simbolo, nombre, ayuda)) in Self.controlesTeleprompter.enumerated() {
-            let boton = NSButton()
-            configurar(boton, simbolo: simbolo, nombre: nombre, ayuda: ayuda, accion: #selector(tocarControl(_:)))
-            boton.tag = indice
-            porControl.append((boton, control))
-            fila.addArrangedSubview(boton)
-        }
-        return fila
-    }
-
-    @objc private func tocarControl(_ boton: NSButton) {
-        guard boton.tag >= 0, boton.tag < porControl.count else { return }
-        onTeleprompterControl?(porControl[boton.tag].control)
-    }
-
-
-    /// Un botón del widget, con la gramática compartida de `CommandButton`.
-    private func configurar(_ boton: NSButton, simbolo: String, nombre: String, ayuda: String, accion: Selector) {
-        Boton.configurar(boton, simbolo: simbolo, nombre: nombre, ayuda: ayuda, target: self, accion: accion)
-    }
-
-    /// Abajo a la derecha de la pantalla principal la primera vez; después
-    /// recuerda dónde lo dejaste.
-    private func colocar() {
-        if let guardada = ConfigurationStore.shared.current.widgetPosition {
-            let punto = NSPoint(x: guardada.x, y: guardada.y)
-            if NSScreen.screens.contains(where: { $0.frame.contains(punto) }) {
-                setFrameOrigin(punto)
-                return
-            }
-        }
-        let visible = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        setFrameOrigin(NSPoint(x: visible.maxX - frame.width - BloomindStyle.Space.card,
-                               y: visible.maxY - frame.height - BloomindStyle.Space.card))
-    }
-
-    // MARK: - Compacto y expandido
-
-    /// Muestra u oculta las filas de más y ajusta la ventana a su contenido.
-    ///
-    /// Crece y se encoge **hacia abajo**: el borde de arriba se queda donde
-    /// estaba. Si creciera hacia arriba, expandirlo con el widget apoyado contra
-    /// el borde superior de la pantalla lo empujaría fuera de la vista.
-    private func aplicarTamaño(manteniendoArriba: Bool) {
-        for fila in filasExpandidas { fila.isHidden = !expandido }
-
-        alternarTamaño.image = Boton.icono(expandido ? "chevron.up" : "chevron.down", "")
-        alternarTamaño.title = expandido ? "Menos" : "Más"
-        alternarTamaño.toolTip = expandido ? "Dejar solo los botones de siempre" : "Mostrar todos los botones"
-
-        guard let contenido = contentView else { return }
-        contenido.layoutSubtreeIfNeeded()
-        let borde = frame.maxY
-        setContentSize(contenido.fittingSize)
-        if manteniendoArriba {
-            setFrameTopLeftPoint(NSPoint(x: frame.minX, y: borde))
-        }
-    }
-
-    @objc private func tocarAlternarTamaño() {
-        expandido.toggle()
-        ConfigurationStore.shared.update { $0.widgetExpanded = expandido }
-        aplicarTamaño(manteniendoArriba: true)
-        Logger.shared.log("Widget en modo \(expandido ? "expandido" : "compacto")")
-    }
+    /// La combinación vigente de una acción, para escribirla en los menús y las
+    /// alertas. Sale del registro y no de una constante: si se reasigna desde
+    /// Preferencias, el widget muestra la nueva.
+    var etiquetaDeAtajo: ((ShortcutAction) -> String?)?
 
     // MARK: - Estado
-
-    /// Refresca todo lo que muestra.
-    func update(segundos: Int,
-                pausado: Bool,
-                modo: CaptureMode,
-                censura: Bool,
-                anotando: Bool,
-                color: MarkerColor,
-                hayCamara: Bool,
-                resaltadoCursor: Bool,
-                teleprompter: TeleprompterState,
-                audio: AudioState) {
-
-        tiempo.stringValue = String(format: "%02d:%02d", segundos / 60, segundos % 60)
-        estado.stringValue = pausado ? "❚❚ PAUSADO" : "● GRABANDO"
-        // El turquesa es exclusivo del éxito: grabando va en lab, pausado en gris.
-        estado.textColor = pausado ? BloomindStyle.muted : BloomindStyle.lab
-
-        // Sin emojis: el altavoz tachado y el bloque de censura se dibujan a
-        // color y con otro trazo que los símbolos del resto de la interfaz, así
-        // que ensuciaban el único renglón de texto del widget. Lo que distingue
-        // un estado de alerta acá es el color coral, el mismo de los botones
-        // (decisión 114).
-        var partes: [(String, NSColor)] = []
-        switch modo {
-        case .pantalla: partes.append(("Pantalla", BloomindStyle.muted))
-        case .camara:   partes.append(("Cámara", BloomindStyle.muted))
-        case .tablero:  partes.append(("Tablero", BloomindStyle.muted))
-        }
-        if anotando { partes.append(("anotando", BloomindStyle.muted)) }
-        if censura { partes.append(("censura", BloomindStyle.signal)) }
-        // El círculo del cursor no se ve en la pantalla de quien graba, solo en
-        // el video: sin este aviso, la única forma de saber que está apagado es
-        // acordarse de haberlo apagado.
-        if !resaltadoCursor { partes.append(("sin cursor", BloomindStyle.muted)) }
-        // El silencio va con nombre y no solo con el ícono tachado: es lo que
-        // evita grabar media clase mudo sin darse cuenta.
-        if audio.microfonoSilenciado && audio.sistemaSilenciado {
-            partes.append(("SIN AUDIO", BloomindStyle.signal))
-        } else if audio.microfonoSilenciado {
-            partes.append(("micrófono mudo", BloomindStyle.signal))
-        } else if audio.sistemaSilenciado {
-            partes.append(("sonido mudo", BloomindStyle.signal))
-        }
-        detalle.attributedStringValue = renglon(partes)
-
-        // El punto de color solo tiene sentido cuando se está dibujando.
-        let dibujando = modo == .tablero || anotando
-        puntoColor.isHidden = !dibujando
-        puntoColor.layer?.backgroundColor = color.cgColor
-
-        pausar.image = Boton.icono(pausado ? "play.fill" : "pause.fill",
-                                  pausado ? "Reanudar" : "Pausar")
-        pausar.toolTip = pausado ? "Reanudar" : "Pausar"
-        // El botón de cámara nunca se deshabilita: sin cámara prendida sigue
-        // sirviendo para prender una, que es justo lo que pasa cuando se arrancó
-        // a grabar sin elegir ninguna (decisión 82). Un botón deshabilitado no
-        // recibe clics y el menú quedaría inalcanzable justo cuando hace falta.
-        hayCamaraPrendida = hayCamara
-        burbuja.isEnabled = true
-        burbuja.image = Boton.icono(hayCamara ? "person.crop.circle" : "person.crop.circle.badge.plus", "Cámara")
-        burbuja.toolTip = hayCamara
-            ? "Apagar la cámara · mantené o clic derecho para elegir otra"
-            : "Elegir y prender una cámara"
-        Boton.pintar(burbuja, hayCamara ? .prendido : .apagado)
-
-        // Las fuentes que no se eligieron antes de arrancar quedan deshabilitadas,
-        // no ausentes: el botón no es un atajo para encenderlas (decisión 82).
-        actualizar(microfono, activa: audio.capturaMicrofono, silenciada: audio.microfonoSilenciado,
-                   simboloVivo: "mic.fill", simboloMudo: "mic.slash.fill",
-                   ayudaViva: "Silenciar micrófono", ayudaMuda: "Activar micrófono")
-        actualizar(sistema, activa: audio.capturaSistema, silenciada: audio.sistemaSilenciado,
-                   simboloVivo: "speaker.wave.2.fill", simboloMudo: "speaker.slash.fill",
-                   ayudaViva: "Silenciar audio del sistema", ayudaMuda: "Activar audio del sistema")
-
-        actualizarBotonesExpandidos(modo: modo, censura: censura, anotando: anotando,
-                                    dibujando: dibujando, hayCamara: hayCamara,
-                                    resaltadoCursor: resaltadoCursor,
-                                    teleprompter: teleprompter)
-
-        actualizarTeleprompter(teleprompter)
-    }
-
-    /// Arma el renglón de estado con un color por parte, separadas por puntos.
-    private func renglon(_ partes: [(String, NSColor)]) -> NSAttributedString {
-        let texto = NSMutableAttributedString()
-        for (indice, parte) in partes.enumerated() {
-            if indice > 0 {
-                texto.append(NSAttributedString(string: " · ", attributes: [
-                    .font: BloomindStyle.ui(11), .foregroundColor: BloomindStyle.hairline
-                ]))
-            }
-            texto.append(NSAttributedString(string: parte.0, attributes: [
-                .font: BloomindStyle.ui(11), .foregroundColor: parte.1
-            ]))
-        }
-        return texto
-    }
 
     /// Estado del teleprompter que muestra el widget.
     struct TeleprompterState {
@@ -512,28 +54,6 @@ final class RecordingWidget: NSPanel {
         static let apagado = TeleprompterState(visible: false, corriendo: false, editando: false)
     }
 
-    /// Los controles quedan deshabilitados mientras el teleprompter está apagado
-    /// (plan, 8.9): no son una forma de prenderlo, solo de manejarlo.
-    private func actualizarTeleprompter(_ estado: TeleprompterState) {
-        for (boton, control) in porControl {
-            boton.isEnabled = estado.visible
-            switch control {
-            case .playPausa:
-                // El único de la fila con estado: azul mientras el guion sube.
-                boton.image = Boton.icono(estado.corriendo ? "pause.fill" : "play.fill", "Play y pausa del guion")
-                boton.title = estado.corriendo ? "Pausa" : "Play"
-                Boton.pintar(boton, estado.corriendo ? .prendido : .apagado)
-                // Con el guion abierto para editar no se puede hacer correr.
-                boton.isEnabled = estado.visible && !estado.editando
-            case .editar:
-                boton.title = estado.editando ? "Leer" : "Editar"
-                Boton.pintar(boton, estado.editando ? .prendido : .apagado)
-            default:
-                Boton.pintar(boton, .apagado)
-            }
-        }
-    }
-
     /// Estado de audio que muestra el widget.
     struct AudioState {
         let capturaMicrofono: Bool
@@ -542,76 +62,583 @@ final class RecordingWidget: NSPanel {
         let sistemaSilenciado: Bool
     }
 
+    /// Lo último que llegó por `update`. Los menús se arman al abrirlos con
+    /// esto, así nunca muestran un estado viejo.
+    private struct Foto {
+        var pausado = false
+        var modo: CaptureMode = .pantalla
+        var censura = false
+        var anotando = false
+        var color: MarkerColor = .amarillo
+        var lienzo: BoardColor = .blanco
+        var hayCamara = false
+        var resaltadoCursor = true
+        var teleprompter = TeleprompterState.apagado
+        var audio = AudioState(capturaMicrofono: false, capturaSistema: false,
+                               microfonoSilenciado: false, sistemaSilenciado: false)
 
-    /// Marca el modo activo, tiñe lo que está prendido y apaga lo que no aplica.
-    ///
-    /// Deshabilitar en vez de esconder: un botón que desaparece y vuelve mueve a
-    /// los de al lado, y en mitad de una clase eso hace tocar el equivocado.
-    private func actualizarBotonesExpandidos(modo: CaptureMode, censura: Bool,
-                                             anotando: Bool, dibujando: Bool,
-                                             hayCamara: Bool, resaltadoCursor: Bool,
-                                             teleprompter: TeleprompterState) {
-        for (accion, boton) in porAccion {
-            boton.isEnabled = true
-            Boton.pintar(boton, .apagado)
+        var dibujando: Bool { modo == .tablero || anotando }
+    }
 
-            switch accion {
-            case .modoPantalla: Boton.pintar(boton, modo == .pantalla ? .prendido : .apagado)
-            case .modoTablero:  Boton.pintar(boton, modo == .tablero ? .prendido : .apagado)
-            case .modoCamara:
-                // Sin cámara no hay modo cámara completa: el fondo del frame
-                // quedaría en negro (decisión 83).
-                boton.isEnabled = hayCamara
-                Boton.pintar(boton, modo == .camara ? .prendido : .apagado)
-                boton.toolTip = hayCamara ? accion.label : "No hay ninguna cámara prendida"
-            case .censura:
-                // Coral y no azul: la censura prendida está tapando algo del
-                // video, y eso se mira distinto que un modo activo.
-                Boton.pintar(boton, censura ? .alerta : .apagado)
-                boton.toolTip = censura ? "Destapar la zona censurada" : "Tapar la zona censurada"
-            case .capaAnotacion:
-                Boton.pintar(boton, anotando ? .prendido : .apagado)
-                boton.toolTip = anotando ? "Apagar el marcador" : "Prender el marcador sobre la pantalla"
-            case .resaltadoCursor:
-                // El círculo no está en la pantalla de Sebas, solo en el video,
-                // así que este botón es la única forma de saber si está puesto.
-                Boton.pintar(boton, resaltadoCursor ? .prendido : .apagado)
-                boton.toolTip = resaltadoCursor
-                    ? "Apagar el círculo del cursor y el efecto del clic"
-                    : "Prender el círculo del cursor y el efecto del clic"
-            case .teleprompter:
-                // Es el único botón de la fila compacta que se pinta acá: su
-                // acción vive en el registro de atajos como cualquier otra.
-                Boton.pintar(boton, teleprompter.visible ? .prendido : .apagado)
-                boton.toolTip = teleprompter.visible ? "Esconder el guion" : "Mostrar el guion"
-            case .colorTablero:
-                // El lienzo solo existe en el tablero.
-                boton.isEnabled = modo == .tablero
-            case .deshacer, .borrar:
-                // Actúan sobre la superficie de dibujo activa; sin ninguna
-                // prendida no tienen sobre qué actuar.
-                boton.isEnabled = dibujando
-            default:
-                break
+    private var foto = Foto()
+    private var mini = ConfigurationStore.shared.current.widgetMini
+
+    // MARK: - Vistas
+
+    private let columna = NSStackView()
+    private let capsula = NSView()
+    private let pastilla = MiniPill()
+    private let alertas = NSStackView()
+
+    private let punto = LiveDot()
+    private let tiempo = NSTextField(labelWithString: "00:00")
+    private let marcador = NSView()
+    private let frase = NSTextField(wrappingLabelWithString: "")
+
+    private let pausar = CapsuleButton(simbolo: "pause", nombre: "Pausar", ayuda: "Pausar")
+    private let detener = CapsuleButton(simbolo: "stop", nombre: "Detener", ayuda: "Detener la grabación")
+    private let reiniciar = CapsuleButton(simbolo: "arrow.counterclockwise", nombre: "Reiniciar", ayuda: "Reiniciar toma")
+    private let microfono = CapsuleButton(simbolo: "mic", nombre: "Micrófono", ayuda: "Silenciar micrófono")
+    private let sistema = CapsuleButton(simbolo: "speaker.wave.2", nombre: "Sonido PC", ayuda: "Silenciar audio del sistema")
+    private let camara = CapsuleButton(simbolo: "person.crop.circle", nombre: "Cámara", ayuda: "Cámara")
+
+    private let grupoVe = CapsuleButton(simbolo: "macwindow", nombre: "Qué se ve", ayuda: "Pantalla, cámara completa o tablero", ancho: nil)
+    private let grupoTablero = CapsuleButton(simbolo: "square.and.pencil", nombre: "Tablero", ayuda: "Lienzo, deshacer y borrar", ancho: nil)
+    private let grupoSobre = CapsuleButton(simbolo: "cursorarrow.rays", nombre: "Sobre la pantalla", ayuda: "Cursor, marcador y censura", ancho: nil)
+    private let guion = CapsuleButton(simbolo: "text.alignleft", nombre: "Guion", ayuda: "Mostrar o esconder el guion")
+    private let guionMenu = CapsuleButton(simbolo: "chevron.down", nombre: "", ayuda: "Controles del guion", ancho: 22)
+
+    private let lienzo = CapsuleButton(simbolo: "circle.lefthalf.filled", nombre: "Lienzo", ayuda: "Tablero blanco o negro")
+    private let deshacer = CapsuleButton(simbolo: "arrow.uturn.backward", nombre: "Deshacer", ayuda: "Deshacer el último trazo")
+    private let borrar = CapsuleButton(simbolo: "eraser", nombre: "Borrar", ayuda: "Borrar todo lo dibujado")
+    private let leer = CapsuleButton(simbolo: "pause", nombre: "Pausa guion", ayuda: "Play y pausa del guion", ancho: nil)
+    private let achicar = CapsuleButton(simbolo: "arrow.down.right.and.arrow.up.left", nombre: "Achicar",
+                                        ayuda: "Dejar solo el tiempo", ancho: 46)
+
+    private var contextoTablero = NSView()
+    private var contextoGuion = NSView()
+
+    /// Lo que se está mostrando en las alertas, para no rearmarlas cada segundo.
+    private var alertasMostradas: [Alerta] = []
+
+    init() {
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 66),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+
+        isFloatingPanel = true
+        level = WindowLayer.widget.level
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        isMovableByWindowBackground = true
+        backgroundColor = .clear
+        isOpaque = false
+        hasShadow = true
+        // Clara siempre, aunque el Mac esté en modo oscuro: es la identidad de
+        // la app (decisión 123), y así los menús y tooltips salen claros también.
+        appearance = NSAppearance(named: .aqua)
+
+        construir()
+        aplicarMini()
+        colocar()
+    }
+
+    // MARK: - Construcción
+
+    private func construir() {
+        let c = BloomindStyle.Claro.self
+
+        capsula.wantsLayer = true
+        capsula.layer?.backgroundColor = c.blanco.cgColor
+        capsula.layer?.cornerRadius = 33
+        capsula.layer?.borderWidth = 1
+        capsula.layer?.borderColor = c.tinta.withAlphaComponent(0.72).cgColor
+
+        tiempo.font = BloomindStyle.reloj(25)
+        tiempo.textColor = c.tinta
+
+        marcador.wantsLayer = true
+        marcador.layer?.cornerRadius = 4.5
+        marcador.layer?.borderWidth = 1
+        marcador.layer?.borderColor = c.tinta.withAlphaComponent(0.3).cgColor
+        fijar(marcador, 9, 9)
+
+        let lineaReloj = NSStackView(views: [punto, tiempo, marcador])
+        lineaReloj.spacing = 9
+        lineaReloj.alignment = .centerY
+
+        frase.font = BloomindStyle.ui(11.5)
+        frase.textColor = c.pizarra
+        frase.maximumNumberOfLines = 2
+        frase.lineBreakMode = .byWordWrapping
+        frase.cell?.truncatesLastVisibleLine = true
+        frase.preferredMaxLayoutWidth = 186
+
+        let reloj = NSStackView(views: [lineaReloj, frase])
+        reloj.orientation = .vertical
+        reloj.alignment = .leading
+        reloj.spacing = 4
+        fijar(reloj, 186, nil)
+
+        pausar.target = self; pausar.action = #selector(tocarPausa)
+        detener.target = self; detener.action = #selector(tocarDetener)
+        reiniciar.target = self; reiniciar.action = #selector(tocarReiniciar)
+        microfono.target = self; microfono.action = #selector(tocarMicrofono)
+        sistema.target = self; sistema.action = #selector(tocarSistema)
+        camara.target = self; camara.action = #selector(tocarCamara)
+        // Mantener presionado: el menú de cámaras, haya o no una prendida.
+        let menuLargo = NSPressGestureRecognizer(target: self, action: #selector(mostrarMenuDeCamara))
+        menuLargo.minimumPressDuration = 0.35
+        camara.addGestureRecognizer(menuLargo)
+
+        for grupo in [grupoVe, grupoTablero, grupoSobre] {
+            grupo.conFlecha = true
+            grupo.target = self
+            grupo.action = #selector(tocarGrupo(_:))
+        }
+        guion.target = self; guion.action = #selector(tocarGuion)
+        guionMenu.imagePosition = .imageOnly
+        guionMenu.target = self; guionMenu.action = #selector(tocarGrupo(_:))
+        // El guion y su flecha se leen como un solo botón partido.
+        guion.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMinXMaxYCorner]
+        guionMenu.layer?.maskedCorners = [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+        let partido = NSStackView(views: [guion, guionMenu])
+        partido.spacing = 0
+
+        lienzo.target = self; lienzo.action = #selector(tocarLienzo)
+        deshacer.target = self; deshacer.action = #selector(tocarDeshacer)
+        borrar.target = self; borrar.action = #selector(tocarBorrar)
+        leer.target = self; leer.action = #selector(tocarLeer)
+        contextoTablero = contexto([lienzo, deshacer, borrar])
+        contextoGuion = contexto([leer])
+
+        achicar.target = self; achicar.action = #selector(tocarAchicar)
+
+        let fila = NSStackView(views: [
+            reloj, pausar, detener, reiniciar, divisor(),
+            microfono, sistema, camara, divisor(),
+            grupoVe, grupoTablero, contextoTablero, grupoSobre, partido, contextoGuion,
+            achicar
+        ])
+        fila.spacing = 4
+        fila.alignment = .centerY
+        fila.edgeInsets = NSEdgeInsets(top: 0, left: 22, bottom: 0, right: 8)
+        fila.setCustomSpacing(6, after: reloj)
+        fila.setCustomSpacing(7, after: grupoTablero)
+        fila.setCustomSpacing(7, after: contextoTablero)
+        fila.setCustomSpacing(7, after: partido)
+        fila.setCustomSpacing(7, after: contextoGuion)
+        fila.translatesAutoresizingMaskIntoConstraints = false
+        capsula.addSubview(fila)
+        NSLayoutConstraint.activate([
+            fila.leadingAnchor.constraint(equalTo: capsula.leadingAnchor),
+            fila.trailingAnchor.constraint(equalTo: capsula.trailingAnchor),
+            fila.topAnchor.constraint(equalTo: capsula.topAnchor),
+            fila.bottomAnchor.constraint(equalTo: capsula.bottomAnchor),
+            capsula.heightAnchor.constraint(equalToConstant: 66)
+        ])
+
+        pastilla.onTap = { [weak self] in self?.ponerMini(false) }
+
+        alertas.spacing = 8
+
+        columna.setViews([capsula, pastilla, alertas], in: .top)
+        columna.orientation = .vertical
+        columna.alignment = .trailing
+        columna.spacing = 8
+        columna.translatesAutoresizingMaskIntoConstraints = false
+
+        let raiz = NSView()
+        raiz.addSubview(columna)
+        NSLayoutConstraint.activate([
+            columna.leadingAnchor.constraint(equalTo: raiz.leadingAnchor),
+            columna.trailingAnchor.constraint(equalTo: raiz.trailingAnchor),
+            columna.topAnchor.constraint(equalTo: raiz.topAnchor),
+            columna.bottomAnchor.constraint(equalTo: raiz.bottomAnchor)
+        ])
+        contentView = raiz
+
+        NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: self,
+                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.guardarPosicion() }
+        }
+    }
+
+    /// El fondo gris claro que agrupa los botones que aparecen según el
+    /// contexto: así se ve que son de ese momento y no de siempre.
+    private func contexto(_ botones: [NSView]) -> NSView {
+        let fila = NSStackView(views: botones)
+        fila.spacing = 0
+        fila.wantsLayer = true
+        fila.layer?.backgroundColor = BloomindStyle.Claro.papel.cgColor
+        fila.layer?.cornerRadius = 13
+        fila.layer?.borderWidth = 1
+        fila.layer?.borderColor = BloomindStyle.Claro.linea.cgColor
+        return fila
+    }
+
+    private func divisor() -> NSView {
+        let linea = NSView()
+        linea.wantsLayer = true
+        linea.layer?.backgroundColor = BloomindStyle.Claro.linea.cgColor
+        fijar(linea, 1, 30)
+        return linea
+    }
+
+    private func fijar(_ vista: NSView, _ ancho: CGFloat?, _ alto: CGFloat?) {
+        vista.translatesAutoresizingMaskIntoConstraints = false
+        if let ancho { vista.widthAnchor.constraint(equalToConstant: ancho).isActive = true }
+        if let alto { vista.heightAnchor.constraint(equalToConstant: alto).isActive = true }
+    }
+
+    // MARK: - Posición y tamaño
+
+    /// Arriba a la derecha de la pantalla principal la primera vez; después
+    /// recuerda dónde lo dejaste.
+    private func colocar() {
+        ajustarTamaño()
+        if let guardada = ConfigurationStore.shared.current.widgetTopRight {
+            let esquina = NSPoint(x: guardada.x, y: guardada.y)
+            if NSScreen.screens.contains(where: { $0.frame.insetBy(dx: -1, dy: -1).contains(esquina) }) {
+                setFrameTopRight(esquina)
+                return
+            }
+        }
+        let visible = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        setFrameTopRight(NSPoint(x: visible.maxX - BloomindStyle.Space.card,
+                                 y: visible.maxY - BloomindStyle.Space.card))
+    }
+
+    private func setFrameTopRight(_ esquina: NSPoint) {
+        setFrameOrigin(NSPoint(x: esquina.x - frame.width, y: esquina.y - frame.height))
+    }
+
+    /// La ventana mide lo que su contenido, y crece o se encoge **hacia la
+    /// izquierda y hacia abajo**: la esquina de arriba a la derecha no se mueve.
+    private func ajustarTamaño() {
+        guard let raiz = contentView else { return }
+        raiz.layoutSubtreeIfNeeded()
+        let tamaño = columna.fittingSize
+        guard tamaño != frame.size else { return }
+        let esquina = NSPoint(x: frame.maxX, y: frame.maxY)
+        var nuevo = NSRect(x: esquina.x - tamaño.width, y: esquina.y - tamaño.height,
+                           width: tamaño.width, height: tamaño.height)
+        // Crecer desde la esquina derecha puede sacarlo de la pantalla: pasa al
+        // abrir la cápsula con la pastilla mini arrastrada contra el borde
+        // izquierdo. Ahí se corre lo justo para quedar entero a la vista.
+        if let visible = (screen ?? NSScreen.main)?.visibleFrame {
+            nuevo.origin.x = min(max(nuevo.minX, visible.minX), visible.maxX - nuevo.width)
+            nuevo.origin.y = min(max(nuevo.minY, visible.minY), visible.maxY - nuevo.height)
+        }
+        setFrame(nuevo, display: true)
+        // La sombra de una ventana transparente sigue la forma de lo que tiene
+        // pintado; sin esto se queda con la del tamaño anterior.
+        invalidateShadow()
+    }
+
+    // MARK: - Modo mini
+
+    private func ponerMini(_ valor: Bool) {
+        guard mini != valor else { return }
+        mini = valor
+        ConfigurationStore.shared.update { $0.widgetMini = valor }
+        aplicarMini()
+        Logger.shared.log("Widget en modo \(valor ? "mini" : "completo")")
+    }
+
+    private func aplicarMini() {
+        capsula.isHidden = mini
+        pastilla.isHidden = !mini
+        ajustarTamaño()
+    }
+
+    // MARK: - Refresco
+
+    /// Refresca todo lo que muestra.
+    func update(segundos: Int,
+                pausado: Bool,
+                modo: CaptureMode,
+                censura: Bool,
+                anotando: Bool,
+                color: MarkerColor,
+                lienzo colorLienzo: BoardColor,
+                hayCamara: Bool,
+                resaltadoCursor: Bool,
+                teleprompter: TeleprompterState,
+                audio: AudioState) {
+
+        foto = Foto(pausado: pausado, modo: modo, censura: censura, anotando: anotando,
+                    color: color, lienzo: colorLienzo, hayCamara: hayCamara,
+                    resaltadoCursor: resaltadoCursor, teleprompter: teleprompter, audio: audio)
+
+        let reloj = String(format: "%02d:%02d", segundos / 60, segundos % 60)
+        tiempo.stringValue = reloj
+        punto.pausado = pausado
+        tiempo.alphaValue = pausado ? 0.45 : 1
+        frase.stringValue = textoDeEstado()
+
+        // El punto de color solo tiene sentido cuando se está dibujando.
+        marcador.isHidden = !foto.dibujando
+        marcador.layer?.backgroundColor = color.cgColor
+
+        pausar.cambiar(simbolo: pausado ? "play" : "pause", nombre: pausado ? "Reanudar" : "Pausar")
+        pausar.toolTip = pausado ? "Reanudar" : "Pausar"
+
+        // El botón de cámara nunca se deshabilita: sin cámara prendida sigue
+        // sirviendo para prender una (decisión 82).
+        camara.cambiar(simbolo: hayCamara ? "person.crop.circle" : "person.crop.circle.badge.plus")
+        camara.estado = hayCamara ? .prendido : .normal
+        camara.toolTip = hayCamara
+            ? "Apagar la cámara · mantené presionado para elegir otra"
+            : "Elegir y prender una cámara"
+
+        // Las fuentes que no se eligieron antes de arrancar quedan deshabilitadas,
+        // no ausentes: el botón no es un atajo para encenderlas (decisión 82).
+        pintarAudio(microfono, activa: audio.capturaMicrofono, silenciada: audio.microfonoSilenciado,
+                    simbolo: "mic", nombre: "Micrófono", nombreMudo: "Activar mic",
+                    ayuda: "Silenciar micrófono", ayudaMuda: "Activar micrófono")
+        pintarAudio(sistema, activa: audio.capturaSistema, silenciada: audio.sistemaSilenciado,
+                    simbolo: "speaker.wave.2", nombre: "Sonido PC", nombreMudo: "Activar PC",
+                    ayuda: "Silenciar audio del sistema", ayudaMuda: "Activar audio del sistema")
+
+        // Lo del tablero vive en la cápsula solo mientras hay tablero; la pausa
+        // del guion, solo con el guion a la vista.
+        contextoTablero.isHidden = modo != .tablero
+        lienzo.toolTip = colorLienzo == .negro ? "Pasar a lienzo blanco" : "Pasar a lienzo negro"
+        guion.estado = teleprompter.visible ? .prendido : .normal
+        guion.toolTip = teleprompter.visible ? "Esconder el guion" : "Mostrar el guion"
+        contextoGuion.isHidden = !teleprompter.visible
+        leer.cambiar(simbolo: teleprompter.corriendo ? "pause" : "play",
+                     nombre: teleprompter.corriendo ? "Pausa guion" : "Leer guion")
+        leer.estado = teleprompter.corriendo ? .prendido : .normal
+        // Con el guion abierto para editar no se puede hacer correr.
+        leer.isEnabled = !teleprompter.editando
+
+        let nuevas = alertasActuales()
+        if nuevas != alertasMostradas {
+            alertasMostradas = nuevas
+            alertas.setViews(nuevas.map(pastillaDeAlerta), in: .trailing)
+        }
+        pastilla.pintar(tiempo: reloj, pausado: pausado, alerta: !nuevas.isEmpty)
+
+        ajustarTamaño()
+    }
+
+    /// La frase bajo el cronómetro: qué se está grabando y lo que no se ve en
+    /// la pantalla de quien graba. Las alertas no van acá: tienen su pastilla.
+    private func textoDeEstado() -> String {
+        let largo: String
+        let corto: String
+        switch foto.modo {
+        case .pantalla: largo = "la pantalla";        corto = "pantalla"
+        case .camara:   largo = "la cámara completa"; corto = "cámara completa"
+        case .tablero:  largo = "el tablero \(foto.lienzo.label)"; corto = "tablero \(foto.lienzo.label)"
+        }
+        var partes = [foto.pausado ? "En pausa · \(corto)" : "Grabando \(largo)"]
+        if foto.dibujando { partes.append("marcador \(foto.color.label)") }
+        // El círculo del cursor no se ve en la pantalla de quien graba, solo en
+        // el video: sin este aviso, la única forma de saber que está apagado es
+        // acordarse de haberlo apagado (decisión 101).
+        if !foto.resaltadoCursor { partes.append("sin cursor") }
+        return partes.joined(separator: " · ")
+    }
+
+    /// Un botón de audio: normal, mudo (coral) o deshabilitado.
+    private func pintarAudio(_ boton: CapsuleButton, activa: Bool, silenciada: Bool,
+                             simbolo: String, nombre: String, nombreMudo: String,
+                             ayuda: String, ayudaMuda: String) {
+        boton.isEnabled = activa
+        boton.cambiar(simbolo: silenciada ? simbolo + ".slash" : simbolo,
+                      nombre: silenciada ? nombreMudo : nombre)
+        boton.estado = silenciada ? .alerta : .normal
+        boton.toolTip = activa ? (silenciada ? ayudaMuda : ayuda) : "No se eligió esta fuente antes de grabar"
+    }
+
+    // MARK: - Alertas
+
+    private enum Alerta: Equatable {
+        case sinAudio, microfono, sistema, censura
+    }
+
+    private func alertasActuales() -> [Alerta] {
+        let a = foto.audio
+        var lista: [Alerta] = []
+        let micCallado = !a.capturaMicrofono || a.microfonoSilenciado
+        let pcCallado = !a.capturaSistema || a.sistemaSilenciado
+        if (a.capturaMicrofono || a.capturaSistema) && micCallado && pcCallado {
+            lista.append(.sinAudio)
+        } else {
+            if a.capturaMicrofono && a.microfonoSilenciado { lista.append(.microfono) }
+            if a.capturaSistema && a.sistemaSilenciado { lista.append(.sistema) }
+        }
+        if foto.censura { lista.append(.censura) }
+        return lista
+    }
+
+    private func pastillaDeAlerta(_ alerta: Alerta) -> NSView {
+        let a = foto.audio
+        switch alerta {
+        case .sinAudio:
+            let accion: ShortcutAction = a.capturaMicrofono ? .silenciarMicrofono : .silenciarSistema
+            return AlertPill(simbolo: "mic.slash", texto: "Sin audio", atajo: atajo(accion)) { [weak self] in
+                guard let self else { return }
+                if a.capturaMicrofono && a.microfonoSilenciado { self.onToggleMicrophone?() }
+                if a.capturaSistema && a.sistemaSilenciado { self.onToggleSystemAudio?() }
+            }
+        case .microfono:
+            return AlertPill(simbolo: "mic.slash", texto: "Micrófono mudo", atajo: atajo(.silenciarMicrofono)) { [weak self] in
+                self?.onToggleMicrophone?()
+            }
+        case .sistema:
+            return AlertPill(simbolo: "speaker.slash", texto: "Sonido del PC mudo", atajo: atajo(.silenciarSistema)) { [weak self] in
+                self?.onToggleSystemAudio?()
+            }
+        case .censura:
+            return AlertPill(simbolo: "eye.slash", texto: "Censura puesta", atajo: atajo(.censura)) { [weak self] in
+                self?.onAction?(.censura)
             }
         }
     }
 
-    /// Un botón de audio: prendido, mudo o deshabilitado. El símbolo tachado es
-    /// lo que hace que se vea de reojo en mitad de una clase, sin leer.
-    private func actualizar(_ boton: NSButton, activa: Bool, silenciada: Bool,
-                            simboloVivo: String, simboloMudo: String,
-                            ayudaViva: String, ayudaMuda: String) {
-        boton.isEnabled = activa
-        let simbolo = silenciada ? simboloMudo : simboloVivo
-        let ayuda = silenciada ? ayudaMuda : ayudaViva
-        boton.image = Boton.icono(simbolo, ayuda)
-        boton.toolTip = activa ? ayuda : "No se eligió esta fuente antes de grabar"
-        // Acá el fondo lleno marca lo **silenciado**, no lo prendido: un
-        // micrófono abierto es lo normal y lo que hay que ver de lejos es el que
-        // está mudo.
-        Boton.pintar(boton, silenciada ? .alerta : .apagado)
+    private func atajo(_ accion: ShortcutAction) -> String {
+        etiquetaDeAtajo?(accion) ?? accion.porDefecto.etiqueta
     }
+
+    // MARK: - Menús de grupo
+
+    @objc private func tocarGrupo(_ boton: CapsuleButton) {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.minimumWidth = 236
+        menu.appearance = NSAppearance(named: .aqua)
+
+        let f = foto
+        switch boton {
+        case grupoVe:
+            menu.addItem(.sectionHeader(title: "Qué se ve"))
+            menu.addItem(item("Pantalla", .modoPantalla, marcado: f.modo == .pantalla))
+            // Sin cámara no hay modo cámara completa: el fondo del frame
+            // quedaría en negro (decisión 83).
+            menu.addItem(item("Cámara completa", .modoCamara, marcado: f.modo == .camara, activo: f.hayCamara))
+            menu.addItem(item("Tablero", .modoTablero, marcado: f.modo == .tablero))
+
+        case grupoTablero:
+            menu.addItem(.sectionHeader(title: "Tablero"))
+            if f.modo != .tablero {
+                menu.addItem(item("Pasar al tablero", .modoTablero))
+            }
+            // El lienzo solo existe en el tablero. La acción alterna, así que
+            // elegir el que ya está puesto no hace nada.
+            menu.addItem(item("Lienzo blanco", .colorTablero, marcado: f.lienzo == .blanco,
+                              activo: f.modo == .tablero, ejecutar: f.lienzo != .blanco))
+            menu.addItem(item("Lienzo negro", .colorTablero, marcado: f.lienzo == .negro,
+                              activo: f.modo == .tablero, ejecutar: f.lienzo != .negro))
+            // Actúan sobre la superficie de dibujo activa; sin ninguna prendida
+            // no tienen sobre qué actuar.
+            menu.addItem(item("Deshacer trazo", .deshacer, activo: f.dibujando))
+            menu.addItem(item("Borrar todo", .borrar, activo: f.dibujando))
+
+        case grupoSobre:
+            menu.addItem(.sectionHeader(title: "Sobre la pantalla"))
+            menu.addItem(item("Resaltar cursor", .resaltadoCursor, marcado: f.resaltadoCursor))
+            menu.addItem(item("Marcador", .capaAnotacion, marcado: f.anotando))
+            let color = item("Cambiar color · \(f.color.label)", .colorMarcador)
+            color.image = circulo(f.color)
+            menu.addItem(color)
+            menu.addItem(.separator())
+            menu.addItem(item("Censura", .censura, marcado: f.censura))
+            menu.addItem(item("Redibujar la zona", .redibujarCensura))
+
+        case guionMenu:
+            menu.addItem(.sectionHeader(title: "Guion"))
+            let t = f.teleprompter
+            menu.addItem(control(t.corriendo ? "Pausa" : "Leer", .playPausa, activo: t.visible && !t.editando, nota: "espacio"))
+            menu.addItem(control("Volver al inicio", .reiniciar, activo: t.visible))
+            menu.addItem(control("Más lento", .menosVelocidad, activo: t.visible, nota: "↓"))
+            menu.addItem(control("Más rápido", .masVelocidad, activo: t.visible, nota: "↑"))
+            menu.addItem(control("Letra más chica", .menosLetra, activo: t.visible))
+            menu.addItem(control("Letra más grande", .masLetra, activo: t.visible))
+            menu.addItem(control(t.editando ? "Volver a leer" : "Editar el guion", .editar, activo: t.visible))
+
+        default:
+            return
+        }
+
+        boton.abierto = true
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: boton.bounds.height + 8), in: boton)
+        boton.abierto = false
+    }
+
+    /// Una acción del registro de atajos, con su combinación a la derecha.
+    private func item(_ titulo: String, _ accion: ShortcutAction, marcado: Bool = false,
+                      activo: Bool = true, ejecutar: Bool = true) -> NSMenuItem {
+        let item = MenuClosureItem(titulo: titulo) { [weak self] in
+            if ejecutar { self?.onAction?(accion) }
+        }
+        item.state = marcado ? .on : .off
+        item.isEnabled = activo
+        mostrarAtajo(atajo(accion), en: item)
+        return item
+    }
+
+    /// Un control del teleprompter. Sus teclas no son atajos del registro sino
+    /// teclas sueltas de su ventana (decisión 92), así que van como nota.
+    private func control(_ titulo: String, _ control: TeleprompterWindow.Control,
+                         activo: Bool, nota: String? = nil) -> NSMenuItem {
+        let item = MenuClosureItem(titulo: titulo) { [weak self] in
+            self?.onTeleprompterControl?(control)
+        }
+        item.isEnabled = activo
+        if let nota { item.toolTip = "En el guion: \(nota)" }
+        return item
+    }
+
+    /// Escribe la combinación a la derecha del renglón con el dibujo nativo de
+    /// los menús, que la alinea en columna y la pinta bien al pasar el mouse.
+    /// Una combinación que el menú no sabe dibujar (una tecla con nombre largo)
+    /// va al final del título.
+    private func mostrarAtajo(_ etiqueta: String, en item: NSMenuItem) {
+        var mods: NSEvent.ModifierFlags = []
+        var resto = Substring(etiqueta)
+        while let primero = resto.first {
+            switch primero {
+            case "⌃": mods.insert(.control)
+            case "⌥": mods.insert(.option)
+            case "⇧": mods.insert(.shift)
+            case "⌘": mods.insert(.command)
+            default: break
+            }
+            guard "⌃⌥⇧⌘".contains(primero) else { break }
+            resto = resto.dropFirst()
+        }
+        let tecla: String?
+        switch resto {
+        case "⌫": tecla = "\u{8}"
+        case let t where t.count == 1: tecla = t.lowercased()
+        default: tecla = nil
+        }
+        if let tecla, !mods.isEmpty {
+            item.keyEquivalent = tecla
+            item.keyEquivalentModifierMask = mods
+        } else {
+            item.title += "   \(etiqueta)"
+        }
+    }
+
+    private func circulo(_ color: MarkerColor) -> NSImage {
+        NSImage(size: NSSize(width: 14, height: 14), flipped: false) { rect in
+            let forma = NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1))
+            NSColor(cgColor: color.cgColor)?.setFill()
+            forma.fill()
+            BloomindStyle.Claro.tinta.withAlphaComponent(0.25).setStroke()
+            forma.stroke()
+            return true
+        }
+    }
+
+    // MARK: - Mostrar y esconder
 
     func present() {
         orderFrontRegardless()
@@ -622,41 +649,42 @@ final class RecordingWidget: NSPanel {
         orderOut(nil)
     }
 
-    // MARK: - Interno
-
     private func guardarPosicion() {
-        let origen = frame.origin
+        let esquina = NSPoint(x: frame.maxX, y: frame.maxY)
+        guard ConfigurationStore.shared.current.widgetTopRight != StoredPoint(x: esquina.x, y: esquina.y) else { return }
         ConfigurationStore.shared.update {
-            $0.widgetPosition = StoredPoint(x: origen.x, y: origen.y)
+            $0.widgetTopRight = StoredPoint(x: esquina.x, y: esquina.y)
         }
     }
 
+    // MARK: - Botones
+
     @objc private func tocarPausa() { onPause?() }
     @objc private func tocarDetener() { onStop?() }
-
-    /// Los botones del modo expandido: cada uno dispara la acción de su atajo.
-    @objc private func tocarAccion(_ boton: NSButton) {
-        let acciones = ShortcutAction.allCases
-        guard boton.tag >= 0, boton.tag < acciones.count else { return }
-        onAction?(acciones[boton.tag])
-    }
+    @objc private func tocarMicrofono() { onToggleMicrophone?() }
+    @objc private func tocarSistema() { onToggleSystemAudio?() }
+    @objc private func tocarGuion() { onAction?(.teleprompter) }
+    @objc private func tocarLienzo() { onAction?(.colorTablero) }
+    @objc private func tocarDeshacer() { onAction?(.deshacer) }
+    @objc private func tocarBorrar() { onAction?(.borrar) }
+    @objc private func tocarLeer() { onTeleprompterControl?(.playPausa) }
+    @objc private func tocarAchicar() { ponerMini(true) }
 
     /// Con cámara prendida, el botón prende y apaga la burbuja, que es lo que se
     /// hace veinte veces en una clase. El menú, que es lo que se hace una vez,
-    /// sale manteniéndolo o con clic derecho. Sin cámara prendida, el clic normal
-    /// abre el menú directo: no hay burbuja que alternar todavía.
-    @objc private func tocarBurbuja() {
-        if hayCamaraPrendida { onToggleBubble?() } else { mostrarMenuDeCamara() }
+    /// sale manteniéndolo presionado. Sin cámara prendida, el clic normal abre
+    /// el menú directo: no hay burbuja que alternar todavía.
+    @objc private func tocarCamara() {
+        if foto.hayCamara { onToggleBubble?() } else { mostrarMenuDeCamara() }
     }
 
     @objc private func mostrarMenuDeCamara() {
         guard let menu = onCameraMenu?() else { return }
-        menu.popUp(positioning: nil,
-                   at: NSPoint(x: 0, y: burbuja.bounds.height + 4),
-                   in: burbuja)
+        menu.appearance = NSAppearance(named: .aqua)
+        camara.abierto = true
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: camara.bounds.height + 8), in: camara)
+        camara.abierto = false
     }
-    @objc private func tocarMicrofono() { onToggleMicrophone?() }
-    @objc private func tocarSistema() { onToggleSystemAudio?() }
 
     /// Reiniciar toma descarta lo grabado. Manda a la Papelera, no borra
     /// (decisión 12), pero igual pregunta: es la única acción del widget que
@@ -677,5 +705,241 @@ final class RecordingWidget: NSPanel {
         NSApp.activate(ignoringOtherApps: true)
         guard alerta.runModal() == .alertFirstButtonReturn else { return }
         onRestart?()
+    }
+}
+
+// MARK: - Piezas de la cápsula
+
+/// Un renglón de menú que ejecuta un bloque. `NSMenuItem` solo sabe de
+/// target y selector, y el target es débil: el renglón se sostiene a sí mismo.
+private final class MenuClosureItem: NSMenuItem {
+    private let bloque: () -> Void
+
+    init(titulo: String, bloque: @escaping () -> Void) {
+        self.bloque = bloque
+        super.init(title: titulo, action: #selector(disparar), keyEquivalent: "")
+        target = self
+    }
+
+    required init(coder: NSCoder) { fatalError("no se usa") }
+
+    @objc private func disparar() { bloque() }
+}
+
+/// El punto del cronómetro: azul con un anillo que late mientras se graba,
+/// dos barras en pausa.
+@MainActor
+final class LiveDot: NSView {
+
+    var pausado = false { didSet { if pausado != oldValue { refrescar() } } }
+    /// Blanco en vez de azul, para cuando va sobre coral.
+    var sobreColor = false { didSet { if sobreColor != oldValue { refrescar() } } }
+
+    private let anillo = CAShapeLayer()
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        translatesAutoresizingMaskIntoConstraints = false
+        widthAnchor.constraint(equalToConstant: 10).isActive = true
+        heightAnchor.constraint(equalToConstant: 10).isActive = true
+        anillo.fillColor = nil
+        anillo.lineWidth = 2
+        anillo.path = CGPath(ellipseIn: CGRect(x: -4, y: -4, width: 18, height: 18), transform: nil)
+        anillo.frame = CGRect(x: 0, y: 0, width: 10, height: 10)
+        layer?.addSublayer(anillo)
+        refrescar()
+    }
+
+    convenience init() { self.init(frame: .zero) }
+    required init?(coder: NSCoder) { fatalError("no se usa") }
+
+    private var tinta: NSColor {
+        sobreColor ? .white : (pausado ? BloomindStyle.Claro.pizarra : BloomindStyle.Claro.azul)
+    }
+
+    private func refrescar() {
+        anillo.strokeColor = tinta.cgColor
+        anillo.removeAllAnimations()
+        anillo.opacity = 0
+        if !pausado {
+            let escala = CABasicAnimation(keyPath: "transform.scale")
+            escala.fromValue = 0.6
+            escala.toValue = 1.0
+            let opacidad = CABasicAnimation(keyPath: "opacity")
+            opacidad.fromValue = 0.6
+            opacidad.toValue = 0
+            let latido = CAAnimationGroup()
+            latido.animations = [escala, opacidad]
+            latido.duration = 1.8
+            latido.repeatCount = .infinity
+            anillo.add(latido, forKey: "latido")
+        }
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        tinta.setFill()
+        if pausado {
+            NSBezierPath(rect: NSRect(x: 1, y: 0, width: 3, height: 10)).fill()
+            NSBezierPath(rect: NSRect(x: 6, y: 0, width: 3, height: 10)).fill()
+        } else {
+            NSBezierPath(ovalIn: bounds).fill()
+        }
+    }
+}
+
+/// El widget achicado: solo el punto y el cronómetro (decisión 125). Tocarlo
+/// vuelve a la cápsula; arrastrarlo mueve la ventana.
+@MainActor
+final class MiniPill: NSView {
+
+    var onTap: (() -> Void)?
+
+    private let punto = LiveDot()
+    private let tiempo = NSTextField(labelWithString: "00:00")
+    private var inicio: NSEvent?
+    private var arrastrando = false
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = 21
+        layer?.borderWidth = 1
+        toolTip = "Tocá para ver todos los controles"
+
+        tiempo.font = BloomindStyle.reloj(23)
+        let fila = NSStackView(views: [punto, tiempo])
+        fila.spacing = 9
+        fila.alignment = .centerY
+        fila.edgeInsets = NSEdgeInsets(top: 0, left: 17, bottom: 0, right: 20)
+        fila.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(fila)
+        NSLayoutConstraint.activate([
+            fila.leadingAnchor.constraint(equalTo: leadingAnchor),
+            fila.trailingAnchor.constraint(equalTo: trailingAnchor),
+            fila.topAnchor.constraint(equalTo: topAnchor),
+            fila.bottomAnchor.constraint(equalTo: bottomAnchor),
+            heightAnchor.constraint(equalToConstant: 42)
+        ])
+        pintar(tiempo: "00:00", pausado: false, alerta: false)
+    }
+
+    convenience init() { self.init(frame: .zero) }
+    required init?(coder: NSCoder) { fatalError("no se usa") }
+
+    /// Con una alerta se pone coral entera: se tiene que ver aun achicada.
+    func pintar(tiempo texto: String, pausado: Bool, alerta: Bool) {
+        let c = BloomindStyle.Claro.self
+        layer?.backgroundColor = (alerta ? c.coral : c.blanco).cgColor
+        layer?.borderColor = (alerta ? c.coral : c.tinta.withAlphaComponent(0.72)).cgColor
+        tiempo.stringValue = texto
+        tiempo.textColor = alerta ? .white : c.tinta
+        tiempo.alphaValue = pausado ? (alerta ? 0.75 : 0.45) : 1
+        punto.pausado = pausado
+        punto.sobreColor = alerta
+    }
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        inicio = event
+        arrastrando = false
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard !arrastrando, let inicio else { return }
+        arrastrando = true
+        window?.performDrag(with: inicio)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if !arrastrando { onTap?() }
+        inicio = nil
+    }
+}
+
+/// Una alerta grave: pastilla coral con lo que pasa y su atajo, que se deshace
+/// al tocarla (decisión 126).
+@MainActor
+final class AlertPill: NSView {
+
+    private let accion: () -> Void
+    private var encima = false
+
+    init(simbolo: String, texto: String, atajo: String, accion: @escaping () -> Void) {
+        self.accion = accion
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 20
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.6).cgColor
+        toolTip = "Tocá para deshacer"
+
+        let icono = NSImageView()
+        icono.image = NSImage(systemSymbolName: simbolo, accessibilityDescription: texto)?
+            .withSymbolConfiguration(.init(pointSize: 16, weight: .semibold))
+        icono.contentTintColor = .white
+
+        let etiqueta = NSTextField(labelWithString: texto)
+        etiqueta.font = BloomindStyle.ui(16, weight: .semibold)
+        etiqueta.textColor = .white
+
+        let tecla = NSTextField(labelWithString: atajo)
+        // La del sistema y no la monoespaciada: SF Mono dibuja ⌥ y ⌘ apretados.
+        tecla.font = BloomindStyle.ui(12, weight: .semibold)
+        tecla.textColor = .white
+        let fondoTecla = NSView()
+        fondoTecla.wantsLayer = true
+        fondoTecla.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.22).cgColor
+        fondoTecla.layer?.cornerRadius = 12
+        tecla.translatesAutoresizingMaskIntoConstraints = false
+        fondoTecla.addSubview(tecla)
+        NSLayoutConstraint.activate([
+            tecla.leadingAnchor.constraint(equalTo: fondoTecla.leadingAnchor, constant: 8),
+            tecla.trailingAnchor.constraint(equalTo: fondoTecla.trailingAnchor, constant: -8),
+            tecla.centerYAnchor.constraint(equalTo: fondoTecla.centerYAnchor),
+            fondoTecla.heightAnchor.constraint(equalToConstant: 24)
+        ])
+
+        let fila = NSStackView(views: [icono, etiqueta, fondoTecla])
+        fila.spacing = 9
+        fila.alignment = .centerY
+        fila.edgeInsets = NSEdgeInsets(top: 0, left: 14, bottom: 0, right: 8)
+        fila.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(fila)
+        NSLayoutConstraint.activate([
+            fila.leadingAnchor.constraint(equalTo: leadingAnchor),
+            fila.trailingAnchor.constraint(equalTo: trailingAnchor),
+            fila.topAnchor.constraint(equalTo: topAnchor),
+            fila.bottomAnchor.constraint(equalTo: bottomAnchor),
+            heightAnchor.constraint(equalToConstant: 40)
+        ])
+        pintar()
+    }
+
+    required init?(coder: NSCoder) { fatalError("no se usa") }
+
+    private func pintar() {
+        let c = BloomindStyle.Claro.self
+        layer?.backgroundColor = (encima ? c.coralHundido : c.coral).cgColor
+    }
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds,
+                                       options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { encima = true; pintar() }
+    override func mouseExited(with event: NSEvent) { encima = false; pintar() }
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { accion() }
     }
 }

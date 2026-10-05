@@ -24,7 +24,7 @@ func comprobar(_ descripcion: String, _ condicion: Bool) {
 
 print("Configuración")
 
-// Un archivo real de antes de la Fase 14: sin widgetExpanded.
+// Un archivo real de antes de la Fase 14: sin los campos que vinieron después.
 let viejo = """
 {
   "boardColor" : "blanco",
@@ -45,13 +45,12 @@ guard let cargado = try? JSONDecoder().decode(Configuration.self, from: Data(vie
 }
 
 comprobar("un archivo sin el campo nuevo carga igual", true)
-comprobar("el campo nuevo toma su valor por defecto", cargado.widgetExpanded == false)
+comprobar("el campo nuevo toma su valor por defecto", cargado.widgetMini == false)
 comprobar("el resaltado del cursor arranca prendido si no está en el archivo",
           cargado.cursorHighlightEnabled == true)
 comprobar("no se pierde la cuenta regresiva apagada", cargado.countdownEnabled == false)
 comprobar("no se pierde el nombre de la sesión", cargado.lastSessionName == "Plataforma Neon")
 comprobar("no se pierde la burbuja", cargado.bubbleFrame?.width == 317)
-comprobar("no se pierde la posición del widget", cargado.widgetPosition?.x == 1156)
 
 // Un archivo vacío también tiene que cargar: es el caso de un reset a mano.
 if let vacio = try? JSONDecoder().decode(Configuration.self, from: Data("{}".utf8)) {
@@ -64,7 +63,7 @@ if let vacio = try? JSONDecoder().decode(Configuration.self, from: Data("{}".utf
 
 // Y lo que se escribe tiene que volver a leerse idéntico.
 var ida = Configuration()
-ida.widgetExpanded = true
+ida.widgetMini = true
 ida.lastSessionName = "Clase Supabase"
 if let datos = try? JSONEncoder().encode(ida),
    let vuelta = try? JSONDecoder().decode(Configuration.self, from: datos) {

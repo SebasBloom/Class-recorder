@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grabador · Estudio</title>
+<!--
+DIRECCIÓN A — ESTUDIO DE TRANSMISIÓN
+
+Mundo: la sala de control de un estudio de TV. Equipos de rack oscuros, rótulos
+grabados en el metal, instrumentos que miden, y una sola luz que se prende: AL AIRE.
+
+Paleta
+  Sala        #0F1A2C  fondo base (navy Bloomind)
+  Rack        #16243D  superficies: paneles, tiras de canal
+  Pozo        #0A1322  hundidos: monitor, vúmetro, campos
+  Riel        #26364F  bordes finos
+  Tinta       #E8EEF7  texto principal
+  Grabado     #8CA3C4  rótulos y texto secundario
+  Mando       #3A7BFF  selección, foco, botón principal (hover #1F4DFF)
+  Tally       #FF5E4D  SOLO la luz de AL AIRE y lo que está mudo o tapado.
+              Más saturado que el coral #F0857A de la guía: a 12 px sobre navy
+              el coral se lee rosado, y una luz de aire tiene que leerse roja.
+  Ámbar       #F5B13D  pausa (la luz queda fija en ámbar)
+  Turquesa    #45D3C5  SOLO éxito: "listo para grabar", nivel de voz bueno
+
+Tipografía
+  Archivo (ancho variable)  interfaz. Rótulos en ancho 75 + mayúsculas + espaciado:
+                            se leen como serigrafía de equipo.
+  IBM Plex Mono             código de tiempo, niveles, medidas, atajos. Cifras tabulares.
+
+Composición
+  Panel        rack apaisado 780×556: a la izquierda el MONITOR DE SALIDA (lo que va a
+               quedar en el video, con el área y la burbuja donde van); a la derecha tres
+               TIRAS DE CANAL (Audio con vúmetro, Cámara, Guion); abajo la barra de grabar
+               con la luz AL AIRE apagada.
+  Widget       rack vertical de 196 de ancho: luz, código de tiempo, siete mandos fijos;
+               expandido suma pestañas de grupo (Fuente, Tablero, Marcar, Guion) que se
+               eligen solas según lo que esté pasando.
+  Teleprompter consola ancha bajo la cámara; marca de lectura azul a la izquierda.
+  Atajos       hoja de rack con las combinaciones en columna, agrupadas como el widget.
+  Cuenta       anillo que se vacía; al llegar a 1 se enciende AL AIRE.
+  Área         visor con esquinas de encuadre y medidas en vivo.
+
+Firma: la luz AL AIRE. Apagada en el panel, prendida y latiendo en el widget y en la
+barra de menú, ámbar fija en pausa. Es lo único que brilla en toda la app.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sala:#0F1A2C; --rack:#16243D; --pozo:#0A1322; --riel:#26364F; --riel2:#33476A;
+  --tinta:#E8EEF7; --grabado:#8CA3C4; --tenue:#5D7192;
+  --mando:#3A7BFF; --mando2:#1F4DFF;
+  --tally:#FF5E4D; --ambar:#F5B13D; --turq:#45D3C5;
+  --ui:"Archivo",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#05080F;overflow:hidden}
+body{font-family:var(--ui);color:var(--tinta);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--mando);outline-offset:2px}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* Rótulo serigrafiado */
+.eng{font-stretch:75%;font-weight:600;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--grabado)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- La Mac ---------- */
+#mac{position:fixed;left:0;top:0;width:1440px;height:900px;overflow:hidden;transform-origin:0 0;background:#fff}
+.fondo{position:absolute;inset:25px 0 0 0;display:none}
+[data-fondo=hoja] .f-hoja,[data-fondo=n8n] .f-n8n,[data-fondo=foto] .f-foto{display:block}
+.f-hoja{background:#fff;color:#1d1d1f;font:13px -apple-system,system-ui,sans-serif}
+.f-hoja .tb{height:52px;background:#f3f3f3;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:18px;padding:0 20px;color:#555}
+.f-hoja .tb b{color:#1d1d1f;font-weight:600}
+.f-hoja .grid{display:grid;grid-template-columns:44px 230px 200px 170px 190px 150px 1fr;font-size:12.5px}
+.f-hoja .grid div{height:26px;border-right:1px solid #e3e3e3;border-bottom:1px solid #e3e3e3;padding:5px 8px;white-space:nowrap;overflow:hidden}
+.f-hoja .grid .h{background:#f6f6f6;color:#777;text-align:center}
+.f-hoja .grid .k{font-weight:600}
+.f-n8n{background:#1d1e24 radial-gradient(#3a3c46 1px,transparent 1.2px) 0 0/22px 22px}
+.f-n8n .node{position:absolute;width:150px;height:72px;border-radius:10px;background:#2b2d36;border:1px solid #474a57;color:#d8d9de;font:12px system-ui;display:flex;align-items:center;gap:10px;padding:0 14px}
+.f-n8n .node i{width:34px;height:34px;border-radius:8px;display:block;flex:none}
+.f-foto{background:
+  radial-gradient(60% 50% at 70% 35%,#ffd38a 0,#f39a5b 30%,transparent 60%),
+  radial-gradient(80% 60% at 20% 90%,#2c5d6e 0,transparent 70%),
+  linear-gradient(180deg,#f7b07a 0,#d9775a 40%,#5a4a6a 70%,#1d3550 100%)}
+.tablero{position:absolute;inset:25px 0 0 0;background:#111316;display:none}
+.tablero svg{position:absolute;inset:0;width:100%;height:100%}
+
+/* Barra de menú */
+.menubar{position:absolute;left:0;top:0;right:0;height:25px;background:rgba(240,240,242,.86);backdrop-filter:blur(20px);display:flex;align-items:center;padding:0 12px;gap:18px;font:13px -apple-system,system-ui,sans-serif;color:#111;z-index:50}
+.menubar .r{margin-left:auto;display:flex;align-items:center;gap:14px}
+.menubar .r svg{width:16px;height:16px;stroke:#111}
+.mbicon{position:relative;display:flex;align-items:center;gap:5px;padding:2px 6px;border-radius:5px}
+.mbicon .dot{width:7px;height:7px;border-radius:50%;background:var(--tally);display:none}
+.mbicon .t{font:500 12px var(--mono);display:none}
+[data-scene=grabando] .mbicon .dot,[data-scene=grabando] .mbicon .t{display:block}
+[data-scene=problemas] .mbicon .dot{display:block;background:var(--ambar)}
+[data-scene=problemas] .mbicon .t{display:block}
+.menu{position:absolute;top:27px;right:178px;width:250px;background:rgba(246,246,248,.96);border:1px solid rgba(0,0,0,.12);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:5px;font:13px -apple-system,system-ui,sans-serif;color:#1d1d1f;z-index:51;display:none}
+.menu div{padding:4px 10px;border-radius:5px;display:flex;justify-content:space-between}
+.menu div:hover{background:#3478f6;color:#fff}
+.menu .sep{height:1px;background:#d8d8dc;margin:5px 8px;padding:0}
+.menu .dis{color:#aaa}
+.menu .ttl{color:#888;font-size:12px}
+[data-scene=antes] .menu{display:block}
+
+/* Ventana nativa */
+.win{position:absolute;background:var(--sala);border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.55),0 0 0 1.5px rgba(255,255,255,.06) inset,0 24px 60px rgba(0,0,0,.45);overflow:hidden}
+.lights{display:flex;gap:8px}
+.lights i{width:12px;height:12px;border-radius:50%;background:#3a465c;display:block}
+.win:hover .lights i:nth-child(1){background:#ff5f57}.win:hover .lights i:nth-child(2){background:#febc2e}.win:hover .lights i:nth-child(3){background:#28c840}
+
+/* ---------- PANEL ---------- */
+.panel{left:236px;top:156px;width:780px;height:584px;display:none}
+[data-scene=antes] .panel{display:block}
+.p-head{height:44px;display:flex;align-items:center;gap:16px;padding:0 18px;border-bottom:1px solid var(--riel)}
+.p-head h1{font-size:15px;font-weight:650;letter-spacing:-.01em}
+.p-head h1 span{color:var(--grabado);font-weight:500;font-stretch:80%;letter-spacing:.14em;font-size:10.5px;text-transform:uppercase;margin-right:8px}
+.estado{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--grabado)}
+.estado i{width:7px;height:7px;border-radius:50%;background:var(--turq);display:block}
+.estado.err{color:#FF8A7D}.estado.err i{background:var(--tally)}
+.estado a{color:var(--mando);text-decoration:none;font-weight:600;cursor:pointer}
+.p-body{display:grid;grid-template-columns:404px minmax(0,1fr);gap:14px;padding:14px 14px 0}
+.col{display:flex;flex-direction:column;gap:12px}
+
+.monitor{background:var(--pozo);border:1px solid var(--riel);border-radius:10px;padding:10px}
+.mon-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.mon-top .mono{font-size:10.5px;color:var(--tenue)}
+.screen{position:relative;height:233px;border-radius:4px;overflow:hidden;background:#fff}
+.screen .mini{position:absolute;inset:0}
+.screen .mini.hoja{background:linear-gradient(#f3f3f3 0 14px,transparent 14px),repeating-linear-gradient(90deg,transparent 0 58px,#e2e2e2 58px 59px),repeating-linear-gradient(transparent 0 9px,#e8e8e8 9px 10px),#fff}
+.screen .mini.hoja::after{content:"";position:absolute;left:8px;top:22px;width:46%;height:60%;background:repeating-linear-gradient(transparent 0 4px,#9aa3ae 4px 5.5px,transparent 5.5px 10px);opacity:.55}
+.screen .mini.n8n{background:#1d1e24 radial-gradient(#3a3c46 .6px,transparent .8px) 0 0/7px 7px}
+.screen .mini.n8n b{position:absolute;width:44px;height:21px;border-radius:4px;background:#2b2d36;border:1px solid #474a57}
+.screen .mini.foto{background:radial-gradient(60% 50% at 70% 35%,#ffd38a 0,#f39a5b 30%,transparent 60%),linear-gradient(180deg,#f7b07a 0,#d9775a 40%,#5a4a6a 70%,#1d3550 100%)}
+.screen .dim{position:absolute;inset:0;background:rgba(6,10,18,.62);display:none}
+.screen .area{position:absolute;left:23%;top:16%;width:58%;height:62%;border:1.5px solid #fff;display:none;box-shadow:0 0 0 999px rgba(6,10,18,.55)}
+.panel.con-area .screen .area{display:block}
+.screen .mbub{position:absolute;left:3.5%;bottom:11%;width:15%;aspect-ratio:1;border-radius:50%;border:1.5px solid #fff;background:radial-gradient(circle at 50% 38%,#e9c3a6 0 18%,transparent 19%),radial-gradient(ellipse at 50% 100%,#2f4569 0 45%,transparent 46%),#7d8ea8;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.screen .rec{position:absolute;right:8px;top:8px;font:600 9.5px var(--mono);color:#fff;background:rgba(10,19,34,.75);padding:2px 6px;border-radius:3px;letter-spacing:.06em}
+.mon-ctl{display:flex;gap:8px;margin-top:10px;align-items:center}
+
+.seg{display:flex;background:var(--pozo);border:1px solid var(--riel);border-radius:8px;padding:2px;gap:2px}
+.seg button{height:28px;padding:0 11px;border-radius:6px;font-size:12.5px;color:var(--grabado);display:flex;align-items:center;gap:6px;transition:background .15s,color .15s}
+.seg button svg.i{width:16px;height:16px}
+.seg button:hover{color:var(--tinta);background:rgba(255,255,255,.04)}
+.seg button.on{background:var(--riel2);color:var(--tinta)}
+.sel{height:32px;display:flex;align-items:center;gap:8px;background:var(--pozo);border:1px solid var(--riel);border-radius:8px;padding:0 10px;font-size:13px;color:var(--tinta);cursor:pointer;transition:border-color .15s;min-width:0}
+.sel:hover{border-color:var(--riel2)}
+.sel .v{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sel svg.i{width:14px;height:14px;color:var(--grabado)}
+
+.sesion{background:var(--rack);border:1px solid var(--riel);border-radius:10px;padding:12px 12px 10px}
+.sesion input{width:100%;margin:6px 0 8px;background:transparent;border:0;border-bottom:1px solid var(--riel2);color:var(--tinta);font:600 19px var(--ui);letter-spacing:-.01em;padding:2px 0 6px;outline:none}
+.sesion input:focus{border-bottom-color:var(--mando)}
+.carpeta{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--grabado)}
+.carpeta .mono{color:#9FC2F2;flex:1;font-size:11px}
+.lnk{color:var(--mando);font-weight:600;font-size:12px;padding:3px 6px;border-radius:5px}
+.lnk:hover{background:rgba(58,123,255,.12)}
+
+.canal{background:var(--rack);border:1px solid var(--riel);border-radius:10px;padding:11px 12px;position:relative}
+.canal-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
+.canal-h .st{font-size:11.5px;color:var(--grabado)}
+.canal-h .st.ok{color:var(--turq)}
+.audio{display:grid;grid-template-columns:minmax(0,1fr) 22px;gap:12px}
+.audio .seg button{flex:1;justify-content:center;padding:0 4px;font-size:12px;gap:4px}
+.vu{grid-row:1/3;grid-column:2;display:flex;flex-direction:column-reverse;gap:2px;background:var(--pozo);border:1px solid var(--riel);border-radius:5px;padding:3px}
+.vu i{flex:1;border-radius:1.5px;background:#1d2a40;display:block;transition:background .06s}
+.vu i.on{background:var(--turq)}.vu i.on.w{background:var(--ambar)}.vu i.on.c{background:var(--tally)}
+.audio .stack{display:flex;flex-direction:column;gap:8px}
+.cam-row{display:flex;gap:8px;align-items:center}
+.cam-row .sel{flex:1}
+.nota{font-size:11.5px;color:var(--tenue);margin-top:7px;line-height:1.35}
+.tabs{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+.tab{height:24px;padding:0 9px;border-radius:5px;font-size:12px;color:var(--grabado);border:1px solid var(--riel);transition:all .15s}
+.tab:hover{color:var(--tinta);border-color:var(--riel2)}
+.tab.on{background:var(--tinta);color:var(--sala);border-color:var(--tinta);font-weight:600}
+.lectura{background:var(--pozo);border:1px solid var(--riel);border-radius:6px;padding:8px 10px;font-size:12.5px;line-height:1.45;color:#C9D5E6;height:58px;overflow:hidden;position:relative}
+.lectura::after{content:"";position:absolute;left:0;right:0;bottom:0;height:22px;background:linear-gradient(transparent,var(--pozo))}
+.perillas{display:flex;gap:10px;margin-top:9px;align-items:center}
+.perilla{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--grabado)}
+.perilla .mono{color:var(--tinta);font-size:12.5px;min-width:30px;text-align:center}
+.step{width:20px;height:20px;border-radius:5px;border:1px solid var(--riel);color:var(--grabado);display:grid;place-items:center;font:500 14px var(--mono)}
+.step:hover{border-color:var(--riel2);color:var(--tinta)}
+.step:active{background:var(--riel)}
+.perillas .lnk{margin-left:auto}
+
+.p-foot{position:absolute;left:0;right:0;bottom:0;height:72px;border-top:1px solid var(--riel);background:var(--rack);display:flex;align-items:center;gap:16px;padding:0 14px}
+.tallybox{height:40px;padding:0 14px;border-radius:6px;border:1px solid var(--riel);background:#120E12;display:flex;align-items:center;gap:9px;font-stretch:75%;font-weight:700;letter-spacing:.24em;font-size:12px;color:#5A3D44}
+.tallybox i{width:9px;height:9px;border-radius:50%;background:#5A3D44;display:block}
+.chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--grabado);cursor:pointer;user-select:none}
+.chk b{width:30px;height:18px;border-radius:9px;background:var(--riel);position:relative;transition:background .15s}
+.chk b::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+.chk.on b{background:var(--mando)}.chk.on b::after{transform:translateX(12px)}
+.grabar{margin-left:auto;height:44px;padding:0 18px 0 16px;border-radius:9px;background:var(--mando);color:#fff;font-weight:650;font-size:14.5px;display:flex;align-items:center;gap:10px;transition:background .15s,transform .08s}
+.grabar:hover{background:var(--mando2)}.grabar:active{transform:translateY(1px)}
+.grabar .o{width:12px;height:12px;border-radius:50%;border:2px solid #fff;display:block}
+.grabar .k{font:500 11px var(--mono);opacity:.7;margin-left:4px}
+
+/* ---------- BURBUJA ---------- */
+.burbuja{position:absolute;left:36px;bottom:96px;width:176px;height:176px;border-radius:50%;overflow:hidden;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 10px 30px rgba(0,0,0,.35);display:none;cursor:grab;
+  background:radial-gradient(circle at 50% 36%,#e3b896 0 17%,transparent 17.5%),radial-gradient(ellipse 34% 26% at 50% 27%,#2a2220 0 99%,transparent 100%),radial-gradient(ellipse 52% 38% at 50% 100%,#24395c 0 99%,transparent 100%),linear-gradient(160deg,#9aa9bd,#5f6f86)}
+.burbuja::after{content:"";position:absolute;right:20px;bottom:20px;width:12px;height:12px;border-right:2px solid rgba(255,255,255,.8);border-bottom:2px solid rgba(255,255,255,.8);border-radius:0 0 3px 0;opacity:0;transition:opacity .15s}
+.burbuja:hover::after{opacity:1}
+[data-scene=antes] .burbuja,[data-scene=grabando] .burbuja,[data-scene=cuenta] .burbuja{display:block}
+
+/* ---------- WIDGET ---------- */
+.widget{position:absolute;right:20px;top:44px;width:224px;background:var(--sala);border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 0 1.5px rgba(255,255,255,.07) inset,0 18px 40px rgba(0,0,0,.4);display:none;overflow:hidden;user-select:none}
+[data-scene=grabando] .widget,[data-scene=problemas] .widget{display:block}
+.tally{margin:8px 8px 0;height:26px;border-radius:5px;display:flex;align-items:center;justify-content:center;gap:8px;font-stretch:75%;font-weight:750;font-size:12px;letter-spacing:.26em;color:#fff;background:var(--tally);
+  box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 0 18px rgba(255,94,77,.55);animation:aire 2.6s ease-in-out infinite}
+.tally i{width:7px;height:7px;border-radius:50%;background:#fff;display:block}
+@keyframes aire{0%,100%{box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 0 18px rgba(255,94,77,.6)}50%{box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 0 6px rgba(255,94,77,.25)}}
+.widget.pausa .tally{background:var(--ambar);color:#2A1C00;animation:none;box-shadow:0 0 0 1px rgba(255,255,255,.15) inset}
+.widget.pausa .tally i{background:#2A1C00;border-radius:1px;width:8px;height:8px;background:linear-gradient(90deg,#2A1C00 0 35%,transparent 35% 65%,#2A1C00 65%)}
+.tc{padding:10px 12px 0;display:flex;align-items:baseline;justify-content:space-between}
+.tc .mono{font-size:30px;font-weight:500;letter-spacing:-.02em;line-height:1}
+.tc .mono s{text-decoration:none;color:var(--tenue)}
+.tc .grip{width:18px;height:18px;color:var(--tenue);cursor:grab}
+.detalle{padding:6px 12px 10px;font-size:12px;color:var(--grabado);display:flex;align-items:flex-start;gap:7px;line-height:1.35}
+.detalle .pt{flex:none;margin-top:3px;width:9px;height:9px;border-radius:50%;background:#FFD400;box-shadow:0 0 0 1.5px rgba(255,255,255,.25);display:none}
+.widget.dibuja .detalle .pt{display:block}
+.alertas{display:none;flex-direction:column;gap:1px;margin:0 8px 8px}
+.widget.alerta .alertas{display:flex}
+.alertas div{display:flex;align-items:center;gap:8px;background:rgba(255,94,77,.14);color:#FF8F82;font-stretch:80%;font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;padding:6px 8px;border-left:2px solid var(--tally)}
+.alertas div:first-child{border-radius:0 5px 0 0}.alertas div:last-child{border-radius:0 0 5px 0}
+.alertas svg.i{width:14px;height:14px}
+.mandos{padding:0 8px 8px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.b{height:52px;border-radius:7px;background:var(--rack);border:1px solid var(--riel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10.5px;font-stretch:88%;font-weight:550;color:var(--tinta);transition:background .12s,border-color .12s,transform .06s;position:relative}
+.b:hover{background:#1C2D4B;border-color:var(--riel2)}
+.b:active{transform:translateY(1px);background:#142039}
+.b.ancho{grid-column:span 2;flex-direction:row;gap:9px;font-size:12.5px;font-weight:600}
+.b.on{background:var(--mando);border-color:var(--mando);color:#fff}
+.b.on:hover{background:var(--mando2)}
+.b.mudo{background:var(--tally);border-color:var(--tally);color:#fff}
+.b[disabled]{opacity:.35;pointer-events:none}
+.b .kbd{position:absolute;top:4px;right:5px;font:500 8.5px var(--mono);color:var(--tenue);opacity:0;transition:opacity .15s}
+.widget:hover .b .kbd{opacity:1}
+.b.on .kbd,.b.mudo .kbd{color:rgba(255,255,255,.7)}
+.mas{display:flex;align-items:center;justify-content:center;gap:6px;height:24px;margin:0 8px 8px;border-radius:6px;font-size:11px;color:var(--grabado);font-stretch:80%;letter-spacing:.12em;text-transform:uppercase;font-weight:650}
+.mas:hover{background:var(--rack);color:var(--tinta)}
+.mas svg.i{width:14px;height:14px;transition:transform .2s}
+.widget.exp .mas svg.i{transform:rotate(180deg)}
+.cajon{display:none;border-top:1px solid var(--riel);background:#0C1626}
+.widget.exp .cajon{display:block}
+.gtabs{display:grid;grid-template-columns:repeat(4,1fr);padding:6px 8px 0;gap:2px}
+.gt{height:30px;font-stretch:75%;font-weight:700;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--tenue);border-bottom:2px solid transparent;position:relative;transition:color .15s}
+.gt:hover{color:var(--tinta)}
+.gt.on{color:var(--tinta);border-bottom-color:var(--mando)}
+.gt .bd{position:absolute;top:4px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--tally);display:none}
+.gt.bd-on .bd{display:block}
+.gt .bd.az{background:var(--mando)}
+.gpane{display:none;padding:8px;grid-template-columns:repeat(3,1fr);gap:4px}
+.gpane.on{display:grid}
+.lectvel{grid-column:span 2;border-radius:7px;border:1px dashed var(--riel);display:flex;align-items:center;justify-content:center;gap:10px;font:500 11px var(--mono);color:var(--grabado)}
+.lectvel b{color:var(--tinta);font-weight:500}
+.pista{padding:0 10px 9px;font-size:10.5px;color:var(--tenue);line-height:1.35}
+
+/* ---------- TELEPROMPTER ---------- */
+.tp{left:226px;top:38px;width:820px;height:290px;display:none}
+[data-scene=grabando] .tp{display:block}
+.tp-h{height:38px;display:flex;align-items:center;gap:4px;padding:0 12px;border-bottom:1px solid var(--riel)}
+.tp-h .tab{height:24px}
+.tp-h .mono{margin-left:auto;font-size:11px;color:var(--grabado)}
+.tp-h .mono b{color:var(--tinta);font-weight:500}
+.tp-txt{position:relative;height:178px;overflow:hidden;padding:0 56px}
+.tp-txt .rollo{position:absolute;left:56px;right:56px;top:-6px;font-size:34px;line-height:1.32;font-weight:500;letter-spacing:-.01em;outline:none}
+.tp-txt .rollo p{color:#53647F;transition:color .3s}
+.tp-txt .rollo p.ya{color:#33425B}
+.tp-txt .rollo p.aqui{color:#fff}
+.tp-txt .marca{position:absolute;left:22px;top:52px;width:0;height:0;border-left:13px solid var(--mando);border-top:9px solid transparent;border-bottom:9px solid transparent}
+.tp-txt .banda{position:absolute;left:0;right:0;top:40px;height:46px;background:rgba(58,123,255,.06);border-top:1px solid rgba(58,123,255,.18);border-bottom:1px solid rgba(58,123,255,.18)}
+.tp-txt::after{content:"";position:absolute;left:0;right:0;bottom:0;height:40px;background:linear-gradient(transparent,var(--sala));pointer-events:none}
+.tp-txt::before{content:"";position:absolute;left:0;right:0;top:0;height:34px;background:linear-gradient(var(--sala),transparent);pointer-events:none;z-index:1}
+.tp.edit .tp-txt .rollo p{color:#C9D5E6}
+.tp.edit .marca,.tp.edit .banda{display:none}
+.tp.edit .tp-txt{background:var(--pozo)}
+.tp-bar{height:74px;border-top:1px solid var(--riel);background:var(--rack);display:flex;align-items:center;gap:4px;padding:0 10px}
+.tp-bar .b{width:68px;height:54px}
+.tp-bar .sep{width:1px;height:34px;background:var(--riel);margin:0 6px}
+.tp-bar .hint{margin-left:auto;text-align:right;font:500 10.5px/1.6 var(--mono);color:var(--tenue)}
+.tp-bar .hint b{color:var(--grabado);font-weight:500;border:1px solid var(--riel);border-radius:3px;padding:0 4px}
+
+/* ---------- TARJETA DE ATAJOS ---------- */
+.card{right:24px;bottom:24px;width:384px;display:none;padding:14px 16px 12px}
+[data-scene=atajos] .card{display:block}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.card-h h2{font-size:15px;font-weight:650}
+.card-h .mono{font-size:10.5px;color:var(--tenue)}
+.card h3{margin:10px 0 3px}
+.fila{display:grid;grid-template-columns:1fr 104px;align-items:center;height:24px;font-size:12.5px;color:#D3DDEB}
+.keys{display:flex;justify-content:flex-end;gap:3px}
+.keys kbd{min-width:21px;height:20px;padding:0 4px;border-radius:4px;background:var(--rack);border:1px solid var(--riel2);border-bottom-width:2px;font:500 12px/17px var(--mono);color:var(--tinta);text-align:center}
+
+/* ---------- CUENTA ---------- */
+.cuenta{position:absolute;left:50%;top:50%;width:260px;height:260px;margin:-130px 0 0 -130px;border-radius:50%;background:var(--sala);box-shadow:0 0 0 1px rgba(0,0,0,.6),0 30px 80px rgba(0,0,0,.5);display:none;place-items:center}
+[data-scene=cuenta] .cuenta{display:grid}
+.cuenta svg{position:absolute;inset:14px;width:232px;height:232px;transform:rotate(-90deg)}
+.cuenta circle{fill:none;stroke-width:5}
+.cuenta .base{stroke:var(--riel)}
+.cuenta .arco{stroke:var(--tinta);stroke-dasharray:691;stroke-dashoffset:0;stroke-linecap:round}
+.cuenta .arco.corre{transition:stroke-dashoffset 1s linear;stroke-dashoffset:691}
+.cuenta .n{font:500 108px/1 var(--mono);letter-spacing:-.04em}
+.cuenta .lbl{position:absolute;bottom:52px;left:0;right:0;text-align:center}
+.cuenta .mini-tally{position:absolute;top:50px;left:50%;transform:translateX(-50%);height:20px;padding:0 10px;border-radius:4px;font-stretch:75%;font-weight:750;font-size:10px;letter-spacing:.26em;display:flex;align-items:center;gap:6px;color:#3B2A30;background:#120E12;border:1px solid var(--riel);transition:all .3s}
+.cuenta .mini-tally i{width:6px;height:6px;border-radius:50%;background:currentColor;display:block}
+.cuenta.vivo .mini-tally{background:var(--tally);color:#fff;border-color:var(--tally);box-shadow:0 0 16px rgba(255,94,77,.6)}
+
+/* ---------- ÁREA ---------- */
+.area-sel{position:absolute;inset:25px 0 0 0;display:none;cursor:crosshair;z-index:40}
+[data-scene=area] .area-sel{display:block}
+.area-sel .rect{position:absolute;box-shadow:0 0 0 9999px rgba(6,10,18,.6);outline:1px solid rgba(255,255,255,.5)}
+.area-sel .c{position:absolute;width:18px;height:18px;border:0 solid #fff}
+.area-sel .c1{left:-3px;top:-3px;border-left-width:3px;border-top-width:3px}
+.area-sel .c2{right:-3px;top:-3px;border-right-width:3px;border-top-width:3px}
+.area-sel .c3{left:-3px;bottom:-3px;border-left-width:3px;border-bottom-width:3px}
+.area-sel .c4{right:-3px;bottom:-3px;border-right-width:3px;border-bottom-width:3px}
+.area-sel .med{position:absolute;left:0;top:-30px;font:500 12px var(--mono);background:var(--sala);color:var(--tinta);padding:4px 8px;border-radius:5px;white-space:nowrap}
+.area-sel .med b{color:var(--grabado);font-weight:500}
+.area-sel .titulo{position:absolute;top:28px;left:50%;transform:translateX(-50%);background:var(--sala);border-radius:10px;padding:12px 18px;display:flex;align-items:center;gap:22px;box-shadow:0 0 0 1px rgba(0,0,0,.5),0 12px 30px rgba(0,0,0,.4);white-space:nowrap}
+.area-sel .titulo h2{font-size:16px;font-weight:650}
+.area-sel .titulo .k{font-size:12px;color:var(--grabado);display:flex;gap:6px;align-items:center}
+.area-sel kbd{height:20px;padding:0 6px;border-radius:4px;background:var(--rack);border:1px solid var(--riel2);border-bottom-width:2px;font:500 11px/16px var(--mono);color:var(--tinta)}
+
+/* ---------- Control de la maqueta (no es producto) ---------- */
+.mq{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:999;display:flex;gap:12px;align-items:center;background:rgba(250,250,250,.94);color:#222;border-radius:10px;padding:6px 8px;font:12px system-ui;box-shadow:0 4px 18px rgba(0,0,0,.25);border:1px solid rgba(0,0,0,.08)}
+.mq b{font-weight:700;letter-spacing:.06em;color:#888;font-size:10px;padding:0 4px}
+.mq .g{display:flex;gap:2px;background:#ececec;border-radius:7px;padding:2px}
+.mq button{padding:4px 9px;border-radius:5px;color:#333;font:12px system-ui}
+.mq button.on{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15);font-weight:600}
+
+@media (prefers-reduced-motion:reduce){
+  .tally{animation:none}
+  .cuenta .arco.corre{transition:none}
+  *{transition:none!important}
+}
+</style>
+</head>
+<body>
+<div id="mac" data-scene="antes" data-fondo="hoja">
+
+  <!-- Fondos: la app que está detrás -->
+  <div class="fondo f-hoja">
+    <div class="tb"><b>Procesos 2026.xlsx</b><span>Inicio</span><span>Insertar</span><span>Fórmulas</span><span>Datos</span></div>
+    <div class="grid" id="hoja"></div>
+  </div>
+  <div class="fondo f-n8n" id="n8n"></div>
+  <div class="fondo f-foto"></div>
+  <div class="tablero"><svg viewBox="0 0 1440 875" fill="none" stroke="#FFD400" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="260" y="300" width="240" height="120" rx="14"/><rect x="620" y="300" width="240" height="120" rx="14"/><rect x="980" y="300" width="240" height="120" rx="14"/>
+    <path d="M505 360c40 0 60 0 105 0M590 345l20 15-20 15M865 360c40 0 60 0 105 0M950 345l20 15-20 15"/>
+    <path d="M318 352c8-18 30-18 34 0s-10 30 6 30 18-30 30-30M352 372"/><path d="M680 345c20 30 40 30 60 0M700 380h50"/><path d="M1040 340l30 40 30-40v40"/>
+    <path d="M300 520c150 40 600 50 880 0" stroke-dasharray="2 14"/>
+    <path d="M610 560c10-20 40-20 50 0s-30 40-10 40 40-10 50-20"/>
+  </svg></div>
+
+  <!-- Barra de menú -->
+  <div class="menubar">
+    <svg viewBox="0 0 20 20" width="14" height="14" fill="#111"><path d="M13.6 10.6c0-2 1.6-2.9 1.7-3a3.7 3.7 0 0 0-2.9-1.6c-1.2-.1-2.4.7-3 .7s-1.6-.7-2.6-.7a3.9 3.9 0 0 0-3.3 2c-1.4 2.4-.4 6 1 8 .7 1 1.5 2 2.5 2s1.4-.7 2.6-.7 1.5.7 2.6.6 1.7-1 2.4-2a8 8 0 0 0 1.1-2.2 3.4 3.4 0 0 1-2.1-3.1zM11.7 4.7a3.4 3.4 0 0 0 .8-2.5 3.5 3.5 0 0 0-2.3 1.2 3.3 3.3 0 0 0-.8 2.4 2.9 2.9 0 0 0 2.3-1.1z"/></svg>
+    <b id="appname">Excel</b><span>Archivo</span><span>Edición</span><span>Ver</span><span>Insertar</span>
+    <div class="r">
+      <div class="mbicon"><svg viewBox="0 0 20 20" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5c-3.6 0-6 2.5-6 5.5 0 1.7.7 2.8 1.7 3.6v3h3v-2h2.6v2h3v-3c1-.8 1.7-1.9 1.7-3.6 0-3-2.4-5.5-6-5.5z"/><path d="M10 3.5v10.1M7 8.2c.8.4 1.6.4 3 0M10 10.5c1.3-.4 2.2-.4 3 .2"/></svg><span class="dot"></span><span class="t" id="mbtime">12:34</span></div>
+      <svg viewBox="0 0 20 20" fill="none" stroke-width="1.6" stroke-linecap="round"><path d="M3 8a10 10 0 0 1 14 0M5.5 10.7a6.5 6.5 0 0 1 9 0M8 13.3a3 3 0 0 1 4 0"/></svg>
+      <svg viewBox="0 0 24 20" style="width:22px" fill="none" stroke-width="1.4"><rect x="2" y="5" width="17" height="10" rx="2.5"/><rect x="4" y="7" width="11" height="6" rx="1" fill="#111" stroke="none"/><path d="M21 9v2"/></svg>
+      <span>lun 5 oct 10:42</span>
+    </div>
+  </div>
+  <div class="menu">
+    <div class="ttl">Grabador Bloomind</div><div class="sep"></div>
+    <div>Iniciar grabación…<span style="opacity:.55">⌃⌥⌘G</span></div><div class="dis">Detener grabación</div><div>Abrir carpeta de grabaciones</div><div>Atajos…</div><div class="sep"></div><div>Salir<span style="opacity:.55">⌘Q</span></div>
+  </div>
+
+  <!-- PANEL -->
+  <section class="win panel" id="panel">
+    <header class="p-head">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <h1><span>Bloomind</span>Grabador</h1>
+      <div class="estado" id="estado"><i></i><span>Listo para grabar</span></div>
+    </header>
+    <div class="p-body">
+      <div class="col">
+        <div class="monitor">
+          <div class="mon-top"><span class="eng">Monitor de salida</span><span class="mono" id="medida">2880 × 1800 · pantalla entera</span></div>
+          <div class="screen"><div class="mini hoja" id="mini"></div><div class="area"></div><div class="mbub"></div><div class="rec">ASÍ QUEDA EL VIDEO</div></div>
+          <div class="mon-ctl">
+            <div class="seg" id="segArea"><button class="on" data-a="0"><svg class="i"><use href="#i-pantalla"/></svg>Entera</button><button data-a="1"><svg class="i"><use href="#i-area"/></svg>Un área</button></div>
+            <div class="sel" style="flex:1"><span class="v">Retina integrada</span><svg class="i"><use href="#i-chev"/></svg></div>
+          </div>
+        </div>
+        <div class="sesion">
+          <label class="eng" for="ses">Nombre de la sesión</label>
+          <input id="ses" value="Clase 2.5 · n8n con cámara" spellcheck="false">
+          <div class="carpeta"><svg class="i" style="width:15px;height:15px"><use href="#i-carpeta"/></svg><span class="mono">~/Movies/Grabador Bloomind</span><button class="lnk">Cambiar</button></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="canal">
+          <div class="canal-h"><span class="eng">Audio</span><span class="st ok mono" id="db">−18 dB · buena voz</span></div>
+          <div class="audio">
+            <div class="stack">
+              <div class="seg" id="segAudio"><button class="on" title="Solo micrófono"><svg class="i"><use href="#i-mic"/></svg>Voz</button><button title="Solo sonido del sistema"><svg class="i"><use href="#i-parlante"/></svg>PC</button><button title="Micrófono y sistema mezclados">Voz + PC</button><button title="Sin audio">Nada</button></div>
+              <div class="sel"><svg class="i" style="color:var(--grabado)"><use href="#i-mic"/></svg><span class="v">Micrófono DJI vía iPhone</span><svg class="i"><use href="#i-chev"/></svg></div>
+            </div>
+            <div class="vu" id="vu"></div>
+          </div>
+        </div>
+        <div class="canal">
+          <div class="canal-h"><span class="eng">Cámara</span><span class="st">Burbuja a la vista</span></div>
+          <div class="cam-row"><div class="sel"><svg class="i" style="color:var(--grabado)"><use href="#i-cam"/></svg><span class="v">Cámara FaceTime HD</span><svg class="i"><use href="#i-chev"/></svg></div></div>
+          <p class="nota">Arrastrá la burbuja a donde la quieras: en el video queda en ese mismo lugar.</p>
+        </div>
+        <div class="canal">
+          <div class="canal-h"><span class="eng">Guion</span><span class="st">Sale solo al grabar</span></div>
+          <div class="tabs"><button class="tab on">Intro</button><button class="tab">Desarrollo</button><button class="tab">Cierre</button><button class="tab">Escrito</button></div>
+          <div class="lectura">Hola a todos. Hoy vamos a conectar un formulario de Google con una hoja de cálculo y a mandar un correo de confirmación sin escribir código.</div>
+          <div class="perillas">
+            <div class="perilla">Velocidad <button class="step">−</button><span class="mono">2.0</span><button class="step">+</button></div>
+            <div class="perilla">Letra <button class="step">−</button><span class="mono">38</span><button class="step">+</button></div>
+            <button class="lnk" title="Traer guiones de Word, texto o RTF">Archivos…</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="p-foot">
+      <div class="tallybox" title="Se prende cuando arranca la grabación"><i></i>AL AIRE</div>
+      <div class="chk on" id="chk"><b></b>Cuenta 3, 2, 1</div>
+      <button class="grabar"><span class="o"></span>Grabar<span class="k">⌃⌥⌘G</span></button>
+    </footer>
+  </section>
+
+  <div class="burbuja" title="Arrastrá para mover · esquina para cambiar el tamaño"></div>
+
+  <!-- TELEPROMPTER -->
+  <section class="win tp" id="tp">
+    <div class="tp-h"><button class="tab on">Intro</button><button class="tab">Desarrollo</button><button class="tab">Cierre</button><span class="mono">velocidad <b>2.0</b> · letra <b>34</b> · ⌥⌘T esconde</span></div>
+    <div class="tp-txt"><div class="banda"></div><div class="marca"></div>
+      <div class="rollo" id="rollo">
+        <p class="ya">Hola a todos, bienvenidos.</p>
+        <p class="aqui">Hoy vamos a conectar un formulario</p>
+        <p>de Google con una hoja de cálculo</p>
+        <p>y a mandar un correo de confirmación</p>
+        <p>sin escribir una sola línea de código.</p>
+      </div>
+    </div>
+    <div class="tp-bar" id="tpbar"></div>
+  </section>
+
+  <!-- WIDGET -->
+  <aside class="widget" id="widget">
+    <div class="tally"><i></i><span id="tallytxt">AL AIRE</span></div>
+    <div class="tc"><span class="mono" id="tc"><s>00:</s>12:34</span><svg class="i grip"><use href="#i-grip"/></svg></div>
+    <div class="detalle" id="det"></div>
+    <div class="alertas" id="alertas"></div>
+    <div class="mandos" id="mandos"></div>
+    <button class="mas" id="mas"><span id="mastxt">Más mandos</span><svg class="i"><use href="#i-chev"/></svg></button>
+    <div class="cajon">
+      <div class="gtabs" id="gtabs"></div>
+      <div id="gpanes"></div>
+      <p class="pista" id="pista"></p>
+    </div>
+  </aside>
+
+  <!-- TARJETA DE ATAJOS -->
+  <section class="win card" id="card"></section>
+
+  <!-- CUENTA -->
+  <div class="cuenta" id="cuenta"><div class="mini-tally"><i></i>AL AIRE</div><svg viewBox="0 0 232 232"><circle class="base" cx="116" cy="116" r="110"/><circle class="arco" id="arco" cx="116" cy="116" r="110"/></svg><span class="n" id="num">3</span><span class="eng lbl">Arranca en</span></div>
+
+  <!-- ÁREA -->
+  <div class="area-sel" id="areasel">
+    <div class="rect" id="rect"><i class="c c1"></i><i class="c c2"></i><i class="c c3"></i><i class="c c4"></i><span class="med" id="med"></span></div>
+    <div class="titulo"><h2>Elegí el área a grabar</h2><span class="k"><kbd>↩</kbd> confirma</span><span class="k"><kbd>esc</kbd> cancela</span></div>
+  </div>
+</div>
+
+<!-- Control de la maqueta: no es parte del producto -->
+<div class="mq" id="mq">
+  <b>MAQUETA A</b>
+  <div class="g" id="q-scene"></div>
+  <div class="g" id="q-fondo"></div>
+  <div class="g" id="q-exp"></div>
+</div>
+
+<!-- Íconos dibujados: trazo 1.6, caja de 20 -->
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-pausa" viewBox="0 0 20 20"><path d="M7 4.5v11M13 4.5v11" stroke-width="2.4"/></symbol>
+  <symbol id="i-play" viewBox="0 0 20 20"><path d="M6.5 4.3v11.4L15.6 10z" fill="currentColor"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 20 20"><rect x="5" y="5" width="10" height="10" rx="1.6" fill="currentColor"/></symbol>
+  <symbol id="i-reinicio" viewBox="0 0 20 20"><path d="M4.6 10.4a5.5 5.5 0 1 0 1.7-4.4"/><path d="M5.6 3.4v3h3"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 20 20"><rect x="2.5" y="5.5" width="10.5" height="9" rx="2"/><path d="M13 9.2l4.5-2.4v6.4L13 10.8"/></symbol>
+  <symbol id="i-camoff" viewBox="0 0 20 20"><rect x="2.5" y="5.5" width="10.5" height="9" rx="2"/><path d="M13 9.2l4.5-2.4v6.4L13 10.8"/><path d="M3 3.5l14 13"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 20 20"><rect x="7.5" y="2.5" width="5" height="9.5" rx="2.5"/><path d="M4.6 9.6a5.4 5.4 0 0 0 10.8 0M10 15v2.6"/></symbol>
+  <symbol id="i-micoff" viewBox="0 0 20 20"><rect x="7.5" y="2.5" width="5" height="9.5" rx="2.5"/><path d="M4.6 9.6a5.4 5.4 0 0 0 10.8 0M10 15v2.6"/><path d="M3.5 3.5l13 13"/></symbol>
+  <symbol id="i-parlante" viewBox="0 0 20 20"><path d="M3.5 7.6h3l4-3.4v11.6l-4-3.4h-3z"/><path d="M13.6 7.6a3.4 3.4 0 0 1 0 4.8M15.8 5.4a6.5 6.5 0 0 1 0 9.2"/></symbol>
+  <symbol id="i-parlanteoff" viewBox="0 0 20 20"><path d="M3.5 7.6h3l4-3.4v11.6l-4-3.4h-3z"/><path d="M13.5 8l4 4M17.5 8l-4 4"/></symbol>
+  <symbol id="i-guion" viewBox="0 0 20 20"><rect x="4.5" y="2.8" width="11" height="14.4" rx="1.5"/><path d="M7.4 6.6h5.2M7.4 9.6h5.2M7.4 12.6h3.2"/></symbol>
+  <symbol id="i-pantalla" viewBox="0 0 20 20"><rect x="2.5" y="3.5" width="15" height="10" rx="1.5"/><path d="M7 16.8h6M10 13.5v3.3"/></symbol>
+  <symbol id="i-camfull" viewBox="0 0 20 20"><rect x="2.5" y="3.5" width="15" height="13" rx="2"/><circle cx="10" cy="8.6" r="2.3"/><path d="M5.6 16.4c.9-2.4 2.5-3.6 4.4-3.6s3.5 1.2 4.4 3.6"/></symbol>
+  <symbol id="i-tablero" viewBox="0 0 20 20"><rect x="2.5" y="3" width="15" height="11" rx="1"/><path d="M6.2 17.5l1.9-3.5M13.8 17.5l-1.9-3.5M5.6 10.6c1.6-2.6 2.6-.8 4.2-2.8s2.8-.2 4.6-2"/></symbol>
+  <symbol id="i-lienzo" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.5"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></symbol>
+  <symbol id="i-deshacer" viewBox="0 0 20 20"><path d="M7.6 5L4 8.6l3.6 3.6"/><path d="M4 8.6h7.6a4 4 0 0 1 0 8H9"/></symbol>
+  <symbol id="i-borrar" viewBox="0 0 20 20"><path d="M11.6 3.6l4.8 4.8-7.8 7.8H5.2l-1.6-1.6a1.4 1.4 0 0 1 0-2z"/><path d="M8 7.2l4.8 4.8M10 16.2h6.5"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 20 20"><path d="M6 4.5l9 4.6-3.9 1.2 2.4 4.6-1.7.9-2.4-4.6L6.3 13.6z"/><path d="M3.2 6.6l-1-1M5.8 2.6l-.3-1.2M2.7 10.2l-1.2.3" /></symbol>
+  <symbol id="i-censura" viewBox="0 0 20 20"><rect x="3" y="6" width="14" height="8" rx="1" fill="currentColor" opacity=".35"/><rect x="3" y="6" width="14" height="8" rx="1"/><path d="M6 10h8"/></symbol>
+  <symbol id="i-redibujar" viewBox="0 0 20 20"><rect x="3.5" y="5" width="13" height="10" rx="1" stroke-dasharray="2.3 2.1"/><path d="M14 2.5v4M12 4.5h4"/></symbol>
+  <symbol id="i-marcador" viewBox="0 0 20 20"><path d="M12.6 3.4l4 4-7.6 7.6H5v-4z"/><path d="M10.6 5.4l4 4M3.5 17.5h6"/></symbol>
+  <symbol id="i-color" viewBox="0 0 20 20"><circle cx="10" cy="10" r="6.6"/><circle cx="7.6" cy="7.8" r="1.2" fill="currentColor"/><circle cx="12.4" cy="7.8" r="1.2" fill="currentColor"/><circle cx="10" cy="12.6" r="1.2" fill="currentColor"/></symbol>
+  <symbol id="i-atajos" viewBox="0 0 20 20"><rect x="2.5" y="5.5" width="15" height="9.5" rx="1.6"/><path d="M5.6 8.6h.8M9.6 8.6h.8M13.6 8.6h.8M6.6 11.8h6.8"/></symbol>
+  <symbol id="i-inicio" viewBox="0 0 20 20"><path d="M5 4.5v11"/><path d="M15 4.8L8.4 10l6.6 5.2z" fill="currentColor"/></symbol>
+  <symbol id="i-lento" viewBox="0 0 20 20"><path d="M3.5 14a6.5 6.5 0 0 1 13 0"/><path d="M10 14L6.4 9.6" stroke-width="2"/><circle cx="10" cy="14" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-rapido" viewBox="0 0 20 20"><path d="M3.5 14a6.5 6.5 0 0 1 13 0"/><path d="M10 14l3.6-4.4" stroke-width="2"/><circle cx="10" cy="14" r="1" fill="currentColor"/></symbol>
+  <symbol id="i-letramenos" viewBox="0 0 20 20"><path d="M5 15l3-8 3 8M6.1 12.4h3.8" /><path d="M13 9.5h4.5"/></symbol>
+  <symbol id="i-letramas" viewBox="0 0 20 20"><path d="M3 16.5l4-11 4 11M4.5 13h5"/><path d="M13 9.5h4.5M15.25 7.25v4.5"/></symbol>
+  <symbol id="i-editar" viewBox="0 0 20 20"><path d="M4 16l.9-3.8 8.4-8.4 2.9 2.9-8.4 8.4z"/><path d="M11.6 5.5l2.9 2.9"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 20 20"><path d="M5.5 8l4.5 4.5L14.5 8"/></symbol>
+  <symbol id="i-carpeta" viewBox="0 0 20 20"><path d="M2.5 6v9a1 1 0 0 0 1 1h13a1 1 0 0 0 1-1V7.6a1 1 0 0 0-1-1H10L8.4 4.5h-4.9a1 1 0 0 0-1 1z"/></symbol>
+  <symbol id="i-area" viewBox="0 0 20 20"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 20 20"><g fill="currentColor" stroke="none"><circle cx="7" cy="5" r="1.2"/><circle cx="13" cy="5" r="1.2"/><circle cx="7" cy="10" r="1.2"/><circle cx="13" cy="10" r="1.2"/><circle cx="7" cy="15" r="1.2"/><circle cx="13" cy="15" r="1.2"/></g></symbol>
+</svg>
+
+<script>
+const $=s=>document.querySelector(s), mac=$('#mac');
+const ic=(id,cls='i')=>`<svg class="${cls}"><use href="#i-${id}"/></svg>`;
+
+/* Fondos */
+(()=>{const cols=['','Proceso','Juzgado','Cliente','Próxima audiencia','Estado',''];
+ const rows=[['11001-31-03-012-2025-00412','Civil 12 de Bogotá','Inversiones Andina','12 nov 2026','Pruebas'],['05001-40-03-004-2026-00087','Civil Municipal 4 Med.','Laura Restrepo','20 oct 2026','Admisión'],['76001-31-05-002-2025-00931','Laboral 2 de Cali','Transportes del Valle','3 dic 2026','Alegatos'],['11001-33-35-019-2026-00144','Administrativo 19','Clínica San Rafael','—','Traslado'],['08001-31-10-006-2026-00022','Familia 6 Barranquilla','Martínez Ospina','28 oct 2026','Conciliación']];
+ let h=cols.map((c,i)=>`<div class="h">${i? String.fromCharCode(64+i):''}</div>`).join('');
+ h+=cols.map((c,i)=>`<div class="${i?'k':'h'}">${i?c:1}</div>`).join('');
+ for(let r=0;r<30;r++){const d=rows[r%5];h+=`<div class="h">${r+2}</div>`+d.map(x=>`<div>${x}</div>`).join('')+'<div></div>'}
+ $('#hoja').innerHTML=h;
+ const N=[[180,300,'Formulario de Google','#6c5ce7'],[430,220,'Si es nuevo','#00b894'],[680,160,'Hoja de cálculo','#0f9d58'],[680,380,'Gmail','#ea4335'],[930,270,'Avisar en Slack','#e17055']];
+ $('#n8n').innerHTML=`<svg style="position:absolute;inset:0;width:100%;height:100%" fill="none" stroke="#6b6f80" stroke-width="2"><path d="M330 336C380 336 380 256 430 256M580 256C630 256 630 196 680 196M580 256C630 256 630 416 680 416M830 196C880 196 880 306 930 306"/></svg>`+N.map(n=>`<div class="node" style="left:${n[0]}px;top:${n[1]}px"><i style="background:${n[3]}"></i>${n[2]}</div>`).join('');
+})();
+
+/* VU */
+const vu=$('#vu');vu.innerHTML=Array.from({length:14},(_,i)=>`<i class="${i>=12?'c':i>=10?'w':''}"></i>`).join('');
+let lvl=6;const segs=[...vu.children];
+setInterval(()=>{if(mac.dataset.scene!=='antes')return;lvl+=(Math.random()-.48)*3;lvl=Math.max(2,Math.min(12.4,lvl));segs.forEach((s,i)=>s.classList.toggle('on',i<lvl));
+ $('#db').textContent=`−${Math.round(34-lvl*2)} dB · ${lvl>10?'cuidado, satura':'buena voz'}`;$('#db').classList.toggle('ok',lvl<=10)},90);
+
+/* Panel */
+$('#segArea').onclick=e=>{const b=e.target.closest('button');if(!b)return;[...$('#segArea').children].forEach(x=>x.classList.toggle('on',x===b));
+ const a=b.dataset.a==='1';$('#panel').classList.toggle('con-area',a);$('#medida').textContent=a?'1648 × 1104 · un área':'2880 × 1800 · pantalla entera'};
+$('#segAudio').onclick=e=>{const b=e.target.closest('button');if(b)[...$('#segAudio').children].forEach(x=>x.classList.toggle('on',x===b))};
+$('#chk').onclick=()=>$('#chk').classList.toggle('on');
+document.querySelectorAll('.tabs,.tp-h').forEach(t=>t.onclick=e=>{const b=e.target.closest('.tab');if(b)[...t.querySelectorAll('.tab')].forEach(x=>x.classList.toggle('on',x===b))});
+$('#estado').ondblclick=()=>{const e=$('#estado');e.classList.toggle('err');e.querySelector('span').innerHTML=e.classList.contains('err')?'Falta el permiso de micrófono · <a>Abrir Configuración</a>':'Listo para grabar'};
+
+/* Widget */
+const B=(id,l,k,cls='',x='')=>`<button class="b ${cls}" ${x} title="${l}"><span class="kbd">${k||''}</span>${ic(id)}<span>${l}</span></button>`;
+const grupos={
+ fuente:{t:'Fuente',p:()=>B('pantalla','Pantalla','⌥⌘1',st.modo==='pantalla'?'on':'')+B('camfull','Cám. full','⌥⌘2',st.modo==='camara'?'on':'')+B('tablero','Tablero','⌥⌘3',st.modo==='tablero'?'on':''),pista:'Lo que entra al video. La burbuja se suma encima de Pantalla y Tablero.'},
+ tablero:{t:'Tablero',p:()=>{const d=st.modo==='tablero'||st.marca;return B('lienzo','Lienzo','⌥⌘B','',st.modo==='tablero'?'':'disabled')+B('deshacer','Deshacer','⌥⌘Z','',d?'':'disabled')+B('borrar','Borrar','⌥⌘⌫','',d?'':'disabled')},pista:'Se activa con el tablero o con el marcador prendido.'},
+ marcar:{t:'Marcar',p:()=>B('cursor','Cursor','⌥⌘A',st.cursor?'on':'')+B('censura','Censura','⌥⌘C',st.censura?'mudo':'')+B('redibujar','Redibujar','⇧⌥⌘C')+B('marcador','Marcador','⌥⌘D',st.marca?'on':'')+B('color','Color','⌥⌘0')+B('atajos','Atajos','⌥⌘H'),pista:'El círculo del cursor solo se ve en el video, no en tu pantalla.'},
+ guion:{t:'Guion',p:()=>{const v=st.tp?'':'disabled';return `<button class="b ancho ${st.corre?'on':''}" ${v}>${ic(st.corre?'pausa':'play')}<span>${st.corre?'Pausa':'Play'}</span></button>`+B('inicio','Al inicio','','',v)+B('lento','Más lento','','',v)+B('rapido','Más rápido','','',v)+B('editar','Editar','','',v)+B('letramenos','Letra −','','',v)+B('letramas','Letra +','','',v)+`<div class="lectvel" style="grid-column:span 1">2.0×</div>`},pista:'Prendé el guion arriba para manejarlo desde acá.'}
+};
+const st={modo:'pantalla',pausa:false,mic:false,pc:false,cam:true,tp:true,corre:true,censura:false,cursor:true,marca:false,exp:false,tab:'fuente'};
+function pintarWidget(){
+ const w=$('#widget');w.classList.toggle('pausa',st.pausa);w.classList.toggle('exp',st.exp);
+ w.classList.toggle('dibuja',st.modo==='tablero'||st.marca);
+ $('#tallytxt').textContent=st.pausa?'EN PAUSA':'AL AIRE';
+ const det=[{pantalla:'Pantalla',camara:'Cámara completa',tablero:'Tablero'}[st.modo]];
+ if(st.modo==='tablero'||st.marca)det.push('marcador amarillo');if(!st.cursor)det.push('sin cursor');
+ $('#det').innerHTML='<span class="pt"></span><span>'+det.join(' · ')+'</span>';
+ const al=[];if(st.mic&&st.pc)al.push(['micoff','Sin audio']);else{if(st.mic)al.push(['micoff','Micrófono mudo']);if(st.pc)al.push(['parlanteoff','Sonido del PC mudo'])}
+ if(st.censura)al.push(['censura','Censura tapando']);
+ $('#alertas').innerHTML=al.map(a=>`<div>${ic(a[0])}${a[1]}</div>`).join('');w.classList.toggle('alerta',al.length>0);
+ $('#mandos').innerHTML=
+  `<button class="b ancho" data-x="pausa" title="Pausar / reanudar"><span class="kbd">⌥⌘P</span>${ic(st.pausa?'play':'pausa')}<span>${st.pausa?'Reanudar':'Pausar'}</span></button>`+
+  B('stop','Detener','⌃⌥⌘G')+
+  B(st.mic?'micoff':'mic','Micrófono','⌥⌘M',st.mic?'mudo':'','data-x="mic"')+
+  B(st.pc?'parlanteoff':'parlante','Sonido PC','⌥⌘S',st.pc?'mudo':'','data-x="pc"')+
+  B(st.cam?'cam':'camoff','Cámara','',st.cam?'on':'','data-x="cam"')+
+  B('guion','Guion','⌥⌘T',st.tp?'on':'','data-x="tp"')+
+  B('reinicio','Reiniciar','⌥⌘R')+
+  B('atajos','Atajos','⌥⌘H');
+ $('#gtabs').innerHTML=Object.entries(grupos).map(([k,g])=>{let bd='';if(k==='marcar'&&st.censura)bd='bd-on';if(k==='guion'&&st.corre&&st.tp)bd='bd-on az';if(k==='tablero'&&(st.modo==='tablero'||st.marca))bd='bd-on az';
+   return `<button class="gt ${st.tab===k?'on':''} ${bd.includes('bd-on')?'bd-on':''}" data-t="${k}">${g.t}<i class="bd ${bd.includes('az')?'az':''}"></i></button>`}).join('');
+ $('#gpanes').innerHTML=Object.entries(grupos).map(([k,g])=>`<div class="gpane ${st.tab===k?'on':''}">${g.p()}</div>`).join('');
+ $('#pista').textContent=grupos[st.tab].pista;
+ $('#mastxt').textContent=st.exp?'Menos mandos':'Más mandos';
+}
+$('#widget').onclick=e=>{const t=e.target.closest('[data-t]');if(t){st.tab=t.dataset.t;return pintarWidget()}
+ const x=e.target.closest('[data-x]');if(!x)return;const k=x.dataset.x;
+ if(k==='pausa')st.pausa=!st.pausa;else if(k in st)st[k]=!st[k];if(k==='tp')$('#tp').style.display=st.tp?'':'none';pintarWidget()};
+$('#mas').onclick=()=>{st.exp=!st.exp;q.exp=st.exp;pintarMq();pintarWidget()};
+
+/* Teleprompter */
+$('#tpbar').innerHTML=`<button class="b on" data-tp="play">${ic('pausa')}<span>Pausa</span></button>`+B('inicio','Al inicio')+`<span class="sep"></span>`+B('lento','Más lento')+B('rapido','Más rápido')+`<span class="sep"></span>`+B('letramenos','Letra −')+B('letramas','Letra +')+`<span class="sep"></span>`+`<button class="b" data-tp="edit">${ic('editar')}<span>Editar</span></button>`+
+ `<div class="hint"><b>espacio</b> play · <b>↑</b><b>↓</b> velocidad<br><b>⌘+</b><b>⌘−</b> letra</div>`;
+$('#tpbar').onclick=e=>{const b=e.target.closest('[data-tp]');if(!b)return;
+ if(b.dataset.tp==='edit'){const on=$('#tp').classList.toggle('edit');b.classList.toggle('on',on);b.querySelector('span').textContent=on?'Leer':'Editar';$('#rollo').contentEditable=on}
+ else{st.corre=!st.corre;b.classList.toggle('on',st.corre);b.innerHTML=`${ic(st.corre?'pausa':'play')}<span>${st.corre?'Pausa':'Play'}</span>`;pintarWidget()}};
+let li=1;setInterval(()=>{if(mac.dataset.scene!=='grabando'||!st.corre||$('#tp').classList.contains('edit'))return;const ps=[...$('#rollo').children];li=(li+1)%ps.length||1;
+ ps.forEach((p,i)=>{p.className=i<li?'ya':i===li?'aqui':''});$('#rollo').style.transform=`translateY(${-(li-1)*45}px)`;$('#rollo').style.transition='transform .6s ease'},2600);
+
+/* Tarjeta */
+const A=[['Grabación',[['Iniciar / detener grabación','⌃⌥⌘G'],['Pausar / reanudar','⌥⌘P'],['Reiniciar toma','⌥⌘R'],['Silenciar micrófono','⌥⌘M'],['Silenciar audio del sistema','⌥⌘S'],['Teleprompter on / off','⌥⌘T'],['Mostrar / esconder el widget','⌥⌘W']]],
+ ['Fuente',[['Modo pantalla','⌥⌘1'],['Modo cámara completa','⌥⌘2'],['Modo tablero','⌥⌘3']]],
+ ['Tablero',[['Tablero blanco / negro','⌥⌘B'],['Deshacer último trazo','⌥⌘Z'],['Borrar la superficie activa','⌥⌘⌫']]],
+ ['Marcar',[['Capa de anotación','⌥⌘D'],['Resaltado del cursor','⌥⌘A'],['Rotar color del marcador','⌥⌘0'],['Censura on / off','⌥⌘C'],['Redibujar la zona censurada','⇧⌥⌘C'],['Tarjeta de atajos','⌥⌘H']]]];
+$('#card').innerHTML=`<div class="card-h"><h2>Atajos</h2><span class="mono">soltá ⌥⌘H para cerrar</span></div>`+
+ A.map(([g,l])=>`<h3 class="eng">${g}</h3>`+l.map(([n,k])=>`<div class="fila"><span>${n}</span><span class="keys">${[...k].map(c=>`<kbd>${c}</kbd>`).join('')}</span></div>`).join('')).join('');
+
+/* Cuenta regresiva */
+let ct;function cuenta(){clearTimeout(ct);const c=$('#cuenta'),n=$('#num'),a=$('#arco');let i=3;c.classList.remove('vivo');
+ const paso=()=>{if(mac.dataset.scene!=='cuenta')return;if(i===0){c.classList.add('vivo');n.textContent='●';n.style.color='var(--tally)';n.style.fontSize='64px';ct=setTimeout(()=>{n.style='';cuenta()},1800);return}
+  n.textContent=i;a.classList.remove('corre');a.getBoundingClientRect();a.classList.add('corre');i--;ct=setTimeout(paso,1000)};paso()}
+
+/* Área */
+(()=>{const s=$('#areasel'),r=$('#rect');let o=null;const set=(x,y,w,h)=>{Object.assign(r.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'});$('#med').innerHTML=`${Math.round(w*2)} × ${Math.round(h*2)} <b>px</b>`};
+ set(300,170,824,464);
+ s.onmousedown=e=>{const b=s.getBoundingClientRect(),k=b.width/1440;o=[(e.clientX-b.left)/k,(e.clientY-b.top)/k,k,b]};
+ s.onmousemove=e=>{if(!o)return;const x=(e.clientX-o[3].left)/o[2],y=(e.clientY-o[3].top)/o[2];set(Math.min(x,o[0]),Math.min(y,o[1]),Math.abs(x-o[0]),Math.abs(y-o[1]))};
+ addEventListener('mouseup',()=>o=null)})();
+
+/* Escenas */
+const q={scene:'antes',fondo:'hoja',exp:false};
+const SC=[['antes','Antes de grabar'],['cuenta','Cuenta'],['grabando','Grabando'],['problemas','Problemas'],['atajos','Atajos'],['area','Elegir área']];
+function aplicar(){
+ mac.dataset.scene=q.scene;mac.dataset.fondo=q.fondo;
+ $('#appname').textContent={hoja:'Excel',n8n:'Chrome',foto:'Fotos'}[q.fondo];
+ $('#mini').className='mini '+q.fondo;$('#mini').innerHTML=q.fondo==='n8n'?'<b style="left:12%;top:36%"></b><b style="left:32%;top:26%"></b><b style="left:52%;top:18%"></b><b style="left:52%;top:46%"></b><b style="left:72%;top:31%"></b>':'';
+ const P=q.scene==='problemas';$('.tablero').style.display=P?'block':'none';
+ Object.assign(st,P?{modo:'tablero',pausa:true,mic:true,pc:false,cam:false,tp:false,corre:false,censura:true,cursor:false,marca:false,tab:'tablero'}:{modo:'pantalla',pausa:false,mic:false,pc:false,cam:true,tp:true,corre:true,censura:false,cursor:true,marca:false,tab:'guion'});
+ st.exp=q.exp;$('#tp').style.display='';$('#tp').classList.remove('edit');
+ $('#tc').innerHTML=P?'<s>00:</s>27:08':'<s>00:</s>12:34';$('#mbtime').textContent=P?'27:08':'12:34';
+ pintarWidget();if(q.scene==='cuenta')cuenta();pintarMq();
+ history.replaceState(null,'','#'+q.scene+(q.exp?'&exp':'')+(q.fondo!=='hoja'?'&fondo='+q.fondo:''));
+}
+function pintarMq(){
+ $('#q-scene').innerHTML=SC.map(([k,l])=>`<button class="${q.scene===k?'on':''}" data-s="${k}">${l}</button>`).join('');
+ $('#q-fondo').innerHTML=[['hoja','Excel'],['n8n','n8n'],['foto','Foto']].map(([k,l])=>`<button class="${q.fondo===k?'on':''}" data-f="${k}">${l}</button>`).join('');
+ $('#q-exp').innerHTML=`<button class="${!q.exp?'on':''}" data-e="0">Compacto</button><button class="${q.exp?'on':''}" data-e="1">Expandido</button>`;
+}
+$('#mq').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.s)q.scene=b.dataset.s;if(b.dataset.f)q.fondo=b.dataset.f;if(b.dataset.e)q.exp=b.dataset.e==='1';aplicar()};
+const h=location.hash.slice(1).split('&');if(h[0]&&SC.some(s=>s[0]===h[0]))q.scene=h[0];q.exp=h.includes('exp');const f=h.find(x=>x.startsWith('fondo='));if(f)q.fondo=f.slice(6);
+if(h.includes('sinmq'))$('#mq').style.display='none';
+function escala(){const k=Math.min(innerWidth/1440,innerHeight/900);mac.style.transform=`scale(${k})`;mac.style.left=(innerWidth-1440*k)/2+'px';mac.style.top=(innerHeight-900*k)/2+'px'}
+addEventListener('resize',escala);escala();aplicar();
+</script>
+</body>
+</html>

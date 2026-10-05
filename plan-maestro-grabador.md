@@ -267,13 +267,13 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 - Cuenta regresiva 3, 2, 1 antes de arrancar (configurable on/off). El archivo empieza después del conteo.
 - Widget flotante durante la grabación: pequeño, arrastrable, siempre encima, excluido de la captura. Muestra tiempo transcurrido, estado (grabando o pausado), modo activo, indicador de censura activa, color del marcador cuando aplica, y **qué fuentes de audio están silenciadas**.
 - **Todas las acciones que tienen atajo tienen también botón en el widget**, más los controles del teleprompter (8.7-bis). Los atajos siguen funcionando igual: los botones son una vía alternativa, nunca un reemplazo.
-- **Cada botón lleva su nombre escrito debajo del ícono** (decisión 99). Un ícono solo obliga a adivinar o a esperar el tooltip, y en vivo no hay tiempo para ninguna de las dos cosas. El nombre es corto y propio del widget; el nombre largo del registro de acciones queda en el tooltip, la tarjeta de atajos y las preferencias.
-- **Los botones van agrupados y cada grupo lleva su título** (decisión 100): *Comandos de grabación*, *Pantalla a grabar*, *Comandos* y *Comandos tableros*. El primero se ve también en el modo compacto; los otros tres aparecen con sus filas al expandir.
-- **Los botones que tienen estado lo muestran con el fondo lleno** (decisión 101): azul de marca lo que está prendido (cámara, modo activo, resaltado del cursor, marcador), coral lo que está tapando o silenciando (censura, micrófono o sistema en mudo), fondo tenue lo apagado. El resaltado del cursor además se anuncia como "sin cursor" en la línea de estado: es lo único que no se puede ver en la pantalla de quien graba, porque el círculo solo existe en el video.
-- **Dos modos, con un botón para alternar entre ellos:**
-  - **Compacto:** tiempo y estado, más el grupo *Comandos de grabación*: pausar/reanudar, detener, reiniciar toma, cámara on/off (con su menú de selección), silenciar micrófono, silenciar audio del sistema, y el teleprompter on/off.
-  - **Expandido:** todo lo anterior más tres grupos. *Pantalla a grabar*: los tres modos de fuente. *Comandos*: resaltado del cursor, censura on/off, redibujar la zona, capa de anotación, rotar color del marcador. *Comandos tableros*: tablero blanco/negro, deshacer, borrar la superficie activa, la tarjeta de atajos. Y la fila del teleprompter (play y pausa, reiniciar al principio, velocidad, tamaño de letra, editar el guion).
-  - El modo elegido se recuerda en la configuración. El reparto exacto de botones entre compacto y expandido se cierra con Sebas al construirlo, sobre esta base.
+- **Desde la adenda 2 (2026-10-05) el widget es una cápsula** (decisiones 124 a 127, que reemplazan a la 99, 100, 102, 109, 111 y 113):
+  - **Siempre a la vista**, cada uno con su nombre debajo: el cronómetro, pausar/reanudar, detener, reiniciar toma, silenciar micrófono, silenciar audio del sistema y cámara (con su menú de selección).
+  - **Cuatro botones de grupo**, cada uno con un menú chico que lleva el atajo al lado de cada acción, se cierra solo y nunca convive con otro abierto. *Qué se ve*: los tres modos de fuente. *Tablero*: pasar al tablero, lienzo blanco/negro, deshacer y borrar. *Sobre la pantalla*: resaltado del cursor, marcador con su color, censura on/off y redibujar la zona. *Guion*: el teleprompter on/off y sus controles (play y pausa, volver al inicio, velocidad, tamaño de letra, editar).
+  - **Modo mini**: un botón deja solo una pastilla con el punto y el cronómetro, que se toca para volver y se recuerda en la configuración. Reemplaza al compacto y al expandido.
+  - **Alertas**: cada estado grave (una fuente de audio en mudo, la censura puesta) es una pastilla coral grande bajo la cápsula, visible también en modo mini, que se deshace al tocarla. Los botones sueltos siguen pintando su estado: azul lo prendido, coral lo que calla o tapa.
+  - La tarjeta de atajos ya no tiene botón en el widget: se abre con su atajo y desde la barra de menú.
+  - Bajo el cronómetro va una frase de estado (modo, marcador, «sin cursor»), y Lienzo, Deshacer, Borrar y la pausa del guion aparecen sueltos en la cápsula solo cuando aplican (decisión 124).
 - Los dos botones de audio quedan deshabilitados para las fuentes que no se eligieron antes de arrancar: no son un atajo para encenderlas, solo para callarlas. Los controles del teleprompter quedan deshabilitados mientras el teleprompter está apagado.
 - **Los botones tienen que seguir siendo clicables con la capa de dibujo activa.** Con la capa de anotación o el tablero prendidos el mouse queda capturado por esa ventana en toda la pantalla, y ahí es justo donde más falta hacen los botones. Se resuelve con **niveles de ventana**: el widget y el teleprompter viven en un nivel superior al de la superficie de dibujo, y el sistema entrega el clic a la ventana que esté encima en ese punto (decisión 93). No se resuelve con zonas de exclusión en la capa de dibujo. Efecto secundario aceptado: lo que se dibuje debajo del widget o del teleprompter queda tapado en la pantalla del operador, aunque el trazo sí se compone en el video; se corrige moviendo el widget.
 - Pausar congela todos los tracks coherentemente; reanudar es inmediato, sin conteo.
@@ -284,6 +284,8 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 ### 8.10 Panel de configuración pre grabación
 
 Aparece al iniciar una grabación (o desde el menu bar). Contiene: display o área personalizada, modo de audio y dispositivo de micrófono con su indicador de nivel en vivo, cámara, nombre de la sesión, carpeta de salida, countdown on/off, y el **guion del teleprompter con su velocidad y su tamaño de letra de arranque**. Todo con memoria pegajosa: cada campo recuerda el último valor usado y arranca ahí. Elegir una vez, grabar muchas.
+
+**Desde la adenda 2 (2026-10-05) el panel es una oración** (decisión 128): «Voy a grabar la pantalla entera del Retina, con el micrófono DJI y la cámara FaceTime, leyendo 3 guiones». Cada fragmento azul se toca y abre su menú, y el subrayado del micrófono es el medidor de nivel. Mismos campos, misma memoria pegajosa.
 
 El guion es la excepción a la memoria pegajosa por el lado contrario: se guarda como cualquier otro campo, pero lo que **no** se hereda de una grabación a otra son los cambios hechos en vivo. Cada grabación arranca con lo que dice el panel (decisión 91).
 
@@ -298,6 +300,8 @@ La app vive en la barra de menú, sin ícono en el Dock (LSUIElement). Ícono co
 - Video HEVC por hardware, audio AAC 48 kHz, contenedor QuickTime (`.mov`) con fragmentos periódicos. Se eligió `.mov` sobre `.mp4` porque la recuperación de un archivo truncado a la fuerza es notoriamente más confiable en el contenedor QuickTime, y la resistencia a fallos es requisito desde la Fase 1 (decisión 11). QuickTime, ffmpeg y Whisper leen `.mov` con HEVC sin diferencia alguna respecto a `.mp4`, así que VideoFlow no se ve afectado.
 
 ### 8.13 Identidad visual
+
+**Desde la adenda 2 (2026-10-05) esta sección queda reemplazada por la dirección «Escrito»** (decisión 123): tema claro sobre blanco frío #F5F8FC y #FFFFFF, texto navy #0F1A2C, azul de acción #1F4DFF, coral de alerta #C93C30 y turquesa #45D3C5 solo para «todo listo». Fraunces para la oración del panel, el título, el cronómetro, el guion y la cuenta regresiva; la letra del sistema para lo operativo; SF Mono para las teclas. Lo que sigue describe la identidad de la app hasta la Fase 15 y queda como historia.
 
 Toda la interfaz de la app sigue la identidad Bloomind, la misma de CLM, whatasAPI y Bloomind Oficinas. La guía canónica es la sección 5 de `~/CLM Bloomind/docs/instructivo.md`, y en este proyecto está traducida a AppKit en `UI/BloomindStyle.swift`.
 
@@ -442,6 +446,22 @@ Contenido: el teleprompter completo según 8.7-bis, reimplementado nativo en Swi
 Piezas compartidas que toca: niveles y orden de ventanas, registro de acciones y atajos, configuración central, identidad visual y el widget. **No toca el pipeline de composición**, y eso es parte de lo que se verifica: el teleprompter no puede aparecer en ningún video.
 
 Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 15".
+
+### Fase 16. Rediseño visual
+
+Agregada el 2026-10-05 por la adenda 2, y aprobada por Sebas ese mismo día. Va con el proyecto ya terminado: no agrega funciones ni cambia comportamiento, cambia cómo se ve y cómo se ordena lo que ya existe. Cada parte entra a la app real, Sebas la valida, y recién ahí se arranca la siguiente.
+
+Contenido, en este orden:
+
+1. **Widget**: la cápsula, los menús de grupo, el modo mini y las alertas (8.9, decisiones 124 a 127). Va primero porque es lo que se usa grabando.
+2. **Panel**: la oración con sus fragmentos que se tocan y el medidor en el subrayado (8.10, decisión 128).
+3. **El resto**: teleprompter, tarjeta de atajos, cuenta regresiva, burbuja, selector de área y estados del ícono de la barra de menú, con la identidad nueva (8.13, decisión 123).
+
+La referencia visual es `Docs/rediseno/direccion-b.html`, y el estado del rediseño está en `Docs/rediseno/ESTADO.md`.
+
+Piezas compartidas que toca: identidad visual, gramática de botón de comando (que deja de ser compartida con el teleprompter), niveles y orden de ventanas (el modo mini y las pastillas de alerta son parte del widget, no ventanas nuevas con capa propia, salvo que haga falta), registro de acciones y atajos (de ahí salen los atajos escritos en los menús) y configuración central (el modo mini reemplaza a `widgetExpanded`, con lectura tolerante según la decisión 96).
+
+Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 16", uno por parte. Como en la Fase 14, no alcanza con que se vea bien: cada parte reverifica que todas las acciones siguen respondiendo, también con el tablero y la capa de anotación prendidos.
 
 ## 10. Protocolo de trabajo por sesión
 

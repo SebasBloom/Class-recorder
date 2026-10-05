@@ -515,6 +515,7 @@ Alternativa descartada: filtrar antes, dejando de calcular la posición del curs
 Detalle de comportamiento: las ondas de clic que ya estaban en curso terminan de apagarse solas en su medio segundo, en vez de cortarse de golpe. Se ve mejor y sale gratis.
 
 **99. 2026-09-06 — Todos los botones del widget llevan su nombre a la vista, no solo el ícono.**
+*Reemplazada por la decisión 124 (adenda 2, 2026-10-05).*
 Cada botón se dibuja con el símbolo arriba y una palabra abajo: Pausar, Detener, Reiniciar, Cam on/off, Micrófono, Sonido PC, Pantalla, Cám. full, Tablero, Cursor, Censura, Redibujar, Marcador, Color, Lienzo, Deshacer, Borrar, Atajos.
 Razón: pedido de Sebas el 2026-09-06, y tiene razón. Un ícono solo obliga a adivinar o a dejar el mouse quieto esperando el tooltip, y en mitad de una clase no hay tiempo para ninguna de las dos cosas. La app la usan dos personas que no son developers y varios de los íconos no son evidentes: el de censura, el del lienzo del tablero y el del resaltado del cursor no los adivina nadie.
 Costo aceptado: el widget pasa de 217×86 a 502×158 compacto y 502×392 expandido, ya con los títulos de grupo de la decisión 100. Es bastante más superficie en pantalla, y por eso mismo existe el modo compacto y el widget se arrastra a donde no moleste.
@@ -523,12 +524,14 @@ Detalle: el botón de la cámara se llama "Cam on/off" y no "Cámara" a secas, p
 Alternativa descartada: dejar solo íconos y confiar en el tooltip, que es lo que había. Ahorra pantalla y traslada el costo al peor momento posible.
 
 **100. 2026-09-06 — Los botones del widget van agrupados, con un título por grupo.**
+*Reemplazada por la decisión 124 (adenda 2, 2026-10-05).*
 Cuatro grupos, cada uno con su título en el estilo de marca: **Comandos de grabación** (pausar, detener, reiniciar, cámara y los dos de audio), **Pantalla a grabar** (los tres modos de fuente), **Comandos** (cursor, censura, redibujar, marcador, color) y **Comandos tableros** (lienzo, deshacer, borrar, atajos).
 Razón: pedido de Sebas el 2026-09-06. Dieciocho botones seguidos son una pared aunque cada uno tenga su nombre; agrupados se encuentra lo que se busca sin leerlos todos. El nombre del grupo también desambigua botones que solos serían confusos: "Pantalla" bajo "Pantalla a grabar" se entiende como modo de fuente y no como "grabar la pantalla".
 El título del primer grupo se ve siempre, porque esa fila también está en el modo compacto. Los otros tres aparecen y desaparecen con sus filas.
 Costo: el expandido pasa de 195 a 392 px de alto, contando también la grilla pareja de la decisión 102. El compacto crece de 96 a 158, porque su fila también estrena título.
 
 **101. 2026-09-06 — Los botones del widget muestran su estado con el fondo lleno, no con el tinte del ícono.**
+*Ajustada por la decisión 126 (adenda 2, 2026-10-05).*
 Un botón prendido se pinta con el fondo Azul Lab y el texto en blanco; uno que está tapando o silenciando algo, con el fondo coral; uno apagado, con un fondo tenue. Lo usan la cámara, los tres modos, el resaltado del cursor, la censura, el marcador y los dos de audio.
 Razón: pedido de Sebas el 2026-09-06 —"¿cómo sé si el cursor está prendido?"— y era un agujero real. Hasta acá el estado se marcaba tiñendo el ícono, que cambia unos pocos píxeles del dibujito: a un metro de la pantalla, dando clase, los dos estados se ven iguales. El caso del cursor es el más grave de todos, porque el círculo **no está en la pantalla de quien graba**, solo en el video: si el botón no lo dice, no lo dice nadie.
 Detalle de implementación, para no volver a perder el tiempo: **`bezelColor` no funciona.** Se probó primero y macOS lo ignora con cualquier estilo de bezel que permita poner el ícono arriba del nombre. El fondo se pinta con la capa del botón (`isBordered = false` más `layer.backgroundColor`), que además deja los colores planos y sin degradado que pide la identidad de marca.
@@ -536,6 +539,7 @@ Segunda señal, aparte del botón: la línea de estado del widget ahora dice **"
 Alternativa descartada: `setButtonType(.pushOnPushOff)` y dejar que macOS dibuje el estado activado. Es lo nativo y pinta con el color de acento del sistema, que cada usuario configura distinto y que no es el de la marca.
 
 **102. 2026-09-06 — Los botones del widget tienen ancho, alto e ícono de tamaño fijo.**
+*Reemplazada por la decisión 124 (adenda 2, 2026-10-05).*
 Todos miden 74×46 y todos los símbolos se dibujan con la misma configuración óptica (14 pt).
 Razón: pedido de Sebas —"los botones están súper descuadrados"— y las dos causas eran esas. Con ancho **mínimo** en vez de fijo, cada botón se estiraba lo que le pedía su palabra: "Cam on/off" quedaba más ancho que "Pausar", y las cuatro filas dejaban de alinearse entre sí aunque cada fila por dentro estuviera prolija. Y los símbolos del sistema no vienen todos al mismo tamaño óptico: la goma de borrar se dibuja notoriamente más grande que la flecha del cursor, así que la fila se veía despareja incluso con los botones parejos.
 El ancho lo manda la palabra más larga y todos los demás la acompañan. Si algún día una etiqueta no entra, se acorta la palabra antes que agrandar el botón: la grilla es lo que hace que cada cosa esté siempre en el mismo lugar y se encuentre sin leer.
@@ -572,6 +576,7 @@ El resto de los campos del panel se persisten al iniciar la grabación; el guion
 Razón: es el único campo donde el trabajo perdido dolería. Alguien pega el guion, cierra la app y se va: con la regla general, ese texto se perdió sin haber grabado nunca. Escribirlo en cada tecla, en cambio, serían cientos de escrituras a disco por párrafo.
 
 **109. 2026-09-13 — El teleprompter on/off va en la fila compacta del widget y sus controles en una fila expandida de siete.**
+*Reemplazada por la decisión 124 (adenda 2, 2026-10-05).*
 La fila compacta pasa a siete botones (se suma "Guion") y la fila nueva del grupo *Teleprompter* tiene otros siete: Play, Al inicio, Más lento, Más rápido, Letra −, Letra +, Editar. Las dos filas de siete son las que mandan el ancho del widget, que crece de 502 a 582: queda en **582×158 compacto y 582×470 expandido**.
 Razón: prenderlo y apagarlo es de lo que más se hace en vivo, y el plan lo pone en el compacto (8.9). Los controles, en cambio, solo sirven con el teleprompter abierto, así que van en el expandido y quedan deshabilitados mientras está apagado.
 Por qué siete y no partir la fila en dos: dos filas de siete dejan el widget más angosto que una de siete y otra de cuatro, y sobre todo lo dejan parejo. La alternativa de repartir los controles en dos filas sumaba 46 px de alto al expandido para ganar 0 de ancho.
@@ -582,6 +587,7 @@ No se esconde ni se reinicia campo por campo: la ventana se cierra y se descarta
 Razón: es la forma más barata de cumplir la decisión 91 sin listas de cosas que reiniciar. Todo lo que vive en esa ventana —posición, tamaño, velocidad, letra, guion editado en vivo, offset— muere con ella, y no hay forma de que quede un estado viejo colgado porque alguien se olvidó de agregarlo a un `reset()`.
 
 **111. 2026-09-13 — Las filas del widget van 7, 6, 6 y 7, y los dos grupos chicos comparten fila.**
+*Reemplazada por la decisión 124 (adenda 2, 2026-10-05).*
 La fila de modos de fuente (3) y la de comandos de tablero (3, después de mover "Atajos") van en el mismo renglón, cada una con su título encima de su tramo. La tarjeta de atajos pasa del grupo *Comandos tableros* al grupo *Comandos*.
 Razón: pedido de Sebas —"cuadrá los botones, siguen feos, como descuadrados"— y mirando el widget armado tenía razón. Con filas de 7, 3, 5, 4 y 7 el borde derecho quedaba dentado, con huecos de cuatro, dos y tres botones en el medio del bloque: cada fila empezaba alineada y terminaba donde se le ocurría. Con 7, 6, 6 y 7 el bloque se lee como un rectángulo, los huecos son de una sola columna y quedan simétricos entre la segunda y la tercera fila.
 De paso arregla una agrupación que estaba mal: la tarjeta de atajos no es un comando de tablero.
@@ -596,6 +602,7 @@ Lo que arregla además, y es lo que más se nota: **el nombre de todos los boton
 Detalle: la imagen resultante hay que marcarla `isTemplate = true` o deja de tomar el color del botón y los estados prendido/apagado se pierden.
 
 **113. 2026-09-13 — Una sola gramática de botón para el widget y para la barra del teleprompter.**
+*Reemplazada por la decisión 124 (adenda 2, 2026-10-05).*
 `UI/CommandButton.swift` concentra el tamaño, el ícono encajado, el nombre a la vista y el pintado de estado. Las dos superficies que se manejan con la grabación corriendo la usan; ninguna define botones por su cuenta.
 Razón: la barra del teleprompter había nacido con botones de 30×26, solo ícono, sin nombre y con separaciones distintas según el grupo, mientras el widget tenía botones de 74×46 con nombre y estado a color. Dos gramáticas de botón a diez centímetros una de otra es lo que se ve como "descuadrado" sin poder señalar qué, y además la barra rompía la decisión 99 —el nombre siempre a la vista— justo en los controles que se usan leyendo en voz alta.
 Efecto: la barra del teleprompter pasa a tener los mismos siete botones que su fila en el widget, con los mismos nombres. Se aprende una vez y sirve en los dos lados.
@@ -660,3 +667,47 @@ Con un solo guion la fila de pestañas no se muestra: no hay entre qué elegir y
 `lineSpacing` en vez de `lineHeightMultiple`, calculado sobre la altura natural de la fuente para que el 1.8 que se ve sea el mismo.
 Razón: con el multiplicador, el aire extra se agrega **arriba** del glifo, así que el primer renglón del guion aparecía medio renglón por debajo de la línea de lectura en vez de apoyado en ella. Se notaba en cada cambio de guion y al reiniciar, que es cuando el ojo va derecho a esa línea.
 Detalle relacionado, del mismo día: el relleno de media altura se recalcula **después** de forzar el layout. Calculado antes, usa el alto viejo del cuadro y el guion arranca en cualquier lado; pasaba al abrir la ventana y al cambiar de guion, que son los dos momentos en que el alto acaba de cambiar.
+
+## Adenda 2 (2026-10-05): rediseño visual
+
+Va por fuera de las fases originales, con el proyecto ya terminado. El proceso, las maquetas y lo que falta decidir están en `Docs/rediseno/ESTADO.md`; la maqueta vigente es `Docs/rediseno/direccion-b.html`.
+
+**123. 2026-10-05 — La app se rediseña con la dirección B, «Escrito»: clara, con Fraunces como voz.**
+Fondo blanco frío (#F5F8FC y #FFFFFF), texto navy #0F1A2C, azul de acción #1F4DFF, coral de alerta #C93C30 y turquesa #45D3C5 solo para «todo listo». Fraunces (ya empaquetada) para la oración del panel, el título, el cronómetro, el guion y la cuenta regresiva; la letra del sistema para todo lo operativo y SF Mono para las teclas.
+Razón: pedido de Sebas, que quería que la app fuera «una belleza de producto». Una revisión visual de la app real encontró el panel cortado en el Air (938 pt de alto contra 870 útiles), fondos translúcidos del sistema fuera de la paleta, botones del sistema mezclados con los de marca y la tarjeta de atajos desalineada. Se hicieron tres maquetas y Sebas eligió la B porque visualmente le gustó más.
+Reemplaza el tema oscuro de 8.13 para esta app. Sebas eligió identidad libre, así que no espera al DESIGN.md de Bloomind (que dice Inter, sin serif); el día que ese documento se apruebe hay que conciliarlos.
+Alternativas descartadas: A, «Estudio de transmisión» (oscura, con la luz de AL AIRE), y C, «Todo listo» (el DESIGN.md de Bloomind puro), que era la que había votado Claude.
+
+**124. 2026-10-05 — El widget pasa a ser una cápsula: pocos botones a la vista y el resto en menús de grupo chicos.**
+A la vista quedan el cronómetro, Pausar, Detener, Reiniciar, Micrófono, Sonido PC y Cámara, cada uno con su nombre debajo. Lo demás va en cuatro botones de grupo (Qué se ve, Tablero, Sobre la pantalla y Guion). Cada uno abre un menú de 236 pt con el atajo a la derecha de cada acción, que se cierra solo, y nunca hay dos abiertos a la vez.
+Razón, en palabras de Sebas: viéndolo en vivo, la hoja expandida no le gustó y ocupaba demasiado espacio. Dieciocho botones de 74×46 con sus títulos de grupo eran una pared de 502×392 encima de la clase, y la mayoría no se toca nunca en una toma.
+Lo que no cambia: toda acción que tiene atajo sigue teniendo cómo tocarse con el mouse, ahora dentro de su menú. **Reiniciar se queda suelto en la cápsula**, porque Sebas lo usa mucho.
+Reemplaza las decisiones 99 (nombre debajo de cada botón: se mantiene en los botones sueltos y en los menús va el nombre con su atajo), 100 (grupos con título), 102 (grilla de 74×46), 109 y 111 (filas del widget) y 113 (una sola gramática de botón para el widget y el teleprompter, que pasa a tener su propia barra).
+**Ancho: la cápsula de la maqueta, elegida por Sebas el 2026-10-05** («la A 100%»). Mide 900 pt grabando normal y 1216 en tablero con guion: lleva la frase de estado bajo el tiempo, y Lienzo, Deshacer, Borrar y la pausa del guion aparecen sueltos en la cápsula cuando aplican. Alternativa descartada: una compacta de 800 a 878 pt (`Docs/rediseno/ancho-capsula.html`), que ahorraba ancho a cambio de un clic más en el tablero y de perder la frase, que es la que dice «sin cursor».
+
+**125. 2026-10-05 — El modo mini reemplaza al compacto y al expandido.**
+Un botón «Achicar» deja solo una pastilla de 116×42 pt con el punto y el cronómetro. Se toca para volver a la cápsula completa, se arrastra, y el modo queda recordado en la configuración. En pausa muestra dos barras y con una alerta se pone coral entera.
+Razón: pedido de Sebas, «tocar algo y que se reduzca al tiempo». Con la hoja expandida eliminada (124), ya no hay nada que expandir: lo que sobra cuando se graba es la cápsula entera, no una parte.
+El atajo para esconder el widget (decisión 120) se mantiene: el mini deja una referencia a la vista y el atajo no deja ninguna, y son dos usos distintos.
+
+**126. 2026-10-05 — Cada alerta es una pastilla coral grande bajo la cápsula, y tocarla la deshace.**
+«Sin audio ⌥⌘M», «Censura puesta ⌥⌘C» y las demás, una pastilla por alerta. Se ven también en modo mini.
+Razón: con los botones de estado repartidos en menús, el fondo lleno de la decisión 101 deja de alcanzar para lo grave. Un micrófono callado o una censura puesta tienen que verse a un metro de la pantalla, y la pastilla dice qué pasa y cómo se deshace sin abrir nada.
+Ajusta la decisión 101: los botones sueltos siguen mostrando su estado (azul prendido, coral callando), y los de los menús lo muestran con la marca de verificación.
+
+**127. 2026-10-05 — El botón de atajos sale del widget.**
+Los atajos van escritos en cada menú de grupo, y la tarjeta sigue abriéndose con ⌥⌘H y desde la barra de menú.
+Razón: aprobado por Sebas. Con el atajo escrito al lado de cada acción, la tarjeta deja de ser la única forma de encontrar una combinación, y un botón que casi no se toca no se gana un lugar en la cápsula.
+
+**128. 2026-10-05 — El panel de configuración es una oración.**
+«Voy a grabar la pantalla entera del Retina, con el micrófono DJI y la cámara FaceTime, leyendo 3 guiones», en Fraunces. Cada fragmento azul se toca y abre su menú, y el subrayado del micrófono hace de medidor de nivel. Mide unos 460 pt de alto.
+Razón: es la firma de la dirección elegida (123), y además resuelve el panel de 938 pt que en el Air se salía 68 pt por abajo con el botón de grabar cortado.
+Casos difíciles, ya resueltos en la maqueta: los nombres largos se acortan con reglas («los AirPods Pro») y el nombre completo va en el menú; sin permiso, la frase lo dice en coral y el botón pasa a «Dar permiso al micrófono»; sin audio ni cámara queda «sin sonido y sin cámara»; con un área elegida queda «un área de 1280×720 del Retina».
+Costo aceptado: AppKit no trae texto con zonas que se tocan y abren un menú, así que se arma a mano.
+
+**129. 2026-10-05 — Cómo se construyó la cápsula: menús nativos, esquina fija y lo que quedó distinto de la maqueta.**
+- **Los menús de grupo son `NSMenu` del sistema**, con los colores claros. Gratis traen lo que la maqueta pedía a mano: se cierran solos, nunca hay dos abiertos a la vez y el atajo se alinea en columna a la derecha y se pinta bien al pasar el mouse. Alternativa descartada: un panel propio con renglones dibujados, que se parece más a la maqueta y obliga a programar el cierre, el foco y el teclado.
+- **Diferencias con la maqueta, por esa razón:** el color del marcador se cambia con un renglón «Cambiar color · amarillo» (la misma acción que ⌥⌘0) en vez de cinco puntos para elegir uno, porque la app solo sabe rotar el color y elegir uno sería una función nueva. Velocidad y letra del guion son renglones sueltos («Más lento», «Más rápido»…) y no un − y un + dentro del menú: cada toque cierra el menú. Para ajustar varias veces seguidas están las flechas del teclado y la barra del propio guion.
+- **La posición se guarda por la esquina de arriba a la derecha** (`widgetTopRight`) y no por el origen (`widgetPosition`, que se deja de leer). La cápsula cambia de ancho según el contexto y en modo mini; guardada por el origen, cada cambio la correría. Costo: la primera vez después de actualizar, el widget vuelve a su esquina por defecto.
+- **`widgetMini` reemplaza a `widgetExpanded`**, con la lectura tolerante de la decisión 96: un `config.json` viejo carga igual y arranca con la cápsula completa.
+- **El widget es siempre claro**, aunque el Mac esté en modo oscuro (`appearance = .aqua`), así sus menús y tooltips no salen oscuros sobre la cápsula blanca.

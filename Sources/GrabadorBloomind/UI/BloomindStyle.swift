@@ -35,6 +35,43 @@ enum BloomindStyle {
     /// Señal funcional de error y alerta.
     static let signal = NSColor(hex: 0xF0857A)
 
+    // MARK: - Paleta clara, dirección «Escrito» (adenda 2)
+
+    /// La paleta del rediseño (decisión 123). Convive con la oscura de arriba
+    /// mientras la Fase 16 pasa las pantallas una por una; cuando la última
+    /// esté migrada, la oscura se borra.
+    enum Claro {
+        /// Fondo de superficies claras. Frío, nunca crema.
+        static let papel = NSColor(hex: 0xF5F8FC)
+        static let blanco = NSColor.white
+        /// Texto y borde de la cápsula.
+        static let tinta = NSColor(hex: 0x0F1A2C)
+        /// Texto secundario.
+        static let pizarra = NSColor(hex: 0x5C6E88)
+        static let linea = NSColor(hex: 0xE2E9F3)
+        static let lineaFuerte = NSColor(hex: 0xC3CFDF)
+        /// Acción y lo que está prendido.
+        static let azul = NSColor(hex: 0x1F4DFF)
+        static let azulSuave = NSColor(hex: 0xEAF0FF)
+        /// Alerta: algo está callado o tapado.
+        static let coral = NSColor(hex: 0xC93C30)
+        static let coralSuave = NSColor(hex: 0xFDEDEB)
+        static let coralHundido = NSColor(hex: 0xA9302A)
+    }
+
+    /// Fraunces con cifras de ancho fijo, para un cronómetro que no baila al
+    /// pasar de 11 a 12.
+    static func reloj(_ size: CGFloat) -> NSFont {
+        let base = display(size)
+        let fijas = base.fontDescriptor.addingAttributes([
+            .featureSettings: [[
+                NSFontDescriptor.FeatureKey.typeIdentifier: kNumberSpacingType,
+                NSFontDescriptor.FeatureKey.selectorIdentifier: kMonospacedNumbersSelector
+            ]]
+        ])
+        return NSFont(descriptor: fijas, size: size) ?? base
+    }
+
     // MARK: - Espaciado
 
     /// El aire de la guía, en puntos.

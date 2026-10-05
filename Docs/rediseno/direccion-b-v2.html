@@ -1,0 +1,856 @@
+<!doctype html>
+<!--
+  GRABADOR BLOOMIND · DIRECCIÓN B — «ESCRITO»
+
+  Mundo: el abogado que redacta. La app no se configura llenando un formulario:
+  se escribe lo que se va a hacer, como la primera línea de un escrito.
+
+  PALETA
+    Papel frío      #F5F8FC  fondo de superficies claras (nunca crema)
+    Blanco          #FFFFFF  hojas, cápsula, popovers
+    Tinta navy      #0F1A2C  texto, borde de la cápsula, teleprompter
+    Pizarra         #5C6E88  texto secundario
+    Línea           #E2E9F3  divisores y bordes suaves (#C3CFDF el fuerte)
+    Azul profundo   #1F4DFF  acción y fragmentos editables de la oración
+    Coral firme     #C93C30  alerta (mudo, censura); fondo suave #FDEDEB
+    Turquesa        #45D3C5  solo éxito ("Todo listo"), siempre como punto, nunca texto sobre blanco
+
+  TIPOGRAFÍA
+    Fraunces (ya va empaquetada en la app): la oración del panel, el título de la
+      sesión, el cronómetro (cifras tabulares), el guion del teleprompter, la cuenta.
+    SF Pro (system-ui): todo lo operativo — botones, listas, menús. Es lo que AppKit
+      dibuja nativo, así la parte "de máquina" se siente del sistema.
+    SF Mono (ui-monospace): combinaciones de teclas y medidas.
+
+  COMPOSICIÓN
+    Panel: título de la sesión editable + UNA oración en serif cuyas palabras en azul
+      son los controles. Abajo solo lo que no cabe en la frase. ~540 pt de alto.
+    Widget (v2): cápsula blanca con borde navy fino; cronómetro + estado normal en una
+      frase; botones de siempre + 4 botones de grupo que abren un menú chico cada uno
+      (uno a la vez). Lo del tablero y el play del guion aparecen en la cápsula solo
+      cuando aplican. Cada alerta es una pastilla coral propia bajo la cápsula.
+    Teleprompter: hoja navy, misma voz tipográfica, pestañas subrayadas como la oración.
+    Tarjeta de atajos: índice de un código — grupos y combinaciones en columna.
+    Cuenta regresiva: disco blanco con la cifra en serif y un anillo que se vacía.
+    Selector de área: pantalla velada, rectángulo nítido, rótulo y medidas en vivo.
+
+  FIRMA
+    La oración editable. Y el subrayado de "el micrófono DJI" es el medidor de nivel:
+    se mueve con la voz.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grabador · Escrito</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#F5F8FC; --blanco:#FFFFFF; --tinta:#0F1A2C; --pizarra:#5C6E88;
+  --linea:#E2E9F3; --linea-f:#C3CFDF; --azul:#1F4DFF; --azul-suave:#EAF0FF;
+  --coral:#C93C30; --coral-suave:#FDEDEB; --turquesa:#45D3C5; --celeste:#7BC6FF;
+  --navy2:#16243D;
+  --serif:"Fraunces", Georgia, serif;
+  --sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --mono:ui-monospace, "SF Mono", Menlo, monospace;
+  --sombra:0 1px 2px rgba(15,26,44,.08), 0 8px 24px rgba(15,26,44,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#1b1f27;overflow:hidden}
+body{font-family:var(--sans);color:var(--tinta);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,[contenteditable]:focus-visible,.frag:focus-visible{outline:2px solid var(--azul);outline-offset:2px;border-radius:4px}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---------- escritorio simulado ---------- */
+.desk{position:relative;width:1440px;height:900px;overflow:hidden;margin:0 auto}
+.fondo{position:absolute;inset:24px 0 0 0}
+.menubar{position:absolute;top:0;left:0;right:0;height:24px;display:flex;align-items:center;gap:18px;padding:0 14px;
+  font-size:13px;background:rgba(246,247,250,.86);color:#111;z-index:50;border-bottom:1px solid rgba(0,0,0,.08)}
+.menubar b{font-weight:600}
+.menubar .der{margin-left:auto;display:flex;gap:14px;align-items:center}
+.mb-icono{display:flex;align-items:center;gap:6px;padding:1px 6px;border-radius:5px;cursor:pointer}
+.mb-icono:hover,.mb-icono.abierto{background:rgba(0,0,0,.1)}
+.mb-icono svg{width:17px;height:17px;stroke:#111;stroke-width:1.5;fill:none}
+.mb-icono .t{font:500 12px var(--mono);display:none}
+.desk[data-rec="rec"] .mb-icono .t,.desk[data-rec="pausa"] .mb-icono .t{display:inline}
+.mb-punto{width:7px;height:7px;border-radius:50%;background:var(--azul);display:none}
+.desk[data-rec="rec"] .mb-punto{display:block}
+.desk[data-rec="pausa"] .mb-punto{display:block;background:var(--pizarra)}
+.menu{position:absolute;top:26px;right:150px;width:250px;background:rgba(250,251,253,.97);border:1px solid rgba(0,0,0,.12);
+  border-radius:8px;box-shadow:var(--sombra);padding:5px;font-size:13px;z-index:60;display:none}
+.menu.abierto{display:block}
+.menu div{padding:4px 10px;border-radius:5px;display:flex;justify-content:space-between}
+.menu div:hover{background:var(--azul);color:#fff}
+.menu .sep{height:1px;background:rgba(0,0,0,.1);margin:5px 8px;padding:0}
+.menu .sep:hover{background:rgba(0,0,0,.1)}
+.menu .gris{color:#999}.menu .gris:hover{background:none;color:#999}
+.menu .k{font:12px var(--mono);opacity:.6}
+
+/* hoja de cálculo */
+.hoja{background:#fff;height:100%;font:12px var(--sans);color:#222}
+.hoja .barra{height:44px;background:#f3f4f6;border-bottom:1px solid #ddd;display:flex;align-items:center;padding:0 16px;gap:10px;color:#444}
+.hoja table{border-collapse:collapse;width:100%}
+.hoja td,.hoja th{border:1px solid #e3e3e3;height:24px;padding:0 6px;white-space:nowrap;overflow:hidden;max-width:150px}
+.hoja th{background:#f6f6f6;font-weight:500;color:#666}
+/* n8n */
+.flujos{height:100%;background:#2a2b31;background-image:radial-gradient(#45464f 1px,transparent 1px);background-size:20px 20px;position:relative}
+.nodo{position:absolute;width:150px;height:76px;border-radius:10px;background:#3a3b44;border:1px solid #55565f;color:#ddd;
+  font:12px var(--sans);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px}
+.nodo i{width:28px;height:28px;border-radius:7px;display:block}
+/* foto */
+.foto{height:100%;background:
+  radial-gradient(120% 60% at 70% 105%,#25402f 0 40%,transparent 41%),
+  radial-gradient(90% 50% at 15% 100%,#33553d 0 45%,transparent 46%),
+  linear-gradient(180deg,#8fb3d9 0%,#d6c6b0 55%,#c08a5b 70%,#4a5a3c 71%)}
+/* tablero (escena problemas) */
+.tablero{height:100%;background:#111827;position:relative}
+.tablero svg{position:absolute;inset:0;width:100%;height:100%}
+
+/* ---------- ventana del panel ---------- */
+.ventana{position:absolute;background:var(--blanco);border-radius:12px;box-shadow:0 0 0 1px rgba(15,26,44,.14),0 22px 60px rgba(15,26,44,.28)}
+.tbar{height:30px;display:flex;align-items:center;gap:8px;padding:0 12px}
+.tbar i{width:12px;height:12px;border-radius:50%;background:#e2e5ea;display:block;border:1px solid rgba(0,0,0,.08)}
+.panel{left:400px;top:140px;width:640px}
+.panel .cuerpo{padding:14px 44px 0}
+.ceja{font:600 11px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--pizarra);display:flex;gap:10px;align-items:center}
+.ceja .chip{letter-spacing:0;text-transform:none;font-weight:500;color:var(--pizarra)}
+.sesion{font:600 30px/1.15 var(--serif);font-variation-settings:"opsz" 72;letter-spacing:-.01em;margin-top:8px;
+  outline:none;border-bottom:1px dashed transparent;display:inline-block;min-width:200px}
+.sesion:hover{border-bottom-color:var(--linea-f)}
+.sesion:focus{border-bottom-color:var(--azul)}
+.oracion{font:400 27px/1.55 var(--serif);font-variation-settings:"opsz" 36;margin-top:22px;color:var(--tinta);letter-spacing:-.005em}
+.frag{color:var(--azul);font-weight:560;cursor:pointer;position:relative;white-space:nowrap;
+  background-image:linear-gradient(var(--azul),var(--azul));background-size:100% 1.5px;background-repeat:no-repeat;background-position:0 92%;
+  transition:background-size .2s}
+.frag:hover{background-size:100% 3px}
+.frag.abierto{background-color:var(--azul-suave);border-radius:4px}
+.frag.mic{background-image:linear-gradient(var(--linea-f),var(--linea-f)),linear-gradient(var(--azul),var(--azul));
+  background-size:100% 1.5px,var(--nivel,30%) 3px;background-position:0 92%,0 93%}
+.frag.mudo{color:var(--pizarra);font-weight:400}
+.pop{position:absolute;z-index:20;width:300px;background:var(--blanco);border-radius:10px;box-shadow:0 0 0 1px rgba(15,26,44,.12),var(--sombra);
+  padding:8px;font:13px var(--sans);display:none}
+.pop.abierto{display:block;animation:entra .14s ease-out}
+@keyframes entra{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+.pop h6{font:600 11px var(--sans);color:var(--pizarra);padding:6px 10px 4px;letter-spacing:.02em}
+.op{display:flex;align-items:center;gap:10px;width:100%;padding:7px 10px;border-radius:6px;text-align:left}
+.op:hover{background:var(--papel)}
+.op .ck{width:16px;color:var(--azul);visibility:hidden}
+.op.sel .ck{visibility:visible}
+.op small{margin-left:auto;color:var(--pizarra);font:11px var(--mono)}
+.pop .sep{height:1px;background:var(--linea);margin:6px 4px}
+.paso{display:flex;align-items:center;gap:8px;padding:6px 10px}
+.paso span{flex:1}
+.paso .val{flex:none;width:38px;text-align:center;font:500 12px var(--mono)}
+.mini{width:26px;height:26px;border-radius:6px;border:1px solid var(--linea);display:grid;place-items:center}
+.mini:hover{border-color:var(--linea-f);background:var(--papel)}
+.mini svg{width:14px;height:14px}
+
+.ficha{margin-top:30px;border-top:1px solid var(--linea);font-size:13px}
+.ficha .fila{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--linea)}
+.ficha .fila .et{width:150px;color:var(--pizarra)}
+.ficha .ruta{font:12px var(--mono);color:var(--tinta);flex:1}
+.enlace{color:var(--azul);font-weight:500}
+.enlace:hover{text-decoration:underline}
+.switch{width:34px;height:20px;border-radius:10px;background:var(--linea-f);position:relative;transition:background .15s;flex:none}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s}
+.switch.on{background:var(--azul)}
+.switch.on::after{transform:translateX(14px)}
+.pie{display:flex;align-items:center;gap:14px;padding:22px 0 26px}
+.estado{font-size:13px;color:var(--pizarra);display:flex;align-items:center;gap:8px;flex:1}
+.estado .p{width:8px;height:8px;border-radius:50%;background:var(--turquesa)}
+.btn{display:inline-flex;align-items:center;gap:10px;height:42px;padding:0 20px;border-radius:8px;background:var(--azul);color:#fff;font-weight:600;font-size:14px;
+  transition:background .12s,transform .06s}
+.btn:hover{background:var(--tinta)}
+.btn:active{transform:translateY(1px)}
+.btn .r{width:10px;height:10px;border-radius:50%;background:#fff}
+.btn kbd{font:11px var(--mono);opacity:.7;font-weight:400}
+
+/* ---------- cápsula (widget) ---------- */
+.capsula{position:absolute;right:28px;top:48px;width:max-content;z-index:30}
+.cap{height:66px;background:var(--blanco);border-radius:33px;border:1px solid rgba(15,26,44,.72);
+  box-shadow:0 2px 10px rgba(15,26,44,.16);display:flex;align-items:center;padding:0 8px 0 22px;gap:4px;cursor:grab}
+.reloj{display:flex;flex-direction:column;justify-content:center;flex:none;width:186px;margin-right:2px}
+.reloj .n{font:600 25px/1 var(--serif);font-variation-settings:"opsz" 48;font-variant-numeric:tabular-nums lining-nums;display:flex;align-items:center;gap:9px}
+.vivo{width:10px;height:10px;border-radius:50%;background:var(--azul);position:relative;flex:none}
+.vivo::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--azul);opacity:0;animation:late 1.8s ease-out infinite}
+@keyframes late{0%{opacity:.6;transform:scale(.6)}100%{opacity:0;transform:scale(1.5)}}
+.pausado .vivo{background:none;width:10px}
+.pausado .vivo::before{content:"";position:absolute;left:1px;top:0;width:3px;height:10px;background:var(--pizarra);box-shadow:5px 0 0 var(--pizarra)}
+.pausado .vivo::after{display:none}
+.reloj .f{white-space:normal!important;line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-top:4px!important;font-size:11.5px;color:var(--pizarra);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reloj .f b{color:var(--coral);font-weight:600}
+.cap .div{width:1px;height:30px;background:var(--linea);margin:0 4px;flex:none}
+.cb{width:54px;white-space:nowrap;height:52px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:10px;color:var(--tinta);
+  transition:background .12s}
+.cb:hover{background:var(--papel)}
+.cb:active{background:var(--linea)}
+.cb.alerta{background:var(--coral-suave);color:var(--coral)}
+.cb.on{color:var(--azul)}
+.cb.on .lbl{font-weight:600}
+.cb[disabled]{opacity:.35;cursor:default}
+.cb[disabled]:hover{background:none}
+.cb.mas{width:44px}
+.marcador{width:9px;height:9px;border-radius:50%;border:1px solid rgba(15,26,44,.3);display:none}
+
+/* ---------- teleprompter ---------- */
+.tele{position:absolute;left:36px;top:48px;width:680px;transition:top .2s,width .2s;height:268px;background:var(--tinta);border-radius:14px;color:#fff;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.3);z-index:25;display:flex;flex-direction:column}
+.tabs{display:flex;gap:22px;padding:14px 26px 0;font:500 14px var(--serif);font-variation-settings:"opsz" 14}
+.tabs span{color:#8CA3C4;cursor:pointer;padding-bottom:3px}
+.tabs span.sel{color:#fff;box-shadow:inset 0 -1.5px 0 var(--celeste)}
+.texto{flex:1;position:relative;overflow:hidden;padding:0 30px}
+.texto p{font:400 33px/1.4 var(--serif);font-variation-settings:"opsz" 48;position:absolute;left:30px;right:30px;top:4px;transition:transform .4s linear}
+.texto .lectura{position:absolute;left:14px;right:14px;top:100px;height:1px;background:rgba(58,123,255,.7)}
+.texto .lectura::before{content:"";position:absolute;left:-2px;top:-5px;border:5px solid transparent;border-left:7px solid #3A7BFF}
+.texto::after{content:"";position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(transparent,var(--tinta))}
+.texto::before{content:"";position:absolute;left:0;right:0;top:0;height:40px;background:linear-gradient(var(--tinta),transparent);z-index:1}
+.tb{display:flex;align-items:center;gap:2px;padding:8px 12px;background:var(--navy2);border-top:1px solid #26364F}
+.tb button{display:flex;align-items:center;gap:6px;height:34px;padding:0 10px;white-space:nowrap;border-radius:7px;font-size:12.5px;color:#dfe7f3}
+.tb button:hover{background:rgba(255,255,255,.07)}
+.tb button.on{background:#3A7BFF;color:#fff}
+.tabs .meta{margin-left:auto;font:11.5px var(--mono);color:#8CA3C4;white-space:nowrap}
+
+/* ---------- burbuja ---------- */
+.burbuja{position:absolute;width:176px;height:176px;border-radius:50%;right:46px;bottom:46px;z-index:24;overflow:hidden;cursor:grab;
+  box-shadow:0 0 0 3px #fff,0 0 0 4px rgba(15,26,44,.3),0 10px 26px rgba(0,0,0,.25)}
+.burbuja svg{width:100%;height:100%}
+.burbuja .rs{position:absolute;right:14px;bottom:14px;width:14px;height:14px;border-radius:50%;background:#fff;border:1px solid rgba(15,26,44,.3);opacity:0;transition:opacity .15s}
+.burbuja:hover .rs{opacity:1}
+
+/* ---------- cuenta ---------- */
+.cuenta{position:absolute;inset:0;display:none;place-items:center;z-index:40;background:rgba(15,26,44,.18)}
+.cuenta .disco{width:230px;height:230px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px rgba(15,26,44,.12),0 24px 60px rgba(15,26,44,.3);position:relative;display:grid;place-items:center}
+.cuenta .num{font:500 128px/1 var(--serif);font-variation-settings:"opsz" 144;color:var(--tinta);margin-top:-8px}
+.cuenta .num.entra{animation:num .9s ease-out}
+@keyframes num{0%{opacity:0;transform:scale(.85)}25%{opacity:1;transform:none}100%{opacity:1}}
+.cuenta svg{position:absolute;inset:0;transform:rotate(-90deg)}
+.cuenta circle{fill:none;stroke-width:3}
+.cuenta .aro{stroke:var(--azul);stroke-dasharray:691;stroke-linecap:round}
+.cuenta .aro.anda{animation:aro 1s linear}
+@keyframes aro{from{stroke-dashoffset:0}to{stroke-dashoffset:691}}
+.cuenta .ley{position:absolute;top:calc(50% + 136px);font-size:12px;color:var(--tinta);background:#fff;padding:4px 12px;border-radius:12px;box-shadow:0 0 0 1px rgba(15,26,44,.1)}
+
+/* ---------- tarjeta de atajos ---------- */
+.tarjeta{position:absolute;right:40px;bottom:36px;width:430px;background:#fff;border-radius:14px;padding:22px 26px 18px;z-index:45;
+  box-shadow:0 0 0 1px rgba(15,26,44,.16),0 20px 50px rgba(15,26,44,.3)}
+.tarjeta h3{font:600 24px var(--serif);font-variation-settings:"opsz" 36}
+.tarjeta .sub{font-size:12px;color:var(--pizarra);margin:2px 0 6px}
+.tarjeta h6{font:600 11px var(--sans);color:var(--pizarra);margin:12px 0 2px;letter-spacing:.02em}
+.at{display:grid;grid-template-columns:1fr auto;align-items:center;height:24px;font-size:13px}
+.kc{display:inline-flex;gap:3px}
+.kc i{font:500 11.5px var(--mono);font-style:normal;min-width:20px;height:20px;padding:0 5px;border-radius:4px;border:1px solid var(--linea-f);background:var(--papel);display:grid;place-items:center}
+
+/* ---------- selector de área ---------- */
+.area{position:absolute;inset:0;z-index:70;cursor:crosshair;display:none;overflow:hidden}
+.rect{position:absolute;border:1.5px solid #fff;box-shadow:0 0 0 9999px rgba(15,26,44,.58)}
+.rect i{position:absolute;width:10px;height:10px;background:#fff;border:2px solid var(--azul);border-radius:2px}
+.rect .med{position:absolute;right:0;bottom:-30px;font:500 12px var(--mono);background:var(--tinta);color:#fff;padding:3px 8px;border-radius:5px}
+.rotulo{position:absolute;left:50%;top:26px;transform:translateX(-50%);background:#fff;border-radius:12px;padding:12px 20px;text-align:center;box-shadow:var(--sombra);pointer-events:none}
+.rotulo b{font:600 19px var(--serif);display:block}
+.rotulo span{font-size:12px;color:var(--pizarra)}
+
+/* ---------- barra de maqueta (no es diseño) ---------- */
+.dev{position:fixed;left:12px;bottom:12px;z-index:100;display:flex;gap:4px;align-items:center;background:rgba(30,30,34,.92);color:#ddd;font:12px var(--sans);
+  padding:5px;border-radius:9px}
+.dev button{padding:5px 9px;border-radius:6px;color:#ccc}
+.dev button:hover{background:#3a3a40}
+.dev button.sel{background:#e8e8ea;color:#111}
+.dev .s{width:1px;height:18px;background:#555;margin:0 4px}
+
+/* v2: botones de grupo, contexto, menús chicos y pastillas de alerta */
+.cb.grupo{width:auto;min-width:54px;padding:0 7px}
+.cb .chev{width:9px;height:9px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;margin-left:3px;vertical-align:-1px}
+.cb.abierto{background:var(--azul-suave);color:var(--azul)}
+.partido{display:flex}
+.partido .cb:first-child{border-radius:12px 0 0 12px}
+.partido .chevsolo{width:22px;border-radius:0 12px 12px 0}
+.partido .chevsolo .chev{width:11px;height:11px;margin:0}
+.ctx{display:flex;background:var(--papel);border-radius:13px;margin:0 3px;box-shadow:inset 0 0 0 1px var(--linea)}
+.ctx .cb:hover{background:var(--linea)}
+.gmenu{position:absolute;top:76px;width:236px;background:#fff;border-radius:9px;padding:5px;font-size:13px;display:none;z-index:5;
+  box-shadow:0 0 0 1px rgba(15,26,44,.16),0 10px 28px rgba(15,26,44,.18)}
+.gmenu.abierto{display:block;animation:entra .12s ease-out}
+.gmenu h6{font:600 11px var(--sans);color:var(--pizarra);padding:4px 8px 3px;letter-spacing:.02em}
+.mi{display:flex;align-items:center;gap:7px;width:100%;height:26px;padding:0 8px;border-radius:5px;text-align:left;white-space:nowrap}
+button.mi:hover{background:var(--azul);color:#fff}
+button.mi:hover .k{color:rgba(255,255,255,.8)}
+.mi .ck{width:14px;height:14px;flex:none;color:var(--azul);visibility:hidden}
+.mi.sel .ck{visibility:visible}
+button.mi:hover .ck{color:#fff}
+.mi .k{margin-left:auto;font:11px var(--mono);color:#7A8AA2}
+.mi[disabled]{opacity:.38;cursor:default}
+button.mi[disabled]:hover{background:none;color:inherit}
+.mi.alerta{color:var(--coral);font-weight:600}
+.mi.alerta .ck{color:var(--coral)}
+.mi.fijo .colores,.mi .pasos{margin-left:auto;display:flex;align-items:center;gap:5px}
+.mi .pasos .mini{width:22px;height:22px}
+.mi .pasos .val{width:30px;text-align:center;font:500 12px var(--mono)}
+.colores{display:flex;gap:6px}
+.colores i{width:16px;height:16px;border-radius:50%;display:block;border:1px solid rgba(15,26,44,.25);cursor:pointer}
+.colores i.sel{box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--tinta)}
+.alertas{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.pill{height:40px;padding:0 8px 0 14px;border-radius:20px;background:var(--coral);color:#fff;font:600 16px var(--sans);display:flex;align-items:center;gap:9px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.6),0 4px 14px rgba(201,60,48,.35);animation:entra .18s ease-out}
+.pill:hover{background:#A9302A}
+.pill svg.i{width:20px;height:20px}
+.pill kbd{font:500 12px var(--mono);background:rgba(255,255,255,.22);padding:4px 8px;border-radius:12px}
+.frag.falta{color:var(--coral);white-space:normal;background-image:linear-gradient(var(--coral),var(--coral))}
+.falta-t{font-weight:400;font-style:italic;font-size:.82em}
+.frag.apagado{font-weight:450}
+.btn.falta{background:var(--coral-suave);color:var(--coral);box-shadow:inset 0 0 0 1.5px var(--coral)}
+.btn.falta:hover{background:var(--coral);color:#fff}
+.oculto{display:none!important}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-pausa" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0013 0M12 17.5V21"/></symbol>
+    <symbol id="i-micoff" viewBox="0 0 24 24"><path d="M15 9.5V6a3 3 0 00-5.6-1.5M9 9v2a3 3 0 004.6 2.5M5.5 11a6.5 6.5 0 0010.4 5.2M18.5 11c0 .7-.1 1.4-.3 2M12 17.5V21M4 4l16 16"/></symbol>
+    <symbol id="i-son" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11"/></symbol>
+    <symbol id="i-sonoff" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></symbol>
+    <symbol id="i-cam" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="10" r="3"/><path d="M6.6 18.2c1.2-2 3.1-3.2 5.4-3.2s4.2 1.2 5.4 3.2"/></symbol>
+    <symbol id="i-guion" viewBox="0 0 24 24"><path d="M6 3.5h9l3 3v14H6z"/><path d="M9 10h6M9 13.5h6M9 17h3.5"/></symbol>
+    <symbol id="i-pantalla" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16.5V20"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6.5" width="13" height="11" rx="2"/><path d="M16 10.5l5-3v9l-5-3"/></symbol>
+    <symbol id="i-tablero" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M7 13c2-3 3-1 4.5-3s3-1 5 1M8 21l2-4M16 21l-2-4"/></symbol>
+    <symbol id="i-lienzo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17" /><path d="M12 3.5a8.5 8.5 0 010 17z" fill="currentColor"/></symbol>
+    <symbol id="i-deshacer" viewBox="0 0 24 24"><path d="M9 7L5 11l4 4"/><path d="M5 11h9a5 5 0 010 10h-3"/></symbol>
+    <symbol id="i-borrar" viewBox="0 0 24 24"><path d="M14.5 4.5l5 5-8.5 8.5H6l-2-2 10.5-11.5z"/><path d="M9 9l5.5 5.5M11 21h9"/></symbol>
+    <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M6 4l12 6.5-5.2 1.3L10.5 17z"/><circle cx="9.5" cy="9.5" r="7.5" stroke-dasharray="2 2.6" opacity=".7"/></symbol>
+    <symbol id="i-censura" viewBox="0 0 24 24"><rect x="3.5" y="8" width="17" height="8" rx="1.5" fill="currentColor" opacity=".18"/><rect x="3.5" y="8" width="17" height="8" rx="1.5"/><path d="M7 12h10" stroke-dasharray="1.5 2"/></symbol>
+    <symbol id="i-redibujar" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16"/><path d="M9 12h6M12 9v6"/></symbol>
+    <symbol id="i-marcador" viewBox="0 0 24 24"><path d="M15 4l5 5-9.5 9.5-6 1 1-6z"/><path d="M13 6l5 5"/></symbol>
+    <symbol id="i-color" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="7.5" r="1.4" fill="currentColor"/><circle cx="8" cy="12" r="1.4" fill="currentColor"/><circle cx="16" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="16.5" r="1.4" fill="currentColor"/></symbol>
+    <symbol id="i-teclas" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M8 14h8"/></symbol>
+    <symbol id="i-reiniciar" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 102.2-5.3"/><path d="M4.5 3.5v4h4"/></symbol>
+    <symbol id="i-inicio" viewBox="0 0 24 24"><path d="M6 5v14M18 6l-8 6 8 6z"/></symbol>
+    <symbol id="i-lento" viewBox="0 0 24 24"><path d="M13 6l-6 6 6 6M19 6l-6 6 6 6" opacity=".35"/><path d="M13 6l-6 6 6 6"/></symbol>
+    <symbol id="i-rapido" viewBox="0 0 24 24"><path d="M5 6l6 6-6 6M11 6l6 6-6 6"/></symbol>
+    <symbol id="i-menos" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+    <symbol id="i-mas" viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"/></symbol>
+    <symbol id="i-editar" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-abajo" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-arriba" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+    <symbol id="i-letra" viewBox="0 0 24 24"><path d="M4 19l5-14 5 14M6 14h6M16 19v-6M14 15h4" /></symbol>
+    <symbol id="i-cerebro" viewBox="0 0 24 24"><path d="M12 5.5c-1-1.5-3.5-1.8-4.8-.3-1.8-.2-3 1.4-2.6 3-1.6.8-1.8 3-.5 4.1-.7 1.6.4 3.5 2.2 3.5.4 1.6 2.4 2.4 3.9 1.5.6.6 1.2.8 1.8.7zM12 5.5c1-1.5 3.5-1.8 4.8-.3 1.8-.2 3 1.4 2.6 3 1.6.8 1.8 3 .5 4.1.7 1.6-.4 3.5-2.2 3.5-.4 1.6-2.4 2.4-3.9 1.5-.6.6-1.2.8-1.8.7zM12 5.5V18"/></symbol>
+  </defs>
+</svg>
+
+<div class="desk" id="desk" data-rec="no">
+  <div class="menubar">
+    <b id="mb-app">Numbers</b><span>Archivo</span><span>Edición</span><span>Insertar</span><span>Tabla</span><span>Ventana</span>
+    <div class="der">
+      <div class="mb-icono" id="mbIcono" title="Grabador Bloomind"><span class="mb-punto"></span><svg viewBox="0 0 24 24"><use href="#i-cerebro"/></svg><span class="t" id="mbT">12:34</span></div>
+      <span>🔋</span><span>lun 5 oct&nbsp; 10:24</span>
+    </div>
+  </div>
+  <div class="menu" id="menu">
+    <div class="gris">Grabador Bloomind</div><div class="sep"></div>
+    <div id="mIni">Iniciar grabación… <span class="k">^⌥⌘G</span></div>
+    <div id="mDet" class="gris">Detener grabación</div>
+    <div>Abrir carpeta de grabaciones</div>
+    <div>Atajos…</div><div class="sep"></div>
+    <div>Salir <span class="k">⌘Q</span></div>
+  </div>
+
+  <div class="fondo" id="fondo"></div>
+
+  <!-- PANEL -->
+  <div class="ventana panel" id="panel">
+    <div class="tbar"><i></i><i></i><i></i></div>
+    <div class="cuerpo">
+      <div class="ceja">Grabador Bloomind</div>
+      <div class="sesion" contenteditable="true" spellcheck="false" id="sesion">Clase 2.5 · n8n con cámara</div>
+      <p class="oracion" id="oracion"></p>
+      <div class="ficha">
+        <div class="fila"><span class="et">Se guarda en</span><span class="ruta">~/Movies/Grabador Bloomind</span><button class="enlace">Cambiar…</button></div>
+        <div class="fila"><span class="et">Cuenta regresiva</span><span style="flex:1;color:var(--pizarra)">3, 2, 1 antes de arrancar. No sale en el video.</span><button class="switch on" id="swCuenta" aria-label="Cuenta regresiva"></button></div>
+      </div>
+      <div class="pie">
+        <div class="estado" id="estadoPanel"><span class="p"></span>Todo listo. El micrófono te está oyendo.</div>
+        <button class="btn" id="btnGrabar"><span class="r"></span>Grabar <kbd>^⌥⌘G</kbd></button>
+      </div>
+    </div>
+
+    <div class="pop" id="pArea">
+      <h6>Qué parte de la pantalla</h6>
+      <button class="op" data-area=""><svg class="i ck"><use href="#i-check"/></svg>La pantalla entera</button>
+      <button class="op" data-area="x"><svg class="i ck"><use href="#i-check"/></svg>Un área… <small>la dibujás</small></button>
+    </div>
+    <div class="pop" id="pPant">
+      <h6>Pantalla</h6>
+      <button class="op" data-pant="Built-in Retina Display · 2880×1800"><svg class="i ck"><use href="#i-check"/></svg>Built-in Retina Display<small>2880×1800</small></button>
+      <button class="op" data-pant="LG UltraFine 27 · 3840×2160"><svg class="i ck"><use href="#i-check"/></svg>LG UltraFine 27<small>3840×2160</small></button>
+    </div>
+    <div class="pop" id="pAudio">
+      <h6>Qué se oye</h6>
+      <button class="op" data-modo="mic"><svg class="i ck"><use href="#i-check"/></svg>Solo el micrófono</button>
+      <button class="op" data-modo="ambos"><svg class="i ck"><use href="#i-check"/></svg>El micrófono y el sonido del PC</button>
+      <button class="op" data-modo="pc"><svg class="i ck"><use href="#i-check"/></svg>Solo el sonido del PC</button>
+      <button class="op" data-modo="no"><svg class="i ck"><use href="#i-check"/></svg>Sin sonido</button>
+      <div class="sep"></div>
+      <h6>Micrófono</h6>
+      <button class="op" data-mic="Micrófono DJI vía iPhone"><svg class="i ck"><use href="#i-check"/></svg>Micrófono DJI vía iPhone</button>
+      <button class="op" data-mic="AirPods Pro de Sebastián Giraldo"><svg class="i ck"><use href="#i-check"/></svg>AirPods Pro de Sebastián Giraldo<small>teléfono</small></button>
+      <button class="op" data-mic="Micrófono del MacBook Air"><svg class="i ck"><use href="#i-check"/></svg>Micrófono del MacBook Air</button>
+    </div>
+    <div class="pop" id="pCam">
+      <h6>Cámara</h6>
+      <button class="op" data-cam=""><svg class="i ck"><use href="#i-check"/></svg>Sin cámara</button>
+      <button class="op" data-cam="Cámara FaceTime HD"><svg class="i ck"><use href="#i-check"/></svg>Cámara FaceTime HD</button>
+      <button class="op" data-cam="iPhone de Sebastián"><svg class="i ck"><use href="#i-check"/></svg>iPhone de Sebastián</button>
+    </div>
+    <div class="pop" id="pGuion">
+      <h6>Guiones para el teleprompter</h6>
+      <button class="op sel" data-g><svg class="i ck"><use href="#i-check"/></svg>Intro</button>
+      <button class="op sel" data-g><svg class="i ck"><use href="#i-check"/></svg>Desarrollo</button>
+      <button class="op sel" data-g><svg class="i ck"><use href="#i-check"/></svg>Cierre</button>
+      <button class="op enlace"><span class="ck"></span>Cargar archivos…<small>Word, texto, RTF</small></button>
+      <button class="op enlace"><span class="ck"></span>Escribir uno acá</button>
+      <div class="sep"></div>
+      <div class="paso"><span>Velocidad</span><button class="mini" data-paso="vel,-0.5"><svg class="i"><use href="#i-menos"/></svg></button><span class="val" id="vVel">2.0</span><button class="mini" data-paso="vel,0.5"><svg class="i"><use href="#i-mas"/></svg></button></div>
+      <div class="paso"><span>Tamaño de letra</span><button class="mini" data-paso="let,-4"><svg class="i"><use href="#i-menos"/></svg></button><span class="val" id="vLet">34</span><button class="mini" data-paso="let,4"><svg class="i"><use href="#i-mas"/></svg></button></div>
+    </div>
+  </div>
+
+  <!-- WIDGET -->
+  <div class="capsula" id="widget">
+    <div class="cap" id="cap">
+      <div class="reloj"><div class="n"><span class="vivo"></span><span id="tiempo">12:34</span><span class="marcador" id="punto"></span></div><div class="f" id="frase">Grabando la pantalla</div></div>
+      <button class="cb" id="bPausa" title="⌥⌘P"><svg class="i"><use href="#i-pausa"/></svg><span class="lbl">Pausar</span></button>
+      <button class="cb" id="bDetener" title="⌃⌥⌘G"><svg class="i"><use href="#i-stop"/></svg><span class="lbl">Detener</span></button>
+      <button class="cb" id="bReiniciar" title="Reiniciar toma · ⌥⌘R"><svg class="i"><use href="#i-reiniciar"/></svg><span class="lbl">Reiniciar</span></button>
+      <span class="div"></span>
+      <button class="cb" id="bMic" title="⌥⌘M"><svg class="i"><use href="#i-mic"/></svg><span class="lbl">Micrófono</span></button>
+      <button class="cb" id="bSon" title="⌥⌘S"><svg class="i"><use href="#i-son"/></svg><span class="lbl">Sonido PC</span></button>
+      <button class="cb on" id="bCam"><svg class="i"><use href="#i-cam"/></svg><span class="lbl">Cámara</span></button>
+      <span class="div"></span>
+      <button class="cb grupo" data-menu="m-ve"><svg class="i"><use href="#i-pantalla"/></svg><span class="lbl">Qué se ve<svg class="chev"><use href="#i-abajo"/></svg></span></button>
+      <button class="cb grupo" data-menu="m-tab"><svg class="i"><use href="#i-tablero"/></svg><span class="lbl">Tablero<svg class="chev"><use href="#i-abajo"/></svg></span></button>
+      <span class="ctx" id="ctxTab">
+        <button class="cb" id="cLienzo" title="⌥⌘B"><svg class="i"><use href="#i-lienzo"/></svg><span class="lbl">Lienzo</span></button>
+        <button class="cb" id="cDeshacer" title="⌥⌘Z"><svg class="i"><use href="#i-deshacer"/></svg><span class="lbl">Deshacer</span></button>
+        <button class="cb" id="cBorrar" title="⌥⌘⌫"><svg class="i"><use href="#i-borrar"/></svg><span class="lbl">Borrar</span></button>
+      </span>
+      <button class="cb grupo" data-menu="m-sobre"><svg class="i"><use href="#i-cursor"/></svg><span class="lbl">Sobre la pantalla<svg class="chev"><use href="#i-abajo"/></svg></span></button>
+      <span class="partido">
+        <button class="cb on" id="bGuion" title="Mostrar o esconder el guion · ⌥⌘T"><svg class="i"><use href="#i-guion"/></svg><span class="lbl">Guion</span></button>
+        <button class="cb chevsolo" data-menu="m-guion" title="Controles del guion"><svg class="chev"><use href="#i-abajo"/></svg></button>
+      </span>
+      <span class="ctx" id="ctxGuion">
+        <button class="cb on" id="cLeer" title="Espacio"><svg class="i"><use href="#i-pausa"/></svg><span class="lbl">Pausa guion</span></button>
+      </span>
+    </div>
+    <div class="alertas" id="alertas"></div>
+
+    <div class="gmenu" id="m-ve">
+      <h6>Qué se ve</h6>
+      <button class="mi" data-modo="pantalla"><svg class="i ck"><use href="#i-check"/></svg>Pantalla<span class="k">⌥⌘1</span></button>
+      <button class="mi" data-modo="camara"><svg class="i ck"><use href="#i-check"/></svg>Cámara completa<span class="k">⌥⌘2</span></button>
+      <button class="mi" data-modo="tablero"><svg class="i ck"><use href="#i-check"/></svg>Tablero<span class="k">⌥⌘3</span></button>
+    </div>
+    <div class="gmenu" id="m-tab">
+      <h6>Tablero</h6>
+      <button class="mi" id="mIrTab"><span class="ck"></span>Pasar al tablero<span class="k">⌥⌘3</span></button>
+      <button class="mi" data-lienzo="negro"><svg class="i ck"><use href="#i-check"/></svg>Lienzo negro<span class="k">⌥⌘B</span></button>
+      <button class="mi" data-lienzo="blanco"><svg class="i ck"><use href="#i-check"/></svg>Lienzo blanco<span class="k">⌥⌘B</span></button>
+      <button class="mi" data-dib><span class="ck"></span>Deshacer trazo<span class="k">⌥⌘Z</span></button>
+      <button class="mi" data-dib><span class="ck"></span>Borrar todo<span class="k">⌥⌘⌫</span></button>
+    </div>
+    <div class="gmenu" id="m-sobre">
+      <h6>Sobre la pantalla</h6>
+      <button class="mi" id="mCursor"><svg class="i ck"><use href="#i-check"/></svg>Resaltar cursor<span class="k">⌥⌘A</span></button>
+      <button class="mi" id="mMarc"><svg class="i ck"><use href="#i-check"/></svg>Marcador<span class="k">⌥⌘D</span></button>
+      <div class="mi fijo"><span class="ck"></span>Color<span class="colores" id="colores"><i style="background:#ED382E"></i><i class="sel" style="background:#FFD700"></i><i style="background:#33C759"></i><i style="background:#fff"></i><i style="background:#111"></i></span></div>
+      <button class="mi" id="mCens"><svg class="i ck"><use href="#i-check"/></svg>Censura<span class="k">⌥⌘C</span></button>
+      <button class="mi"><span class="ck"></span>Redibujar la zona<span class="k">⇧⌥⌘C</span></button>
+    </div>
+    <div class="gmenu" id="m-guion">
+      <h6>Guion</h6>
+      <button class="mi" id="mLeer"><span class="ck"></span><span class="t">Pausa</span><span class="k">espacio</span></button>
+      <button class="mi"><span class="ck"></span>Volver al inicio</button>
+      <div class="mi fijo"><span class="ck"></span>Velocidad<span class="pasos"><button class="mini" data-wp="vel,-0.5"><svg class="i"><use href="#i-menos"/></svg></button><span class="val" id="wVel">2.0</span><button class="mini" data-wp="vel,0.5"><svg class="i"><use href="#i-mas"/></svg></button></span></div>
+      <div class="mi fijo"><span class="ck"></span>Letra<span class="pasos"><button class="mini" data-wp="let,-4"><svg class="i"><use href="#i-menos"/></svg></button><span class="val" id="wLet">34</span><button class="mini" data-wp="let,4"><svg class="i"><use href="#i-mas"/></svg></button></span></div>
+      <button class="mi"><span class="ck"></span>Editar el guion</button>
+    </div>
+  </div>
+
+  <!-- TELEPROMPTER -->
+  <div class="tele" id="tele">
+    <div class="tabs"><span class="sel">Intro</span><span>Desarrollo</span><span>Cierre</span><div class="meta">velocidad <span id="tVel">2.0</span> · letra <span id="tLet">34</span></div></div>
+    <div class="texto"><div class="lectura"></div><p id="guionTxt">
+      <span style="opacity:.35">Hola a todos, bienvenidos a la clase 2.5.</span>
+      Hoy vamos a conectar un formulario de Google con una hoja de cálculo, y cada respuesta nueva va a mandar un correo de confirmación al cliente. Empecemos por lo básico: el disparador.
+    </p></div>
+    <div class="tb">
+      <button class="on" id="tePlay" title="Espacio"><svg class="i"><use href="#i-pausa"/></svg><span>Pausa</span></button>
+      <button><svg class="i"><use href="#i-inicio"/></svg>Al inicio</button>
+      <button><svg class="i"><use href="#i-lento"/></svg>Más lento</button>
+      <button><svg class="i"><use href="#i-rapido"/></svg>Más rápido</button>
+      <button><svg class="i"><use href="#i-menos"/></svg>Letra −</button>
+      <button><svg class="i"><use href="#i-mas"/></svg>Letra +</button>
+      <button><svg class="i"><use href="#i-editar"/></svg>Editar</button>
+    </div>
+  </div>
+
+  <!-- BURBUJA -->
+  <div class="burbuja" id="burbuja">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+      <defs><linearGradient id="cuarto" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#cfd8e3"/><stop offset="1" stop-color="#8b9bb0"/></linearGradient>
+      <linearGradient id="piel" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9a98a"/><stop offset="1" stop-color="#b98466"/></linearGradient></defs>
+      <rect width="100" height="100" fill="url(#cuarto)"/>
+      <rect x="62" y="10" width="26" height="40" fill="#e9eef4" opacity=".7"/>
+      <path d="M18 100c2-18 15-27 32-27s30 9 32 27z" fill="#1f2a3d"/>
+      <path d="M44 66h12v10H44z" fill="#b98466"/>
+      <ellipse cx="50" cy="48" rx="15" ry="18" fill="url(#piel)"/>
+      <path d="M35 44c0-14 8-20 16-20s15 5 15 18c-3-6-8-8-15-8s-12 3-16 10z" fill="#2b2420"/>
+    </svg>
+    <span class="rs"></span>
+  </div>
+
+  <!-- CUENTA -->
+  <div class="cuenta" id="cuenta">
+    <div class="disco">
+      <svg viewBox="0 0 230 230"><circle cx="115" cy="115" r="110" stroke="#E2E9F3"/><circle class="aro" id="aro" cx="115" cy="115" r="110"/></svg>
+      <span class="num" id="num">3</span>
+    </div>
+    <div class="ley">Esc para cancelar</div>
+  </div>
+
+  <!-- TARJETA -->
+  <div class="tarjeta" id="tarjeta"></div>
+
+  <!-- SELECTOR DE ÁREA -->
+  <div class="area" id="area">
+    <div class="rect" id="rect"><i style="left:-6px;top:-6px"></i><i style="right:-6px;top:-6px"></i><i style="left:-6px;bottom:-6px"></i><i style="right:-6px;bottom:-6px"></i><span class="med" id="med">960 × 540</span></div>
+    <div class="rotulo"><b>Elegí el área a grabar</b><span>Arrastrá para dibujar el rectángulo · Enter confirma · Esc cancela</span></div>
+  </div>
+</div>
+
+<div class="dev" id="dev">
+  <button data-esc="antes">Antes de grabar</button><button data-esc="cuenta">Cuenta regresiva</button><button data-esc="grabando">Grabando</button>
+  <button data-esc="problemas">Problemas</button><button data-esc="atajos">Atajos</button><button data-esc="area">Elegir área</button><button data-esc="casos">Casos</button>
+  <span id="casosBar" class="oculto" style="display:contents"><span class="s"></span><button data-caso="1">Nombres largos</button><button data-caso="2">Sin permiso</button><button data-caso="3">Sin sonido ni cámara</button><button data-caso="4">Un área</button></span>
+  <span class="s"></span>
+  <button data-fondo="hoja">Hoja</button><button data-fondo="flujos">n8n</button><button data-fondo="foto">Foto</button>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const desk=$('#desk'), fondo=$('#fondo'), widget=$('#widget');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---- fondos ---- */
+function hoja(){
+  const cols='ABCDEFGHIJKLMNOP'.split('');
+  const datos=[['Cliente','Proceso','Radicado','Juzgado','Estado','Próxima audiencia','Honorarios'],
+  ['Ferretería El Clavo SAS','Ejecutivo','05001-31-03-012-2026-00184','12 Civil Cto','Admitida','14/10/2026','$ 4.800.000'],
+  ['María Elena Ospina','Laboral','05001-31-05-007-2026-00321','7 Laboral','Notificación','21/10/2026','$ 3.200.000'],
+  ['Transportes Andinos','Responsabilidad','05001-31-03-004-2025-00977','4 Civil Cto','Pruebas','02/11/2026','$ 9.500.000'],
+  ['Inversiones Ruiz','Restitución','05001-40-03-021-2026-00045','21 Civil Mpal','Sentencia','—','$ 2.100.000'],
+  ['Jorge Iván Mejía','Sucesión','05001-31-10-003-2026-00210','3 Familia','Inventarios','28/10/2026','$ 6.000.000']];
+  let h='<div class="hoja"><div class="barra">Procesos activos 2026 — Numbers</div><table><tr><th></th>'+cols.map(c=>'<th>'+c+'</th>').join('')+'</tr>';
+  for(let r=1;r<36;r++){h+='<tr><th>'+r+'</th>';for(let c=0;c<cols.length;c++){const v=(datos[r-1]||[])[c]||'';h+='<td'+(r==1?' style="font-weight:600"':'')+'>'+v+'</td>'}h+='</tr>'}
+  return h+'</table></div>';
+}
+function flujos(){
+  const n=[[120,300,'Formulario de Google','#6c5ce7'],[360,300,'Si es cliente nuevo','#00b894'],[620,220,'Agregar fila en Sheets','#0f9d58'],[620,400,'Enviar correo','#d63031'],[880,300,'Avisar por WhatsApp','#25d366']];
+  return '<div class="flujos"><svg style="position:absolute;inset:0;width:100%;height:100%"><g stroke="#7a7b85" stroke-width="2" fill="none"><path d="M270 338 C315 338 315 338 360 338"/><path d="M510 338 C565 338 565 258 620 258"/><path d="M510 338 C565 338 565 438 620 438"/><path d="M770 258 C825 258 825 338 880 338"/></g></svg>'+
+    n.map(([x,y,t,c])=>`<div class="nodo" style="left:${x}px;top:${y}px"><i style="background:${c}"></i>${t}</div>`).join('')+'</div>';
+}
+function tablero(){const fondoT=estado.lienzo==='negro'?'#111827':'#FAFAF7';return `<div class="tablero" style="background:${fondoT}"><svg viewBox="0 0 1440 876" fill="none" stroke="${estado.color}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M180 260c40-60 120-60 150 0s-40 110-90 90"/><path d="M380 230v140M380 300c30-40 80-40 80 10v60"/><path d="M520 240c60-20 90 20 60 60l-60 70h90"/>
+  <path d="M700 300h170M850 280l25 20-25 20"/><rect x="930" y="300" width="220" height="140" rx="16"/><path d="M965 370h150"/>
+  <path d="M260 520c120 40 260 40 400-10"/><circle cx="1040" cy="600" r="70"/></svg></div>`}
+const FONDOS={hoja,flujos,foto:()=>'<div class="foto"></div>'};
+let fondoAct='hoja';
+function ponerFondo(f){fondoAct=f;fondo.innerHTML=(estado.rec&&estado.modo==='tablero')?tablero():FONDOS[f]();
+  $('#mb-app').textContent=f==='hoja'?'Numbers':f==='flujos'?'Chrome':'Finder';
+  $$('[data-fondo]').forEach(b=>b.classList.toggle('sel',b.dataset.fondo===f));}
+
+/* ---- estado ---- */
+const BASE={rec:false,pausa:false,micMudo:false,sonMudo:false,cam:'Cámara FaceTime HD',guion:true,modo:'pantalla',cens:false,marc:false,cursor:true,seg:754,
+  audio:'mic',mic:'Micrófono DJI vía iPhone',permiso:true,pant:'Built-in Retina Display · 2880×1800',area:null,nGuiones:3,vel:2,let:34,lienzo:'negro',color:'#FFD700',leyendo:true};
+const estado={esc:'antes',...BASE};
+
+/* ---- nombres cortos para la oración ----
+   La oración no es una lista de dispositivos: es una frase. El nombre completo
+   va en el menú y en el tooltip; en la frase va el nombre con que uno lo dice. */
+function corto(s,max){if(s.length<=max)return s;const c=s.slice(0,max).replace(/\s+\S*$/,'');return c+'…'}
+function pantCorta(full){const n=full.split(' · ')[0];return /Built-in Retina/i.test(n)?'Retina':corto(n,18)}
+function micCorto(full){
+  let n=full.replace(/\s+vía\s+.*$/i,'').replace(/\s+de\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+(\s+[A-ZÁÉÍÓÚÑ][\wáéíóúñ]+)*$/,'').replace(/MacBook (Air|Pro)/,'Mac');
+  if(/^AirPods/i.test(n))return 'los '+corto(n,16);
+  if(/^micr[oó]fono/i.test(n))return 'el '+corto(n[0].toLowerCase()+n.slice(1),22);
+  return 'el micrófono '+corto(n,14);
+}
+function camCorta(full){if(!full)return null;if(/FaceTime/i.test(full))return 'la cámara FaceTime';if(/iPhone/i.test(full))return 'el iPhone';return 'la cámara '+corto(full,14)}
+console.assert(micCorto('AirPods Pro de Sebastián Giraldo')==='los AirPods Pro');
+console.assert(micCorto('Micrófono DJI vía iPhone')==='el micrófono DJI');
+console.assert(micCorto('Micrófono del MacBook Air')==='el micrófono del Mac');
+console.assert(pantCorta('LG UltraFine 27 · 3840×2160')==='LG UltraFine 27');
+
+/* ---- panel: la oración se arma del estado ---- */
+const frag=(texto,pop,clase='')=>`<span class="frag ${clase}" tabindex="0" data-pop="${pop}">${texto}</span>`;
+function oracion(){
+  const e=estado, usaMic=e.audio==='mic'||e.audio==='ambos';
+  let s='Voy a grabar '+frag(e.area?'un área de '+e.area:'la pantalla entera','pArea')+' del '+frag(pantCorta(e.pant),'pPant')+', ';
+  if(e.audio==='no') s+=frag('sin sonido','pAudio','apagado');
+  else {
+    s+='con ';
+    if(usaMic){
+      const sin=!e.permiso;
+      s+=`<span class="frag ${sin?'falta':'mic'}" tabindex="0" data-pop="pAudio" title="${e.mic}">${micCorto(e.mic)}`+
+         (sin?'<span class="falta-t"> — sin permiso, tocá para darlo</span>':'')+'</span>';
+      if(e.audio==='ambos') s+=' y '+frag('el sonido del PC','pAudio');
+    } else s+=frag('el sonido del PC','pAudio');
+  }
+  const cam=camCorta(e.cam);
+  s+=(e.audio==='ambos'?', y ':' y ')+frag(cam?(e.audio==='no'?'con '+cam:cam):'sin cámara','pCam',cam?'':'apagado');
+  s+=e.nGuiones?', leyendo '+frag(e.nGuiones===1?'1 guion':e.nGuiones+' guiones','pGuion'):', '+frag('sin guion','pGuion','apagado');
+  $('#oracion').innerHTML=s+'.';
+  // pie: lo que falta va primero, y el botón dice qué hacer con eso
+  const est=$('#estadoPanel'), btn=$('#btnGrabar');
+  btn.classList.toggle('falta',usaMic&&!e.permiso);
+  if(usaMic&&!e.permiso){
+    est.innerHTML='<span class="p" style="background:var(--coral)"></span>Sin ese permiso el video sale mudo.';
+    btn.innerHTML='<svg class="i"><use href="#i-micoff"/></svg>Dar permiso al micrófono';
+  } else {
+    btn.innerHTML='<span class="r"></span>Grabar <kbd>⌃⌥⌘G</kbd>';
+    if(usaMic&&/AirPods/i.test(e.mic)) est.innerHTML='<span class="p" style="background:#E3A008"></span>Los AirPods graban con calidad de teléfono.';
+    else if(e.audio==='no') est.innerHTML='<span class="p" style="background:#E3A008"></span>El video va a salir sin sonido.';
+    else est.innerHTML='<span class="p"></span>Todo listo. '+(usaMic?'El micrófono te está oyendo.':'Se oye el PC.');
+  }
+  // los menús marcan lo elegido
+  $$('#pPant [data-pant]').forEach(b=>b.classList.toggle('sel',b.dataset.pant===e.pant));
+  $$('#pAudio [data-mic]').forEach(b=>b.classList.toggle('sel',b.dataset.mic===e.mic));
+  $$('#pAudio [data-modo]').forEach(b=>b.classList.toggle('sel',b.dataset.modo===e.audio));
+  $$('#pCam [data-cam]').forEach(b=>b.classList.toggle('sel',b.dataset.cam===(e.cam||'')));
+  $$('#pArea [data-area]').forEach(b=>b.classList.toggle('sel',(b.dataset.area||null)===(e.area?'x':null)||(!e.area&&!b.dataset.area)));
+}
+let popAbierto=null;
+function cerrarPop(){if(popAbierto){popAbierto.pop.classList.remove('abierto');popAbierto=null;$$('.frag.abierto').forEach(f=>f.classList.remove('abierto'))}}
+function abrirPop(f){const pop=$('#'+f.dataset.pop);if(popAbierto&&popAbierto.pop===pop){cerrarPop();return}cerrarPop();
+  const r=f.getBoundingClientRect(),pr=$('#panel').getBoundingClientRect();
+  pop.style.left=Math.max(10,Math.min(r.left-pr.left-10,640-310))+'px'; pop.style.top=(r.bottom-pr.top+6)+'px';
+  pop.classList.add('abierto');f.classList.add('abierto');popAbierto={pop};}
+$('#oracion').addEventListener('click',ev=>{
+  const f=ev.target.closest('.frag'); if(!f)return; ev.stopPropagation();
+  if(ev.target.closest('.falta-t')){estado.permiso=true;oracion();return} // en la app: abre Configuración del Sistema
+  abrirPop(f);});
+$('#oracion').addEventListener('keydown',ev=>{const f=ev.target.closest('.frag');if(f&&(ev.key==='Enter'||ev.key===' ')){ev.preventDefault();abrirPop(f)}});
+document.addEventListener('click',e=>{if(!e.target.closest('.pop'))cerrarPop(); if(!e.target.closest('#mbIcono,#menu'))$('#menu').classList.remove('abierto');});
+const tras=fn=>b=>b.addEventListener('click',()=>{fn(b);cerrarPop();oracion();pintarWidget()});
+$$('#pPant [data-pant]').forEach(tras(b=>estado.pant=b.dataset.pant));
+$$('#pAudio [data-modo]').forEach(tras(b=>estado.audio=b.dataset.modo));
+$$('#pAudio [data-mic]').forEach(tras(b=>{estado.mic=b.dataset.mic;if(estado.audio==='pc'||estado.audio==='no')estado.audio='mic'}));
+$$('#pCam [data-cam]').forEach(tras(b=>estado.cam=b.dataset.cam||null));
+$$('#pArea [data-area]').forEach(b=>b.addEventListener('click',()=>{cerrarPop();if(b.dataset.area){irA('area')}else{estado.area=null;oracion()}}));
+$$('#pGuion [data-g]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();b.classList.toggle('sel');estado.nGuiones=$$('#pGuion [data-g].sel').length;estado.guion=estado.nGuiones>0;
+  const f=$('.frag[data-pop="pGuion"]');oracion();const nf=$('.frag[data-pop="pGuion"]');nf.classList.add('abierto');}));
+function paso(k,d){if(k==='vel')estado.vel=Math.min(10,Math.max(.5,estado.vel+d));else estado.let=Math.min(96,Math.max(16,estado.let+d));pintarWidget();
+  $('#guionTxt').style.fontSize=estado.let+'px';}
+$$('[data-paso],[data-wp]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const [k,d]=(b.dataset.paso||b.dataset.wp).split(',');paso(k,+d)}));
+$('#swCuenta').addEventListener('click',e=>e.currentTarget.classList.toggle('on'));
+$('#btnGrabar').addEventListener('click',()=>{if($('#btnGrabar').classList.contains('falta')){estado.permiso=true;oracion();return}
+  cuentaReal=true;irA($('#swCuenta').classList.contains('on')?'cuenta':'grabando')});
+
+/* medidor: el subrayado del micrófono se mueve con la voz */
+let nivel=.3;
+setInterval(()=>{if(reduce)return;const f=$('.frag.mic');if(!f)return;const obj=Math.random()<.08?.05:.25+Math.random()*.7;nivel+=(obj-nivel)*.35;f.style.setProperty('--nivel',(nivel*100).toFixed(0)+'%')},90);
+
+/* ---- widget ---- */
+const nombreModo=e=>({pantalla:'la pantalla',camara:'la cámara completa',tablero:'el tablero '+e.lienzo}[e.modo]);
+function frase(){ // solo lo normal: las alertas tienen su pastilla
+  const e=estado, neutro=[];
+  if(e.marc) neutro.push('anotando');
+  if(!e.cursor) neutro.push('sin cursor');
+  const base=e.pausa?'En pausa · '+nombreModo(e).replace(/^(la|el) /,''):'Grabando '+nombreModo(e);
+  return [base,...neutro].join(' · ');
+}
+function alertas(){
+  const e=estado, al=[], conMic=e.audio==='mic'||e.audio==='ambos', conSon=e.audio==='pc'||e.audio==='ambos';
+  const micOff=!conMic||e.micMudo, sonOff=!conSon||e.sonMudo;
+  if((conMic||conSon)&&micOff&&sonOff) al.push(['sin-audio','Sin audio',conMic?'⌥⌘M':'⌥⌘S','#i-micoff']);
+  else { if(conMic&&e.micMudo) al.push(['mic','Micrófono mudo','⌥⌘M','#i-micoff']); if(conSon&&e.sonMudo) al.push(['son','Sonido del PC mudo','⌥⌘S','#i-sonoff']); }
+  if(e.cens) al.push(['cens','Censura puesta','⌥⌘C','#i-censura']);
+  return al;
+}
+function pintarWidget(){
+  const e=estado;
+  widget.classList.toggle('pausado',e.pausa);
+  $('#tiempo').textContent=String(Math.floor(e.seg/60)).padStart(2,'0')+':'+String(e.seg%60).padStart(2,'0');
+  $('#mbT').textContent=$('#tiempo').textContent;
+  $('#frase').textContent=frase();
+  $('#alertas').innerHTML=alertas().map(([k,t,kb,ic])=>`<button class="pill" data-deshacer="${k}" title="Tocá para deshacer"><svg class="i"><use href="${ic}"/></svg>${t}<kbd>${kb}</kbd></button>`).join('');
+  const bp=$('#bPausa'); bp.querySelector('use').setAttribute('href',e.pausa?'#i-play':'#i-pausa'); bp.querySelector('.lbl').textContent=e.pausa?'Reanudar':'Pausar';
+  const conMic=e.audio==='mic'||e.audio==='ambos', conSon=e.audio==='pc'||e.audio==='ambos';
+  const bm=$('#bMic'); bm.disabled=!conMic; bm.classList.toggle('alerta',conMic&&e.micMudo); bm.querySelector('use').setAttribute('href',e.micMudo?'#i-micoff':'#i-mic'); bm.querySelector('.lbl').textContent=e.micMudo?'Activar mic':'Micrófono';
+  const bs=$('#bSon'); bs.disabled=!conSon; bs.classList.toggle('alerta',conSon&&e.sonMudo); bs.querySelector('use').setAttribute('href',e.sonMudo?'#i-sonoff':'#i-son');
+  $('#bCam').classList.toggle('on',!!e.cam); $('#bGuion').classList.toggle('on',e.guion);
+  // contexto: lo del tablero vive en la cápsula solo mientras hay tablero; el play del guion, solo con guion a la vista
+  $('#ctxTab').classList.toggle('oculto',e.modo!=='tablero');
+  $('#ctxGuion').classList.toggle('oculto',!e.guion);
+  $('#cLienzo').title=(e.lienzo==='negro'?'Pasar a lienzo blanco':'Pasar a lienzo negro')+' · ⌥⌘B';
+  const leer=$('#cLeer'); leer.querySelector('use').setAttribute('href',e.leyendo?'#i-pausa':'#i-play'); leer.querySelector('.lbl').textContent=e.leyendo?'Pausa guion':'Leer guion'; leer.classList.toggle('on',e.leyendo);
+  $('#mLeer .t').textContent=e.leyendo?'Pausa':'Leer';
+  $('#tePlay').classList.toggle('on',e.leyendo);$('#tePlay').querySelector('use').setAttribute('href',e.leyendo?'#i-pausa':'#i-play');$('#tePlay span').textContent=e.leyendo?'Pausa':'Play';
+  // menús
+  $$('#m-ve [data-modo]').forEach(b=>{b.classList.toggle('sel',b.dataset.modo===e.modo);if(b.dataset.modo==='camara')b.disabled=!e.cam});
+  $('#mIrTab').classList.toggle('oculto',e.modo==='tablero');
+  $$('#m-tab [data-lienzo]').forEach(b=>{b.classList.toggle('sel',b.dataset.lienzo===e.lienzo);b.disabled=e.modo!=='tablero'});
+  const dib=e.modo==='tablero'||e.marc; $$('#m-tab [data-dib]').forEach(b=>b.disabled=!dib);
+  $('#mCursor').classList.toggle('sel',e.cursor); $('#mMarc').classList.toggle('sel',e.marc);
+  $('#mCens').classList.toggle('sel',e.cens); $('#mCens').classList.toggle('alerta',e.cens);
+  $$('#m-guion button').forEach(b=>b.disabled=!e.guion);
+  const p=$('#punto'); p.style.display=dib?'block':'none'; p.style.background=e.color;
+  $$('#colores i').forEach(i=>i.classList.toggle('sel',i.style.background===hex2rgb(e.color)));
+  $('#tele').classList.toggle('oculto',!(e.guion&&e.rec));
+  $('#burbuja').classList.toggle('oculto',!e.cam||['cuenta','area','casos'].includes(e.esc));
+  $('#wVel').textContent=$('#tVel').textContent=$('#vVel').textContent=e.vel.toFixed(1);
+  $('#wLet').textContent=$('#tLet').textContent=$('#vLet').textContent=e.let;
+  desk.dataset.rec=e.rec?(e.pausa?'pausa':'rec'):'no';
+  $('#mDet').className=e.rec?'':'gris'; $('#mIni').className=e.rec?'gris':'';
+  requestAnimationFrame(acomodarTele);
+}
+function hex2rgb(h){const n=parseInt(h.slice(1),16);return `rgb(${n>>16}, ${n>>8&255}, ${n&255})`}
+
+/* El teleprompter le cede el paso al widget: se angosta hasta donde empieza la
+   cápsula, y si ya no queda ancho para leer, baja por debajo de ella. */
+function acomodarTele(){
+  const t=$('#tele'); if(t.classList.contains('oculto')||widget.classList.contains('oculto'))return;
+  const k=desk.getBoundingClientRect(), w=$('#cap').getBoundingClientRect(), a=$('#alertas').getBoundingClientRect();
+  const libre=w.left-k.left-16-36;
+  if(libre>=540){t.style.top='48px';t.style.width=Math.min(680,libre)+'px'}
+  else{t.style.width='680px';t.style.top=(Math.max(w.bottom,a.bottom)-k.top+16)+'px'}
+}
+
+/* menús de grupo: uno a la vez, se cierran al elegir, al sacar el mouse o con Esc */
+let menuAbierto=null, graciaT=null;
+function cerrarMenu(){clearTimeout(graciaT);if(!menuAbierto)return;menuAbierto.m.classList.remove('abierto');menuAbierto.b.classList.remove('abierto');menuAbierto=null}
+function abrirMenu(b){
+  const m=$('#'+b.dataset.menu); if(menuAbierto&&menuAbierto.m===m){cerrarMenu();return} cerrarMenu();
+  const wr=widget.getBoundingClientRect(), br=b.getBoundingClientRect();
+  m.classList.add('abierto');
+  const izq=Math.min(br.left-wr.left, wr.width-m.offsetWidth);
+  m.style.left=Math.max(0,izq)+'px'; m.style.top=(br.bottom-wr.top+10)+'px';
+  b.classList.add('abierto'); menuAbierto={m,b};
+}
+$$('[data-menu]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();abrirMenu(b)}));
+$$('.gmenu').forEach(m=>{
+  m.addEventListener('mouseleave',()=>{graciaT=setTimeout(cerrarMenu,400)});
+  m.addEventListener('mouseenter',()=>clearTimeout(graciaT));
+  m.addEventListener('click',e=>{e.stopPropagation();const it=e.target.closest('button.mi');if(it&&!it.disabled)setTimeout(cerrarMenu,90)});
+});
+$$('[data-menu]').forEach(b=>{b.addEventListener('mouseleave',()=>{if(menuAbierto&&menuAbierto.b===b)graciaT=setTimeout(cerrarMenu,400)});b.addEventListener('mouseenter',()=>clearTimeout(graciaT))});
+addEventListener('keydown',e=>{if(e.key==='Escape'){cerrarMenu();cerrarPop()}});
+document.addEventListener('click',e=>{if(!e.target.closest('.gmenu'))cerrarMenu()});
+
+const act=fn=>()=>{fn();ponerFondo(fondoAct);pintarWidget()};
+$('#bPausa').onclick=act(()=>estado.pausa=!estado.pausa);
+$('#bDetener').onclick=()=>irA('antes');
+$('#bMic').onclick=act(()=>estado.micMudo=!estado.micMudo);
+$('#bSon').onclick=act(()=>estado.sonMudo=!estado.sonMudo);
+$('#bCam').onclick=act(()=>{estado.cam=estado.cam?null:'Cámara FaceTime HD';if(!estado.cam&&estado.modo==='camara')estado.modo='pantalla'});
+$('#bGuion').onclick=act(()=>estado.guion=!estado.guion);
+$('#cLeer').onclick=$('#mLeer').onclick=$('#tePlay').onclick=act(()=>estado.leyendo=!estado.leyendo);
+$('#cLienzo').onclick=act(()=>estado.lienzo=estado.lienzo==='negro'?'blanco':'negro');
+$$('#m-ve [data-modo]').forEach(b=>b.onclick=act(()=>estado.modo=b.dataset.modo));
+$('#mIrTab').onclick=act(()=>estado.modo='tablero');
+$$('#m-tab [data-lienzo]').forEach(b=>b.onclick=act(()=>estado.lienzo=b.dataset.lienzo));
+$('#mCursor').onclick=act(()=>estado.cursor=!estado.cursor);
+$('#mMarc').onclick=act(()=>estado.marc=!estado.marc);
+$('#mCens').onclick=act(()=>estado.cens=!estado.cens);
+$$('#colores i').forEach(i=>i.onclick=act(()=>{const m=i.style.background.match(/\d+/g).map(Number);estado.color='#'+m.map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase()}));
+$('#alertas').addEventListener('click',e=>{const p=e.target.closest('.pill');if(!p)return;const k=p.dataset.deshacer;
+  act(()=>{if(k==='mic')estado.micMudo=false;if(k==='son')estado.sonMudo=false;if(k==='cens')estado.cens=false;if(k==='sin-audio'){estado.micMudo=false;estado.sonMudo=false}})()});
+setInterval(()=>{if(estado.rec&&!estado.pausa){estado.seg++;$('#tiempo').textContent=String(Math.floor(estado.seg/60)).padStart(2,'0')+':'+String(estado.seg%60).padStart(2,'0');$('#mbT').textContent=$('#tiempo').textContent}},1000);
+(()=>{let d=null;$('#cap').addEventListener('mousedown',e=>{if(e.target.closest('button'))return;const r=widget.getBoundingClientRect(),k=desk.getBoundingClientRect();d={x:e.clientX-r.left+k.left,y:e.clientY-r.top+k.top}});
+  addEventListener('mousemove',e=>{if(!d)return;widget.style.left=(e.clientX-d.x)+'px';widget.style.top=(e.clientY-d.y)+'px';widget.style.right='auto';acomodarTele()});addEventListener('mouseup',()=>d=null)})();
+
+/* ---- menú de la barra ---- */
+$('#mbIcono').onclick=e=>{e.stopPropagation();$('#menu').classList.toggle('abierto')};
+
+/* ---- tarjeta de atajos ---- */
+const ATAJOS=[['Grabación',[['Iniciar / detener','⌃⌥⌘G'],['Pausar / reanudar','⌥⌘P'],['Reiniciar toma','⌥⌘R']]],
+ ['Qué se ve',[['Modo pantalla','⌥⌘1'],['Modo cámara completa','⌥⌘2'],['Modo tablero','⌥⌘3'],['Tablero blanco / negro','⌥⌘B']]],
+ ['Dibujo',[['Marcador sobre la pantalla','⌥⌘D'],['Rotar color del marcador','⌥⌘0'],['Deshacer último trazo','⌥⌘Z'],['Borrar la superficie activa','⌥⌘⌫']]],
+ ['Censura y cursor',[['Censura on / off','⌥⌘C'],['Redibujar la zona censurada','⇧⌥⌘C'],['Resaltado del cursor','⌥⌘A']]],
+ ['Audio',[['Silenciar micrófono','⌥⌘M'],['Silenciar audio del sistema','⌥⌘S']]],
+ ['Ventanas',[['Teleprompter on / off','⌥⌘T'],['Mostrar / esconder el widget','⌥⌘W'],['Esta tarjeta (mantener)','⌥⌘H']]]];
+$('#tarjeta').innerHTML='<h3>Atajos</h3><p class="sub">Se ve mientras mantengas ⌥⌘H.</p>'+ATAJOS.map(([g,l])=>'<h6>'+g+'</h6>'+l.map(([t,k])=>
+  `<div class="at"><span>${t}</span><span class="kc">${[...k].map(c=>'<i>'+c+'</i>').join('')}</span></div>`).join('')).join('');
+
+/* ---- selector de área ---- */
+(()=>{const a=$('#area'),r=$('#rect');let o=null;const set=(x,y,w,h)=>{Object.assign(r.style,{left:x+'px',top:y+'px',width:w+'px',height:h+'px'});$('#med').textContent=Math.round(w*2)+' × '+Math.round(h*2)};
+  set(240,194,960,540);
+  a.addEventListener('mousedown',e=>{const k=a.getBoundingClientRect();o={x:e.clientX-k.left,y:e.clientY-k.top,k}});
+  addEventListener('mousemove',e=>{if(!o)return;const x=e.clientX-o.k.left,y=e.clientY-o.k.top;set(Math.min(x,o.x),Math.min(y,o.y),Math.abs(x-o.x),Math.abs(y-o.y))});
+  addEventListener('mouseup',()=>o=null);
+  addEventListener('keydown',e=>{if(estado.esc!=='area')return;if(e.key==='Enter'){estado.area=$('#med').textContent.replace(/ /g,'');irA('antes')}if(e.key==='Escape')irA('antes')});})();
+
+/* ---- cuenta regresiva ---- */
+let cuentaT=[],cuentaReal=false;
+function correrCuenta(){cuentaT.forEach(clearTimeout);cuentaT=[];
+  const paso=n=>{const num=$('#num'),aro=$('#aro');num.textContent=n;num.classList.remove('entra');aro.classList.remove('anda');void num.offsetWidth;num.classList.add('entra');aro.classList.add('anda')};
+  [3,2,1].forEach((n,i)=>cuentaT.push(setTimeout(()=>paso(n),i*1000)));
+  cuentaT.push(setTimeout(()=>{if(estado.esc!=='cuenta')return;if(cuentaReal){cuentaReal=false;irA('grabando')}else correrCuenta()},3000));}
+
+/* ---- casos difíciles de la oración ---- */
+const CASOS={
+  1:{mic:'AirPods Pro de Sebastián Giraldo',pant:'LG UltraFine 27 · 3840×2160'},
+  2:{permiso:false},
+  3:{audio:'no',cam:null},
+  4:{area:'1280×720'}};
+
+/* ---- escenas ---- */
+function irA(esc,caso){
+  cerrarMenu();cerrarPop();
+  const e=estado; e.esc=esc;
+  e.rec=['grabando','problemas','atajos'].includes(esc);
+  if(esc==='problemas') Object.assign(e,{pausa:true,micMudo:true,cens:true,modo:'tablero',marc:false,cursor:false,guion:false,color:'#FFD700',lienzo:'negro'});
+  else if(e.rec) Object.assign(e,{pausa:false,micMudo:false,sonMudo:false,cens:false,modo:'pantalla',cursor:true,guion:true});
+  if(esc==='casos'){Object.assign(e,BASE,{esc,area:null},CASOS[caso||1]);}
+  else if(esc==='antes'){Object.assign(e,{permiso:true});e.seg=754}
+  $('#panel').classList.toggle('oculto',!['antes','casos'].includes(esc));
+  widget.classList.toggle('oculto',!e.rec);
+  $('#cuenta').style.display=esc==='cuenta'?'grid':'none';
+  $('#tarjeta').classList.toggle('oculto',esc!=='atajos');
+  $('#area').style.display=esc==='area'?'block':'none';
+  $('#casosBar').classList.toggle('oculto',esc!=='casos');
+  $$('#casosBar [data-caso]').forEach(b=>b.classList.toggle('sel',+b.dataset.caso===(caso||1)));
+  ponerFondo(fondoAct);
+  if(esc==='cuenta')correrCuenta();
+  $$('[data-esc]').forEach(b=>b.classList.toggle('sel',b.dataset.esc===esc));
+  oracion(); pintarWidget();
+  // en Grabando se deja un menú de grupo abierto para ver su tamaño real
+  if(esc==='grabando') setTimeout(()=>abrirMenu($('[data-menu="m-sobre"]')),50);
+  history.replaceState(null,'','#'+esc+(esc==='casos'?(caso||1):'')+(fondoAct!=='hoja'?'+'+fondoAct:''));
+}
+$$('[data-esc]').forEach(b=>b.onclick=()=>irA(b.dataset.esc));
+$$('[data-caso]').forEach(b=>b.onclick=()=>irA('casos',+b.dataset.caso));
+$$('[data-fondo]').forEach(b=>b.onclick=()=>{ponerFondo(b.dataset.fondo);history.replaceState(null,'',location.hash.split('+')[0]+(b.dataset.fondo!=='hoja'?'+'+b.dataset.fondo:''))});
+
+const h=location.hash.slice(1).split('+');
+const fh=h.find(x=>FONDOS[x]); if(fh)fondoAct=fh;
+const m=(h[0]||'antes').match(/^([a-z]+)(\d?)$/)||[,'antes'];
+irA(['antes','cuenta','grabando','problemas','atajos','area','casos'].includes(m[1])?m[1]:'antes',+m[2]||1);
+
+/* medición pedida: lo abierto contra la hoja de la v1 (618 × 368 pt) */
+if(h.includes('medir')) setTimeout(()=>{
+  const hojaV1=618*368, r={};
+  $$('[data-menu]').forEach(b=>{abrirMenu(b);const q=menuAbierto.m.getBoundingClientRect();r[b.dataset.menu]=Math.round(q.width)+'×'+Math.round(q.height)+'='+Math.round(q.width*q.height/hojaV1*100)+'%';cerrarMenu()});
+  document.title='MEDIDA '+JSON.stringify(r);
+},400);
+</script>
+</body>
+</html>

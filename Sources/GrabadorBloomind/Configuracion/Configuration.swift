@@ -51,10 +51,13 @@ struct Configuration: Codable, Equatable {
     var boardColor: String?
 
     var bubbleFrame: StoredRect?
-    var widgetPosition: StoredPoint?
-    /// Widget con todos los botones a la vista, o solo los de siempre. Arranca
-    /// compacto: es lo que ocupa menos pantalla mientras se da clase.
-    var widgetExpanded: Bool = false
+    /// La esquina de arriba a la derecha del widget, que es la que se queda
+    /// quieta cuando la cápsula crece, se achica o pasa a modo mini. Reemplaza
+    /// al origen que se guardaba antes de la Fase 16: un origen abajo a la
+    /// izquierda se corre cada vez que cambia el ancho.
+    var widgetTopRight: StoredPoint?
+    /// El widget achicado a solo el cronómetro (decisión 125).
+    var widgetMini: Bool = false
 
     /// El círculo amarillo del cursor y la onda del clic. Arranca prendido: es
     /// el comportamiento de siempre y lo que se quiere en un tutorial.
@@ -105,8 +108,8 @@ struct Configuration: Codable, Equatable {
         customArea       = try c.decodeIfPresent(StoredRect.self, forKey: .customArea)
         boardColor       = try c.decodeIfPresent(String.self, forKey: .boardColor)
         bubbleFrame      = try c.decodeIfPresent(StoredRect.self, forKey: .bubbleFrame)
-        widgetPosition   = try c.decodeIfPresent(StoredPoint.self, forKey: .widgetPosition)
-        widgetExpanded   = try c.decodeIfPresent(Bool.self, forKey: .widgetExpanded) ?? false
+        widgetTopRight   = try c.decodeIfPresent(StoredPoint.self, forKey: .widgetTopRight)
+        widgetMini       = try c.decodeIfPresent(Bool.self, forKey: .widgetMini) ?? false
         cursorHighlightEnabled = try c.decodeIfPresent(Bool.self, forKey: .cursorHighlightEnabled) ?? true
         teleprompterScript   = try c.decodeIfPresent(String.self, forKey: .teleprompterScript)
         teleprompterScripts  = try c.decodeIfPresent([StoredScript].self, forKey: .teleprompterScripts) ?? []

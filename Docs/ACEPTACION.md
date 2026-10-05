@@ -918,3 +918,51 @@ Con la grabación corriendo, cambiá el guion desde el botón de editar, movelo,
 **Tiene que:** desaparecer el teleprompter al detener. Arrancá otra grabación y prendelo de nuevo: tiene que volver con el guion del panel, la velocidad del panel, el tamaño del panel y en su posición de arranque, arriba y al centro. Nada de lo que ajustaste en la grabación anterior puede sobrevivir.
 
 Y dentro de una misma grabación es al revés: apagalo y prendelo con Opción + Comando + T, y tiene que volver **exactamente como lo dejaste**, incluso en la parte del guion donde ibas.
+
+## Fase 16. Rediseño visual — parte 1: el widget — VALIDADA el 2026-10-05
+
+Lo que cambia: el widget pasa a ser una **cápsula blanca** en una sola fila. A la vista quedan el tiempo con una frase debajo, Pausar, Detener, Reiniciar, Micrófono, Sonido PC y Cámara. Todo lo demás está en cuatro botones con flechita (**Qué se ve**, **Tablero**, **Sobre la pantalla** y la flechita de **Guion**): cada uno abre un menú chico con el atajo escrito al lado. Las alertas graves salen como pastillas coral grandes debajo de la cápsula, y el botón **Achicar** la deja en solo el tiempo.
+
+No cambia ninguna función: lo que hacía el widget lo sigue haciendo, ahora en otro lugar. Por eso el paso 7 vuelve a comprobar que todo responde con el tablero y el marcador prendidos.
+
+Para arrancar: grabá la pantalla con micrófono, sonido del PC, cámara y un guion cargado, para que aparezca todo.
+
+### 1. La cápsula
+
+Arrancá la grabación y mirá arriba a la derecha.
+
+**Tiene que:** verse una cápsula blanca de borde fino, con el tiempo en letra con serifa, un punto azul que late al lado y debajo «Grabando la pantalla». Arrastrala desde el tiempo o desde cualquier parte que no sea un botón: se mueve. Detené, volvé a grabar: aparece donde la dejaste.
+
+### 2. Los menús de grupo
+
+Tocá **Qué se ve**, después **Tablero**, después **Sobre la pantalla** y después la flechita al lado de **Guion**.
+
+**Tiene que:** abrir un menú chico debajo de cada uno, con el atajo a la derecha de cada renglón (por ejemplo «Pantalla ⌥⌘1»), el modo actual con su tilde, y cerrarse solo al elegir algo o al tocar afuera. Nunca puede haber dos abiertos a la vez. Probá una acción de cada menú: cambiar a tablero, prender el marcador, apagar y prender el resaltado del cursor, poner y sacar la censura, y bajar la velocidad del guion. Cada una tiene que hacer lo mismo que su atajo.
+
+### 3. Los botones que aparecen solos
+
+Pasá al tablero con **Opción + Comando + 3**.
+
+**Tiene que:** aparecer en la cápsula, sobre un fondo gris claro, **Lienzo**, **Deshacer** y **Borrar**, y desaparecer al volver a la pantalla. Con el guion a la vista tiene que estar **Pausa guion**, que se esconde al esconder el guion con **Opción + Comando + T**. La frase de abajo del tiempo dice en qué estás («Grabando el tablero negro · marcador amarillo») y, si apagás el resaltado del cursor, agrega «sin cursor».
+
+### 4. Las alertas
+
+Silenciá el micrófono con **Opción + Comando + M** y poné la censura con **Opción + Comando + C**.
+
+**Tiene que:** salir debajo de la cápsula una pastilla coral grande por cada una («Micrófono mudo ⌥⌘M», «Censura puesta ⌥⌘C»), y el botón del micrófono ponerse coral y decir «Activar mic». Tocá cada pastilla: tiene que deshacer lo suyo y desaparecer. Silenciá también el sonido del PC: las dos pastillas de audio se juntan en una sola, «Sin audio».
+
+### 5. El modo mini
+
+Tocá **Achicar**, el último botón de la cápsula.
+
+**Tiene que:** quedar solo una pastilla con el punto y el tiempo, en la misma esquina. Pausá: el punto pasa a dos barritas. Silenciá el micrófono: la pastilla se pone coral entera y la alerta sigue saliendo debajo. Arrastrala: se mueve sin volver a la cápsula. Tocala sin arrastrar: vuelve la cápsula completa. Dejala en mini, detené y volvé a grabar: arranca en mini.
+
+### 6. Pausa, cámara y reiniciar
+
+Tocá **Pausar**: tiene que decir «Reanudar» con el ícono de play (antes decía «Pausar» con ese ícono) y el tiempo quedarse quieto y más claro. Tocá **Cámara**: apaga y prende la burbuja; mantenelo presionado: sale el menú de cámaras. Tocá **Reiniciar**: pregunta antes, como siempre.
+
+### 7. Reverificación: todo responde con el dibujo prendido
+
+Con el tablero prendido, y después con el marcador sobre la pantalla, tocá botones de la cápsula y abrí los menús de grupo.
+
+**Tiene que:** responder todo igual que sin dibujo, y lo que dibujes seguir saliendo en el video. Al terminar, mirá el video: la cápsula, los menús y las pastillas **no pueden aparecer en ningún cuadro**.
