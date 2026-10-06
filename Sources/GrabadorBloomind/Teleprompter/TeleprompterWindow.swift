@@ -40,16 +40,16 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     private let texto = NSTextView()
     private let escenario = EscenarioView()
 
-    /// Los mismos botones del widget, con la misma gramática: ícono arriba,
-    /// nombre abajo, todos del mismo tamaño (decisión 113). La barra de acá y la
-    /// fila del widget hacen lo mismo, así que se ven igual.
-    private let play = NSButton()
-    private let reiniciar = NSButton()
-    private let masLento = NSButton()
-    private let masRapido = NSButton()
-    private let menosLetra = NSButton()
-    private let masLetra = NSButton()
-    private let editar = NSButton()
+    /// Los botones de la barra: ícono y nombre en un renglón, sobre el navy
+    /// (decisión 134). Ya no comparten gramática con el widget, que es blanco
+    /// y lleva el nombre debajo.
+    private let play = BarraBoton()
+    private let reiniciar = BarraBoton()
+    private let masLento = BarraBoton()
+    private let masRapido = BarraBoton()
+    private let menosLetra = BarraBoton()
+    private let masLetra = BarraBoton()
+    private let editar = BarraBoton()
     /// Las teclas que sirven acá, escritas a la vista para no tener que
     /// aprendérselas (decisión 119).
     private let ayuda = NSTextField(labelWithString: "")
@@ -59,6 +59,18 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     private let campoVelocidad = NSTextField()
     private let campoLetra = NSTextField()
     private var valores: NSStackView!
+    private var etiquetasValores: [NSTextField] = []
+
+    /// Claro u oscuro (decisión 135). Se cambia con el botón de arriba a la
+    /// derecha y queda recordado.
+    private(set) var oscuro: Bool
+    private var tema: TeleprompterTheme { .para(oscuro: oscuro) }
+    /// Avisa que se cambió el fondo, para guardarlo.
+    var onTemaCambiado: ((Bool) -> Void)?
+    private let botonTema = NSButton()
+    private let fondoVista = NSView()
+    private let barraVista = NSView()
+    private var filaValores: NSStackView!
 
     /// La combinación que prende y apaga el teleprompter, tal como está
     /// asignada hoy. Se muestra en la barra.
@@ -84,15 +96,18 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
 
     // MARK: - Armado
 
+    /// - Parameter evitando: el marco del widget, para no arrancar debajo de él.
     init(guiones: [(nombre: String, texto: String)], velocidad: Double,
-         tamañoLetra: Double, pantalla: NSRect) {
+         tamañoLetra: Double, pantalla: NSRect, evitando widget: NSRect? = nil,
+         oscuro: Bool = false) {
+        self.oscuro = oscuro
         motor = TeleprompterEngine(velocidad: velocidad, tamañoLetra: tamañoLetra)
         // Sin ninguno cargado igual se abre: en blanco y listo para escribir el
         // guion ahí mismo con el botón de editar.
         self.guiones = guiones.isEmpty ? [(nombre: "Guion", texto: "")] : guiones
 
         super.init(
-            contentRect: Self.marcoInicial(en: pantalla),
+            contentRect: Self.marcoInicial(en: pantalla, evitando: widget),
             styleMask: [.borderless, .resizable, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -107,13 +122,13 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         backgroundColor = .clear
         isOpaque = false
         hasShadow = true
-        // El ancho mínimo lo manda la barra: siete botones de la grilla más su
-        // aire. Más angosta que esto, los controles se cortarían.
-        minSize = NSSize(width: 7 * CommandButton.ancho + 6 * CommandButton.separacion
-                                + BloomindStyle.Space.normal * 2,
-                         height: 260)
-
         construir()
+        // El ancho mínimo lo manda la barra: los siete botones más su aire.
+        // Más angosta que esto, los controles se cortarían.
+        let botones = [play, reiniciar, masLento, masRapido, menosLetra, masLetra, editar]
+        minSize = NSSize(width: botones.map(\.intrinsicContentSize.width).reduce(0, +)
+                                + CGFloat(botones.count - 1) * 2 + BloomindStyle.Space.normal * 2,
+                         height: 260)
         texto.string = self.guiones[0].texto
         refrescarPestañas()
         aplicarTipografia()
@@ -126,13 +141,11 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     override var canBecomeKey: Bool { true }
 
     private func construir() {
-        let fondo = NSView()
+        let fondo = fondoVista
         fondo.wantsLayer = true
-        fondo.layer?.backgroundColor = BloomindStyle.deep.cgColor
-        fondo.layer?.cornerRadius = BloomindStyle.cornerRadius
+        fondo.layer?.cornerRadius = 14
         fondo.layer?.masksToBounds = true
         fondo.layer?.borderWidth = 1
-        fondo.layer?.borderColor = BloomindStyle.hairline.cgColor
 
         texto.isEditable = false
         texto.isSelectable = false
@@ -173,6 +186,7 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         construirPestañas()
 
         fondo.addSubview(barraPestañas)
+        fondo.addSubview(filaValores)
         fondo.addSubview(scrollView)
         fondo.addSubview(escenario)
         fondo.addSubview(barra)
@@ -180,7 +194,9 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         NSLayoutConstraint.activate([
             barraPestañas.topAnchor.constraint(equalTo: fondo.topAnchor),
             barraPestañas.leadingAnchor.constraint(equalTo: fondo.leadingAnchor),
-            barraPestañas.trailingAnchor.constraint(equalTo: fondo.trailingAnchor),
+            barraPestañas.trailingAnchor.constraint(equalTo: filaValores.leadingAnchor, constant: -12),
+            filaValores.trailingAnchor.constraint(equalTo: fondo.trailingAnchor, constant: -BloomindStyle.Space.normal),
+            filaValores.centerYAnchor.constraint(equalTo: barraPestañas.centerYAnchor),
             barraPestañas.heightAnchor.constraint(equalToConstant: Self.altoPestañas),
 
             scrollView.topAnchor.constraint(equalTo: barraPestañas.bottomAnchor),
@@ -200,16 +216,42 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         ])
 
         contentView = fondo
+        pintarTema()
+    }
+
+    /// Pinta todo con el fondo elegido. Es lo único que sabe de colores: el
+    /// resto de la ventana le pregunta a `tema`.
+    private func pintarTema() {
+        let t = tema
+        appearance = NSAppearance(named: t.apariencia)
+        fondoVista.layer?.backgroundColor = t.fondo.cgColor
+        fondoVista.layer?.borderColor = t.borde.cgColor
+        barraVista.layer?.backgroundColor = t.barra.cgColor
+        ayuda.textColor = t.secundario
+        for etiqueta in etiquetasValores { etiqueta.textColor = t.secundario }
+        for boton in [play, reiniciar, masLento, masRapido, menosLetra, masLetra, editar] { boton.tema = t }
+        escenario.tema = t
+        botonTema.contentTintColor = t.secundario
+        botonTema.toolTip = oscuro
+            ? "Pasar a fondo claro, como el resto de la app"
+            : "Pasar a fondo oscuro: cansa menos la vista en clases largas"
+        aplicarTipografia()
+        refrescarPestañas()
+    }
+
+    @objc private func alternarTema() {
+        oscuro.toggle()
+        pintarTema()
+        onTemaCambiado?(oscuro)
+        Logger.shared.log("Teleprompter con fondo \(oscuro ? "oscuro" : "claro")")
     }
 
     /// Alto de la fila de pestañas de guiones.
     private static let altoPestañas: CGFloat = 36
 
-    /// Ancho de la columna de ayuda y valores, a la derecha de los botones.
-    private static let anchoColumna: CGFloat = 200
 
     /// Alto de la barra: el botón más el aire de arriba y abajo.
-    private static let altoBarra: CGFloat = CommandButton.alto + BloomindStyle.Space.tight * 2
+    private static let altoBarra: CGFloat = BarraBoton.alto + BloomindStyle.Space.tight * 2
 
     /// La fila de arriba: un botón por guion cargado.
     ///
@@ -218,7 +260,7 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     /// se muestra, porque no hay entre qué elegir.
     private func construirPestañas() {
         pestañas.orientation = .horizontal
-        pestañas.spacing = CommandButton.separacion
+        pestañas.spacing = 22
         pestañas.edgeInsets = NSEdgeInsets(top: 0, left: BloomindStyle.Space.normal, bottom: 0,
                                            right: BloomindStyle.Space.normal)
 
@@ -250,24 +292,23 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         barraPestañas.isHidden = guiones.count < 2
         guard guiones.count > 1 else { return }
 
+        // Pestañas subrayadas en Fraunces, como los fragmentos de la oración del
+        // panel: la elegida en blanco con su raya celeste, las demás apagadas.
         for (indice, guion) in guiones.enumerated() {
+            let activo = indice == indiceActual
             let boton = NSButton(title: guion.nombre, target: self, action: #selector(tocarPestaña(_:)))
             boton.tag = indice
             boton.isBordered = false
-            boton.wantsLayer = true
-            boton.layer?.cornerRadius = 6
             boton.toolTip = guion.nombre
             boton.cell?.lineBreakMode = .byTruncatingTail
-            let fuente = BloomindStyle.ui(11)
-            let natural = guion.nombre.size(withAttributes: [.font: fuente]).width + 24
+            boton.attributedTitle = NSAttributedString(string: guion.nombre, attributes: [
+                .font: BloomindStyle.display(14, weight: activo ? 560 : 450),
+                .foregroundColor: activo ? tema.texto : tema.secundario,
+                .underlineStyle: activo ? NSUnderlineStyle.thick.rawValue : 0,
+                .underlineColor: tema.acento
+            ])
             boton.translatesAutoresizingMaskIntoConstraints = false
-            boton.widthAnchor.constraint(equalToConstant: min(max(natural, 64), 170).rounded()).isActive = true
-            boton.heightAnchor.constraint(equalToConstant: 24).isActive = true
-
-            let activo = indice == indiceActual
-            boton.layer?.backgroundColor = activo ? BloomindStyle.lab.cgColor
-                                                  : NSColor(white: 1, alpha: 0.10).cgColor
-            CommandButton.titular(boton, color: activo ? .white : BloomindStyle.ink, font: fuente)
+            boton.widthAnchor.constraint(lessThanOrEqualToConstant: 170).isActive = true
             pestañas.addArrangedSubview(boton)
         }
     }
@@ -294,9 +335,8 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     }
 
     private func construirBarra() -> NSView {
-        let barra = NSView()
+        let barra = barraVista
         barra.wantsLayer = true
-        barra.layer?.backgroundColor = BloomindStyle.surface.cgColor
         barra.translatesAutoresizingMaskIntoConstraints = false
 
         configurar(play, "play.fill", "Play", "Play y pausa del guion (barra espaciadora)", #selector(tocarPlay))
@@ -308,7 +348,6 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         configurar(editar, "pencil", "Editar", "Editar el guion", #selector(tocarEditar))
 
         ayuda.font = BloomindStyle.mono(9)
-        ayuda.textColor = BloomindStyle.muted
         ayuda.alignment = .right
 
         for campo in [campoVelocidad, campoLetra] {
@@ -329,37 +368,35 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         let etiquetaLetra = NSTextField(labelWithString: "letra")
         for etiqueta in [etiquetaVelocidad, etiquetaLetra] {
             etiqueta.font = BloomindStyle.mono(11)
-            etiqueta.textColor = BloomindStyle.muted
         }
+        etiquetasValores = [etiquetaVelocidad, etiquetaLetra]
         valores = NSStackView(views: [etiquetaVelocidad, campoVelocidad, etiquetaLetra, campoLetra])
         valores.spacing = 4
         valores.setCustomSpacing(10, after: campoVelocidad)
-        // Los números son lo primero que sobra si la ventana se hace angosta:
-        // los botones no se pueden perder. Pero se **esconden enteros** en vez
-        // de recortarse, porque "velocidad !" a medio cortar se ve peor que no
-        // estar.
-        valores.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
-        ayuda.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
-
-        let columnaDerecha = NSStackView(views: [ayuda, valores])
-        columnaDerecha.orientation = .vertical
-        columnaDerecha.alignment = .trailing
-        columnaDerecha.spacing = 2
-        // Ancho fijo y los dos renglones truncando: apoyada solo en el
-        // espaciador, la columna se desbordaba por el borde derecho de la
-        // ventana y el último número salía cortado.
-        columnaDerecha.translatesAutoresizingMaskIntoConstraints = false
-        columnaDerecha.widthAnchor.constraint(equalToConstant: Self.anchoColumna).isActive = true
+        // La ayuda de teclas y los números van arriba a la derecha, en la fila
+        // de las pestañas, como en la maqueta (decisión 134): abajo no entran
+        // al lado de los siete botones en una pantalla de Air. La ayuda es lo
+        // primero que sobra si la ventana se angosta; los números no se
+        // esconden nunca.
+        botonTema.image = NSImage(systemSymbolName: "circle.lefthalf.filled", accessibilityDescription: "Fondo claro u oscuro")?
+            .withSymbolConfiguration(.init(pointSize: 14, weight: .regular))
+        botonTema.isBordered = false
+        botonTema.target = self
+        botonTema.action = #selector(alternarTema)
+        filaValores = NSStackView(views: [ayuda, valores, botonTema])
+        filaValores.spacing = 14
+        filaValores.alignment = .centerY
+        filaValores.translatesAutoresizingMaskIntoConstraints = false
         ayuda.lineBreakMode = .byTruncatingTail
 
         let espaciador = NSView()
         espaciador.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let fila = NSStackView(views: [play, reiniciar, masLento, masRapido,
-                                       menosLetra, masLetra, editar, espaciador, columnaDerecha])
+                                       menosLetra, masLetra, editar, espaciador])
         fila.orientation = .horizontal
         fila.alignment = .centerY
-        fila.spacing = CommandButton.separacion
+        fila.spacing = 2
         fila.translatesAutoresizingMaskIntoConstraints = false
         barra.addSubview(fila)
 
@@ -371,10 +408,12 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         return barra
     }
 
-    private func configurar(_ boton: NSButton, _ simbolo: String, _ nombre: String,
+    private func configurar(_ boton: BarraBoton, _ simbolo: String, _ nombre: String,
                             _ ayuda: String, _ accion: Selector) {
-        CommandButton.configurar(boton, simbolo: simbolo, nombre: nombre,
-                                 ayuda: ayuda, target: self, accion: accion)
+        boton.poner(simbolo: simbolo, nombre: nombre)
+        boton.toolTip = ayuda
+        boton.target = self
+        boton.action = accion
     }
 
     // MARK: - Mostrar y esconder
@@ -610,7 +649,7 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
             // Fraunces, la serif de la marca: es la cara con la que se lee, y a
             // estos tamaños se sigue leyendo cómodo de lejos.
             .font: fuente,
-            .foregroundColor: BloomindStyle.ink,
+            .foregroundColor: tema.texto,
             .paragraphStyle: parrafo
         ]
         texto.typingAttributes = atributos
@@ -634,17 +673,13 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
 
     private func refrescarControles() {
         let corriendo = motor.corriendo
-        play.image = CommandButton.icono(corriendo ? "pause.fill" : "play.fill",
-                                         corriendo ? "Pausa" : "Play")
-        play.title = corriendo ? "Pausa" : "Play"
-        CommandButton.pintar(play, corriendo ? .prendido : .apagado)
+        play.poner(simbolo: corriendo ? "pause.fill" : "play.fill", nombre: corriendo ? "Pausa" : "Play")
+        play.prendido = corriendo
         play.isEnabled = !editando
 
-        editar.title = editando ? "Leer" : "Editar"
-        editar.image = CommandButton.icono(editando ? "text.aligncenter" : "pencil",
-                                           editando ? "Volver a leer" : "Editar el guion")
+        editar.poner(simbolo: editando ? "text.aligncenter" : "pencil", nombre: editando ? "Leer" : "Editar")
         editar.toolTip = editando ? "Volver a leer" : "Editar el guion"
-        CommandButton.pintar(editar, editando ? .prendido : .apagado)
+        editar.prendido = editando
 
         // Con el guion abierto para editar no hay nada que correr ni que medir.
         for boton in [reiniciar, masLento, masRapido, menosLetra, masLetra] {
@@ -675,15 +710,11 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate
 
-    /// Ancho a partir del cual la columna de la derecha cabe sin apretar a los
-    /// botones. Por debajo se esconde entera: media ayuda cortada se lee peor
-    /// que ninguna.
-    private var anchoConValores: CGFloat { minSize.width + Self.anchoColumna + BloomindStyle.Space.normal }
-
+    /// La ayuda de teclas se esconde entera cuando no entra al lado de las
+    /// pestañas: media ayuda cortada se lee peor que ninguna. Los números
+    /// quedan siempre.
     private func ocultarAyudaSiNoCabe() {
-        let cabe = frame.width >= anchoConValores
-        valores.isHidden = !cabe
-        ayuda.isHidden = !cabe
+        ayuda.isHidden = frame.width < 760
     }
 
     func windowDidResize(_ notification: Notification) {
@@ -703,15 +734,26 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     /// "Arriba" es debajo de la barra de menú, no pegado al borde físico: el
     /// marco que llega es el de la pantalla entera, y apoyado ahí el teleprompter
     /// arrancaría con su primer renglón tapado por la barra o por el notch.
-    private static func marcoInicial(en pantalla: NSRect) -> NSRect {
+    private static func marcoInicial(en pantalla: NSRect, evitando widget: NSRect?) -> NSRect {
         let util = NSScreen.screens.first { $0.frame.intersects(pantalla) }?.visibleFrame ?? pantalla
-        // Más de la mitad del ancho: los siete botones de la barra ocupan 610 pt
-        // y los números tienen que entrar al lado sin apretarlos.
+        // Más de la mitad del ancho: los siete botones de la barra y los
+        // números tienen que entrar sin apretarse.
         let ancho = (util.width * 0.56).rounded()
         let alto = (util.height * 0.32).rounded()
-        return NSRect(x: util.midX - ancho / 2,
-                      y: util.maxY - alto - BloomindStyle.Space.card,
-                      width: ancho, height: alto)
+        let centrado = NSRect(x: util.midX - ancho / 2,
+                              y: util.maxY - alto - BloomindStyle.Space.card,
+                              width: ancho, height: alto)
+
+        // Le cede el paso al widget (decisión 134): si queda ancho para leer a
+        // su izquierda, se angosta hasta ahí; si no, baja por debajo de él.
+        guard let widget, widget.intersects(centrado) else { return centrado }
+        let margen: CGFloat = 36
+        let libre = widget.minX - util.minX - margen - 16
+        if libre >= 540 {
+            let angosto = min(ancho, libre)
+            return NSRect(x: util.minX + margen, y: centrado.minY, width: angosto, height: alto)
+        }
+        return NSRect(x: centrado.minX, y: widget.minY - 16 - alto, width: ancho, height: alto)
     }
 }
 
@@ -730,6 +772,7 @@ private final class EscenarioView: NSView {
     var onClic: (() -> Void)?
 
     var lineaVisible = true { didSet { needsDisplay = true } }
+    var tema = TeleprompterTheme.claro { didSet { needsDisplay = true } }
 
     private var inicioY: CGFloat = 0
     private var offsetInicial: CGFloat = 0
@@ -768,16 +811,88 @@ private final class EscenarioView: NSView {
         dibujarDesvanecido(contexto, rect: NSRect(x: 0, y: 0, width: bounds.width, height: alto), haciaArriba: false)
 
         guard lineaVisible else { return }
-        let margen = bounds.width * 0.08
-        BloomindStyle.lab.withAlphaComponent(0.35).setFill()
+        // La línea de lectura con su flechita a la izquierda: el ojo la
+        // encuentra sin buscarla.
+        let margen: CGFloat = 14
+        tema.acento.withAlphaComponent(0.7).setFill()
         NSRect(x: margen, y: bounds.midY, width: bounds.width - margen * 2, height: 1).fill()
+        let flecha = NSBezierPath()
+        flecha.move(to: NSPoint(x: margen - 2, y: bounds.midY + 5.5))
+        flecha.line(to: NSPoint(x: margen + 5, y: bounds.midY + 0.5))
+        flecha.line(to: NSPoint(x: margen - 2, y: bounds.midY - 4.5))
+        flecha.close()
+        tema.acento.setFill()
+        flecha.fill()
     }
 
     private func dibujarDesvanecido(_ contexto: CGContext, rect: NSRect, haciaArriba: Bool) {
-        let fondo = BloomindStyle.deep
+        let fondo = tema.fondo
         guard let gradiente = NSGradient(starting: fondo, ending: fondo.withAlphaComponent(0)) else { return }
         contexto.saveGState()
         gradiente.draw(in: rect, angle: haciaArriba ? 270 : 90)
         contexto.restoreGState()
+    }
+}
+
+/// Un botón de la barra del teleprompter: ícono y nombre en un renglón.
+/// Prendido se pinta con el acento del fondo elegido; al pasar el mouse se
+/// marca apenas.
+@MainActor
+final class BarraBoton: NSButton {
+
+    static let alto: CGFloat = 34
+
+    var prendido = false { didSet { pintar() } }
+    var tema = TeleprompterTheme.claro { didSet { pintar() } }
+
+    private var nombre = ""
+    private var encima = false
+
+    init() {
+        super.init(frame: .zero)
+        isBordered = false
+        wantsLayer = true
+        layer?.cornerRadius = 7
+        imagePosition = .imageLeading
+        imageHugsTitle = true
+        translatesAutoresizingMaskIntoConstraints = false
+        heightAnchor.constraint(equalToConstant: Self.alto).isActive = true
+    }
+
+    required init?(coder: NSCoder) { fatalError("no se usa") }
+
+    func poner(simbolo: String, nombre: String) {
+        self.nombre = nombre
+        image = CommandButton.icono(simbolo, nombre)
+        pintar()
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: ceil(attributedTitle.size().width) + 20 + 26, height: Self.alto)
+    }
+
+    override var isEnabled: Bool { didSet { pintar() } }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds,
+                                       options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) { encima = true; pintar() }
+    override func mouseExited(with event: NSEvent) { encima = false; pintar() }
+
+    private func pintar() {
+        let tinta = prendido ? NSColor.white : tema.boton
+        let color = isEnabled ? tinta : tinta.withAlphaComponent(0.35)
+        layer?.backgroundColor = prendido ? tema.acento.cgColor
+            : (encima && isEnabled ? tema.encima.cgColor : NSColor.clear.cgColor)
+        contentTintColor = color
+        attributedTitle = NSAttributedString(string: " " + nombre, attributes: [
+            .font: BloomindStyle.ui(12.5), .foregroundColor: color
+        ])
+        invalidateIntrinsicContentSize()
     }
 }

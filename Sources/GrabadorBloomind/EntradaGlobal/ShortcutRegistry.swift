@@ -50,6 +50,27 @@ enum ShortcutAction: String, CaseIterable {
         }
     }
 
+    /// Con quién se lista en la tarjeta y en Preferencias. Es el mismo reparto
+    /// que los menús de grupo del widget (decisión 124), para que cada atajo
+    /// se encuentre en el mismo lugar en las tres partes.
+    var grupo: String {
+        switch self {
+        case .iniciarDetener, .pausar, .reiniciarToma, .silenciarMicrofono, .silenciarSistema:
+            return "Grabación"
+        case .modoPantalla, .modoCamara, .modoTablero:
+            return "Qué se ve"
+        case .colorTablero, .deshacer, .borrar:
+            return "Tablero"
+        case .resaltadoCursor, .capaAnotacion, .colorMarcador, .censura, .redibujarCensura:
+            return "Sobre la pantalla"
+        case .teleprompter, .widget, .tarjeta:
+            return "Ventanas"
+        }
+    }
+
+    /// Los grupos en el orden en que se muestran.
+    static let grupos = ["Grabación", "Qué se ve", "Tablero", "Sobre la pantalla", "Ventanas"]
+
     /// Cuándo está activo. El único permanente es iniciar/detener: fuera de
     /// grabación la app no le roba combinaciones al resto del sistema (punto
     /// delicado 7 del plan).

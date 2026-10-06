@@ -120,6 +120,7 @@ final class MenuBarController {
         window.onRecordingStateChange = { [weak self] grabando, pausado in
             self?.actualizarIcono(grabando: grabando, pausado: pausado)
         }
+        window.onTiempo = { [weak self] segundos in self?.mostrarTiempo(segundos) }
         // Con el atajo la tarjeta se muestra mientras se mantiene apretado; con
         // el botón del widget no hay "soltar", así que ahí alterna.
         window.onToggleShortcutCard = { [weak self] in
@@ -162,6 +163,8 @@ final class MenuBarController {
     private func actualizarIcono(grabando: Bool, pausado: Bool) {
         stopItem?.isHidden = !grabando
 
+        if !grabando { statusItem.button?.title = "" }
+
         guard let base = iconoBase else { return }
         guard grabando else {
             base.isTemplate = true
@@ -169,7 +172,9 @@ final class MenuBarController {
             return
         }
 
-        let color = pausado ? NSColor.systemGray : NSColor.systemRed
+        // Azul grabando y gris en pausa, los mismos del punto del widget
+        // (decisión 123): el mismo estado se ve igual en los dos lugares.
+        let color = pausado ? BloomindStyle.Claro.pizarra : BloomindStyle.Claro.azul
         let compuesto = NSImage(size: base.size, flipped: false) { rect in
             base.draw(in: rect)
             let radio: CGFloat = 5
@@ -180,6 +185,16 @@ final class MenuBarController {
         }
         compuesto.isTemplate = false
         statusItem.button?.image = compuesto
+    }
+
+    /// El tiempo grabado al lado del ícono: se ve sin buscar el widget, aunque
+    /// esté achicado o escondido.
+    private func mostrarTiempo(_ segundos: Int) {
+        guard let boton = statusItem.button else { return }
+        boton.imagePosition = .imageLeading
+        boton.attributedTitle = NSAttributedString(
+            string: String(format: " %02d:%02d", segundos / 60, segundos % 60),
+            attributes: [.font: BloomindStyle.mono(12, weight: .medium)])
     }
 
     @objc private func openRecordingsFolder() {

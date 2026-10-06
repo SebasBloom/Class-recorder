@@ -90,6 +90,9 @@ struct Configuration: Codable, Equatable {
     var teleprompterScripts: [StoredScript] = []
     var teleprompterSpeed: Double = 5
     var teleprompterFontSize: Double = 38
+    /// Fondo oscuro para el teleprompter. Arranca claro, como el resto de la
+    /// app (decisión 135).
+    var teleprompterOscuro: Bool = false
 
     /// Atajos reasignados por el usuario: acción -> combinación. Vacío significa
     /// "todos en su valor por defecto".
@@ -133,6 +136,7 @@ struct Configuration: Codable, Equatable {
         teleprompterScripts  = try c.decodeIfPresent([StoredScript].self, forKey: .teleprompterScripts) ?? []
         teleprompterSpeed    = try c.decodeIfPresent(Double.self, forKey: .teleprompterSpeed) ?? 5
         teleprompterFontSize = try c.decodeIfPresent(Double.self, forKey: .teleprompterFontSize) ?? 38
+        teleprompterOscuro   = try c.decodeIfPresent(Bool.self, forKey: .teleprompterOscuro) ?? false
         shortcuts        = try c.decodeIfPresent([String: Shortcut].self, forKey: .shortcuts) ?? [:]
     }
 }

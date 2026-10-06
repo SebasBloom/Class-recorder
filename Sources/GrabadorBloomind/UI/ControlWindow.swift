@@ -17,6 +17,9 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
 
     /// Avisa a la barra de menú para que cambie el estado del ícono.
     var onRecordingStateChange: ((Bool, Bool) -> Void)?
+    /// Los segundos grabados, una vez por segundo, para el reloj de la barra
+    /// de menú.
+    var onTiempo: ((Int) -> Void)?
 
     /// Muestra u oculta la tarjeta de atajos desde el botón del widget. La
     /// tarjeta y el registro de atajos viven en la barra de menú, no acá, porque
@@ -86,6 +89,8 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
     /// arrastrar, escribir o mover de a pasos con los botones (decisión 115).
     private var speedRow: NumberRow!
     private var fontRow: NumberRow!
+    /// Fondo claro u oscuro del teleprompter (decisión 135).
+    private let temaSwitch = NSSwitch()
 
     /// El teleprompter existe solo mientras dura una grabación: al terminar se
     /// suelta, y con él se van posición, tamaño y guion editado en vivo. La
@@ -477,16 +482,43 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
         let separador = NSBox()
         separador.boxType = .separator
 
+        // El fondo del teleprompter: claro como el resto de la app, u oscuro
+        // para cuidar la vista. La explicación va al lado, porque es lo único
+        // que hace falta saber para elegir.
+        temaSwitch.state = ConfigurationStore.shared.current.teleprompterOscuro ? .on : .off
+        temaSwitch.target = self
+        temaSwitch.action = #selector(cambiarTemaDelGuion)
+        let temaTitulo = NSTextField(labelWithString: "Fondo oscuro")
+        temaTitulo.font = BloomindStyle.ui(13)
+        temaTitulo.textColor = c.tinta
+        let temaExplicacion = NSTextField(wrappingLabelWithString: "Claro va con el resto de la app. Con el fondo blanco, leer una clase larga se puede poner pesado para la vista; el oscuro la cansa menos.")
+        temaExplicacion.font = BloomindStyle.ui(11)
+        temaExplicacion.textColor = c.pizarra
+        let temaTextos = NSStackView(views: [temaTitulo, temaExplicacion])
+        temaTextos.orientation = .vertical
+        temaTextos.alignment = .leading
+        temaTextos.spacing = 2
+        temaTextos.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let filaTema = NSStackView(views: [temaTextos, temaSwitch])
+        filaTema.alignment = .top
+        filaTema.distribution = .fill
+        filaTema.spacing = 12
+
+        let separador2 = NSBox()
+        separador2.boxType = .separator
+
         let stack = NSStackView(views: [titulo, escritoTitulo, scriptScroll, filaCargar, filaLista,
-                                        separador, speedRow, fontRow])
+                                        separador, speedRow, fontRow, separador2, filaTema])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 8
         stack.setCustomSpacing(12, after: titulo)
         stack.setCustomSpacing(12, after: filaLista)
         stack.setCustomSpacing(12, after: separador)
+        stack.setCustomSpacing(12, after: fontRow)
+        stack.setCustomSpacing(12, after: separador2)
         stack.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 16, right: 16)
-        for vista in [scriptScroll, filaLista, separador, speedRow!, fontRow!] as [NSView] {
+        for vista in [scriptScroll, filaLista, separador, speedRow!, fontRow!, separador2, filaTema] as [NSView] {
             vista.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
         }
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -902,7 +934,15 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
         let ventana = TeleprompterWindow(guiones: guionesParaElTeleprompter(),
                                          velocidad: speedRow.value,
                                          tamañoLetra: fontRow.value,
-                                         pantalla: pantalla)
+                                         pantalla: pantalla,
+                                         evitando: widget.isVisible ? widget.frame : nil,
+                                         oscuro: ConfigurationStore.shared.current.teleprompterOscuro)
+        // Cambiado desde el propio teleprompter, también queda guardado y el
+        // interruptor del panel lo muestra.
+        ventana.onTemaCambiado = { [weak self] oscuro in
+            ConfigurationStore.shared.update { $0.teleprompterOscuro = oscuro }
+            self?.temaSwitch.state = oscuro ? .on : .off
+        }
         ventana.onChange = { [weak self] in
             self?.recordarValoresDelGuion()
             self?.tick()
@@ -918,6 +958,11 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
         ventana.setVisible(true)
         Logger.shared.log("Teleprompter abierto: \(ventana.guion.count) caracteres de guion, velocidad \(ventana.velocidad), letra \(Int(ventana.tamañoLetra))")
         tick()
+    }
+
+    @objc private func cambiarTemaDelGuion() {
+        let oscuro = temaSwitch.state == .on
+        ConfigurationStore.shared.update { $0.teleprompterOscuro = oscuro }
     }
 
     /// Lo que se ajusta del guion grabando queda como valor de arranque de la
@@ -1336,6 +1381,7 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
                           capturaSistema: recorder.capturesSource(.system),
                           microfonoSilenciado: recorder.isMuted(.microphone),
                           sistemaSilenciado: recorder.isMuted(.system)))
+        onTiempo?(seconds)
         // El panel puede volver a la vista con la grabación corriendo (al
         // salir del modo de dibujo): el pie dice el tiempo, el resto lo dice
         // el widget.

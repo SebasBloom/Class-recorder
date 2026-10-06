@@ -37,9 +37,8 @@ enum BloomindStyle {
 
     // MARK: - Paleta clara, dirección «Escrito» (adenda 2)
 
-    /// La paleta del rediseño (decisión 123). Convive con la oscura de arriba
-    /// mientras la Fase 16 pasa las pantallas una por una; cuando la última
-    /// esté migrada, la oscura se borra.
+    /// La paleta del rediseño (decisión 123), la de toda la app. La oscura de
+    /// arriba queda solo para el teleprompter, que sigue oscuro (decisión 134).
     enum Claro {
         /// Fondo de superficies claras. Frío, nunca crema.
         static let papel = NSColor(hex: 0xF5F8FC)

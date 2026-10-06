@@ -24,8 +24,9 @@ final class ShortcutsWindow: NSWindowController {
             defer: false
         )
         window.title = "Atajos"
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = BloomindStyle.deep
+        // Clara, como el resto de la app desde la Fase 16 (decisión 123).
+        window.appearance = NSAppearance(named: .aqua)
+        window.backgroundColor = BloomindStyle.Claro.blanco
         window.titlebarAppearsTransparent = true
         window.center()
         super.init(window: window)
@@ -44,24 +45,28 @@ final class ShortcutsWindow: NSWindowController {
         guard let contentView = window?.contentView else { return }
 
         let eyebrow = NSTextField(labelWithString: "")
-        eyebrow.attributedStringValue = BloomindStyle.eyebrow("Bloomind Lab")
+        eyebrow.attributedStringValue = NSAttributedString(string: "GRABADOR BLOOMIND", attributes: [
+            .font: BloomindStyle.ui(11, weight: .semibold),
+            .kern: 1.5,
+            .foregroundColor: BloomindStyle.Claro.pizarra
+        ])
 
         let titulo = NSTextField(labelWithString: "Atajos")
         titulo.font = BloomindStyle.display(28)
-        titulo.textColor = BloomindStyle.ink
+        titulo.textColor = BloomindStyle.Claro.tinta
 
         let ayuda = NSTextField(wrappingLabelWithString: "Tocá una combinación y tecleá la nueva. Todas necesitan al menos un modificador. Salvo iniciar y detener, los atajos solo funcionan mientras grabás.")
         ayuda.font = BloomindStyle.ui(12)
-        ayuda.textColor = BloomindStyle.muted
+        ayuda.textColor = BloomindStyle.Claro.pizarra
 
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 6
+        stack.spacing = 4
 
         statusLabel.font = BloomindStyle.ui(12)
-        statusLabel.textColor = BloomindStyle.muted
+        statusLabel.textColor = BloomindStyle.Claro.pizarra
 
-        let restaurar = BloomindButton(title: "Restaurar por defecto", kind: .ghost)
+        let restaurar = BloomindButton(title: "Restaurar por defecto", kind: .claroSecundario)
         restaurar.target = self
         restaurar.action = #selector(restaurarPorDefecto)
 
@@ -85,12 +90,21 @@ final class ShortcutsWindow: NSWindowController {
     private func reload() {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
 
-        for action in ShortcutAction.allCases {
+        // Por grupos, los mismos de la tarjeta y del widget.
+        for action in ShortcutAction.grupos.flatMap({ grupo in ShortcutAction.allCases.filter { $0.grupo == grupo } }) {
             guard let shortcut = registry.shortcuts[action] else { continue }
+
+            if stack.arrangedSubviews.isEmpty || ShortcutAction.allCases.first(where: { $0.grupo == action.grupo }) == action {
+                let cabeza = NSTextField(labelWithString: action.grupo)
+                cabeza.font = BloomindStyle.ui(11, weight: .semibold)
+                cabeza.textColor = BloomindStyle.Claro.pizarra
+                if let anterior = stack.arrangedSubviews.last { stack.setCustomSpacing(14, after: anterior) }
+                stack.addArrangedSubview(cabeza)
+            }
 
             let nombre = NSTextField(labelWithString: action.label)
             nombre.font = BloomindStyle.ui(13)
-            nombre.textColor = BloomindStyle.ink
+            nombre.textColor = BloomindStyle.Claro.tinta
 
             let boton = NSButton(title: shortcut.etiqueta, target: self, action: #selector(capturar(_:)))
             boton.font = BloomindStyle.mono(12, weight: .medium)
@@ -121,7 +135,7 @@ final class ShortcutsWindow: NSWindowController {
         capturando = (action, sender)
         sender.title = "tecleá…"
         statusLabel.stringValue = "Esperando la combinación para “\(action.label)”. Escape cancela."
-        statusLabel.textColor = BloomindStyle.muted
+        statusLabel.textColor = BloomindStyle.Claro.pizarra
 
         // Monitor local: la ventana de preferencias está adelante, así que las
         // teclas llegan acá sin necesidad de ningún permiso.
@@ -143,18 +157,18 @@ final class ShortcutsWindow: NSWindowController {
 
         guard let shortcut = Shortcut(event: event) else {
             statusLabel.stringValue = "Esa combinación no sirve: hace falta Comando, Opción o Control."
-            statusLabel.textColor = BloomindStyle.signal
+            statusLabel.textColor = BloomindStyle.Claro.coral
             return
         }
 
         if let enConflicto = registry.assign(shortcut, to: action) {
             statusLabel.stringValue = "\(shortcut.etiqueta) ya la usa “\(enConflicto.label)”. Elegí otra."
-            statusLabel.textColor = BloomindStyle.signal
+            statusLabel.textColor = BloomindStyle.Claro.coral
             return
         }
 
         statusLabel.stringValue = "“\(action.label)” quedó en \(shortcut.etiqueta)."
-        statusLabel.textColor = BloomindStyle.turquoise
+        statusLabel.textColor = BloomindStyle.Claro.tinta
         cancelarCaptura()
         reload()
     }
@@ -169,7 +183,7 @@ final class ShortcutsWindow: NSWindowController {
         cancelarCaptura()
         registry.resetToDefaults()
         statusLabel.stringValue = "Todos los atajos volvieron a su combinación original."
-        statusLabel.textColor = BloomindStyle.muted
+        statusLabel.textColor = BloomindStyle.Claro.pizarra
         reload()
     }
 }

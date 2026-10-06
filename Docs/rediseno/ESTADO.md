@@ -55,6 +55,12 @@ Nuevos `UI/CapsuleButton.swift` y `UI/RecordingWidget.swift` reescrito, con la m
 
 La oración vive en `UI/PanelSentence.swift` (reglas, con prueba) y `UI/SentenceView.swift` (dibujo y clic). `ControlWindow` reescrito sobre eso; el guion va en un globo. Decisión 130. Pasos en `Docs/ACEPTACION.md`, «Fase 16 — parte 2». Fotografiado con arnés: se ve como la maqueta y mide unos 415 pt de alto. En la misma parte entraron dos pedidos de Sebas: casillas para usar o no cada guion cargado (decisión 131) y velocidad y letra que se recuerdan y se escriben con números (decisión 132). Siguiente: parte 3.
 
+## Parte 3, el resto: VALIDADA por Sebas (2026-10-06)
+
+Teleprompter, cuenta regresiva, tarjeta de atajos y Preferencias, selector de área, borde de la burbuja e ícono de la barra con el tiempo. Decisiones 133 y 134. Pasos en `Docs/ACEPTACION.md`, «Fase 16 — parte 3». En la misma parte entró el teleprompter claro por defecto con opción oscura (decisión 135). Pendiente de que Sebas decida: la burbuja redonda de la maqueta (cambia el video, no se hizo).
+
+**Con esto la Fase 16 queda cerrada.** Lo que sigue fuera del rediseño: rehacer el instalador de Iván con `./armar-entrega.sh` (el de Drive se borró el 2026-10-05).
+
 ## Cómo seguir
 
 Sebas pidió **no arrancar** hasta que retome. El plan propuesto es pasar a AppKit por pedazos, cada uno validado por Sebas antes del siguiente:

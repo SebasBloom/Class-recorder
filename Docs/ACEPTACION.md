@@ -1014,3 +1014,39 @@ Cambiá el nombre de la sesión tocando el título grande, cambiá la carpeta co
 Dale **Grabar**.
 
 **Tiene que:** hacer la cuenta, irse el panel y aparecer la cápsula. Al detener, el archivo tiene que tener el nombre que pusiste y grabarse lo que dice la frase: esa pantalla o esa área, ese sonido y esa cámara.
+
+## Fase 16. Rediseño visual — parte 3: el resto — VALIDADA el 2026-10-06
+
+Lo que cambia: todo lo que quedaba con la cara vieja. Nada cambia de función.
+
+### 1. El teleprompter
+
+Cargá dos guiones y grabá.
+
+**Tiene que:** abrirse sin quedar debajo de la cápsula del widget: o a su izquierda, más angosto, o debajo de ella. Arriba, las pestañas de los guiones subrayadas, y a la derecha la velocidad y la letra con sus números. Abajo, los botones con ícono y nombre en un renglón. Probá Play, Más lento, Letra + y Editar, escribí un número en la velocidad: todo hace lo mismo que antes. Achicá la ventana: la ayuda de teclas se esconde, los números no.
+
+**El fondo:** el teleprompter tiene que abrir **claro**, blanco con letra navy, de la misma familia que la cápsula. Tocá el botón redondo partido arriba a la derecha: pasa a oscuro en el acto, sin cortar la lectura. Detené y abrí el panel, tocá los guiones: el interruptor «Fondo oscuro» tiene que estar prendido, con su explicación. Grabá otra toma: arranca oscuro. Apagá el interruptor en el panel y grabá: vuelve a claro.
+
+### 2. La cuenta regresiva
+
+Con la cuenta prendida, dale Grabar.
+
+**Tiene que:** salir un disco blanco con el 3, 2, 1 y un anillo azul que se vacía en cada segundo. Y en el video no puede aparecer.
+
+### 3. La tarjeta de atajos
+
+Grabando, mantené **Opción + Comando + H**.
+
+**Tiene que:** salir una tarjeta blanca abajo a la derecha, con los atajos en grupos (Grabación, Qué se ve, Tablero, Sobre la pantalla, Ventanas) y cada tecla en su cajita, todas alineadas. Al soltar, se va. Abrí también «Atajos…» desde la barra de menú: la ventana tiene que ser clara, con los mismos grupos, y reasignar un atajo tiene que seguir funcionando.
+
+### 4. El selector de área
+
+En el panel, tocá «la pantalla entera» y elegí «Un área…». Después, grabando, redibujá la censura con **Mayúscula + Opción + Comando + C**.
+
+**Tiene que:** oscurecerse la pantalla en navy, con una tarjeta blanca arriba que dice qué estás eligiendo, y al arrastrar un rectángulo nítido con borde blanco y la medida abajo a la derecha. Escape cancela.
+
+### 5. La burbuja y la barra de menú
+
+Con la cámara prendida, grabá.
+
+**Tiene que:** la burbuja en tu pantalla tener un borde blanco fino; en el video sale igual que siempre. Al lado del ícono de la barra de menú, el tiempo corriendo y un punto azul; en pausa, el punto gris. Al detener, se va el tiempo.

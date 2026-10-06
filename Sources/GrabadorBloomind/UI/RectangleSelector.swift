@@ -35,7 +35,9 @@ final class RectangleSelector: NSWindow {
 
         level = WindowLayer.selector.level
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        backgroundColor = NSColor(white: 0, alpha: 0.35)
+        // El velo navy de la identidad (decisión 123), bastante cerrado: lo que
+        // importa es que la zona elegida se vea nítida contra el resto.
+        backgroundColor = BloomindStyle.Claro.tinta.withAlphaComponent(0.58)
         isOpaque = false
         hasShadow = false
         contentView = selector
@@ -87,6 +89,7 @@ private final class SelectorView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
+        let c = BloomindStyle.Claro.self
 
         if let seleccion {
             // El velo lo pone el fondo de la ventana; acá se "borra" la zona
@@ -95,25 +98,43 @@ private final class SelectorView: NSView {
             context.fill(seleccion)
             context.setBlendMode(.normal)
 
-            context.setStrokeColor(BloomindStyle.lab.cgColor)
-            context.setLineWidth(2)
+            context.setStrokeColor(NSColor.white.cgColor)
+            context.setLineWidth(1.5)
             context.stroke(seleccion)
 
-            let medidas = "\(Int(seleccion.width)) × \(Int(seleccion.height))"
-            dibujar(medidas, en: CGPoint(x: seleccion.minX, y: seleccion.maxY + 8), tamaño: 12)
+            // La medida, en una etiqueta navy pegada abajo a la derecha.
+            let medidas = NSAttributedString(string: "\(Int(seleccion.width)) × \(Int(seleccion.height))", attributes: [
+                .font: BloomindStyle.mono(12, weight: .medium),
+                .foregroundColor: NSColor.white
+            ])
+            let tamaño = medidas.size()
+            let caja = NSRect(x: seleccion.maxX - tamaño.width - 16, y: seleccion.minY - tamaño.height - 14,
+                              width: tamaño.width + 16, height: tamaño.height + 6)
+            c.tinta.setFill()
+            NSBezierPath(roundedRect: caja, xRadius: 5, yRadius: 5).fill()
+            medidas.draw(at: NSPoint(x: caja.minX + 8, y: caja.minY + 3))
         }
 
-        dibujar(titulo, en: CGPoint(x: bounds.midX - 220, y: bounds.midY), tamaño: 17)
-        dibujar("Arrastrá para elegir la zona. Escape cancela.",
-                en: CGPoint(x: bounds.midX - 220, y: bounds.midY - 26), tamaño: 13)
+        dibujarRotulo()
     }
 
-    private func dibujar(_ texto: String, en punto: CGPoint, tamaño: CGFloat) {
-        let atributos: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: tamaño, weight: .medium),
-            .foregroundColor: NSColor.white
-        ]
-        NSAttributedString(string: texto, attributes: atributos).draw(at: punto)
+    /// El rótulo de arriba al centro: qué se está eligiendo y cómo, en una
+    /// tarjeta blanca.
+    private func dibujarRotulo() {
+        let c = BloomindStyle.Claro.self
+        let principal = NSAttributedString(string: titulo, attributes: [
+            .font: BloomindStyle.display(19), .foregroundColor: c.tinta
+        ])
+        let ayuda = NSAttributedString(string: "Arrastrá para dibujar el rectángulo · Esc cancela", attributes: [
+            .font: BloomindStyle.ui(12), .foregroundColor: c.pizarra
+        ])
+        let ancho = max(principal.size().width, ayuda.size().width) + 40
+        let alto = principal.size().height + ayuda.size().height + 26
+        let caja = NSRect(x: bounds.midX - ancho / 2, y: bounds.maxY - 26 - alto, width: ancho, height: alto)
+        c.blanco.setFill()
+        NSBezierPath(roundedRect: caja, xRadius: 12, yRadius: 12).fill()
+        principal.draw(at: NSPoint(x: caja.midX - principal.size().width / 2, y: caja.maxY - 12 - principal.size().height))
+        ayuda.draw(at: NSPoint(x: caja.midX - ayuda.size().width / 2, y: caja.minY + 12))
     }
 
     // MARK: - Entrada

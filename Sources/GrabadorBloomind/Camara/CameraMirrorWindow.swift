@@ -50,9 +50,12 @@ final class CameraMirrorWindow: NSPanel, NSWindowDelegate {
         container.wantsLayer = true
         container.layer?.cornerRadius = Self.cornerRadius
         container.layer?.masksToBounds = true
-        container.layer?.borderWidth = 1
-        container.layer?.borderColor = BloomindStyle.hairline.cgColor
-        container.layer?.backgroundColor = BloomindStyle.deep.cgColor
+        // Un borde blanco fino, como en la maqueta (decisión 123): separa la
+        // burbuja de cualquier fondo, claro u oscuro. Solo existe en la
+        // pantalla; en el video la burbuja va sin borde, igual que siempre.
+        container.layer?.borderWidth = 2
+        container.layer?.borderColor = NSColor.white.cgColor
+        container.layer?.backgroundColor = BloomindStyle.Claro.tinta.cgColor
         contentView = container
 
         previewLayer.frame = container.bounds

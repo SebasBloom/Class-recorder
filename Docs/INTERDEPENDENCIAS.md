@@ -59,15 +59,13 @@ Cuidado al tocarlo:
 - Las coordenadas van normalizadas, no en píxeles (decisión 56). Por eso esta pieza **no** consume el módulo de conversión de coordenadas.
 - El modelo lo escribe el hilo principal y lo lee la cola de captura: todo pasa por el candado interno.
 
-## Gramática de botón de comando
+## Íconos de los botones en vivo
 
-**Fase 15. Existe.** `UI/CommandButton.swift`.
+**Fase 15, reducida en la Fase 16.** `UI/CommandButton.swift`.
 
-El tamaño fijo (74×46), el ícono encajado en su cuadro de 20×20, el nombre siempre a la vista y el pintado de estado —azul prendido, coral callando o tapando, gris apagado—. Es lo que hace que todo lo que se toca con la grabación corriendo se vea como una sola cosa.
+Hasta la Fase 15 era la gramática de botón compartida del widget y del teleprompter. Desde la Fase 16 cada uno tiene la suya (`UI/CapsuleButton.swift` y `BarraBoton` en el teleprompter, decisiones 124 y 134), y de esta pieza queda solo `icono`: encaja cualquier símbolo en el mismo cuadro de 20×20 para que ninguno se dibuje más grande que su vecino (decisión 112).
 
-Consumidores: la barra del teleprompter, y su función `icono` también la cápsula del widget. **Desde la Fase 16 el widget ya no usa esta gramática**: tiene la suya en `UI/CapsuleButton.swift` (decisión 124). El ancho del botón ya no decide el ancho del widget. Cuando el teleprompter se rediseñe, esta pieza probablemente se va.
-
-Cuidado al tocarla: el ancho del botón decide el ancho del widget (siete columnas) y el ancho mínimo de la ventana del teleprompter. Cambiarlo mueve las dos. Y los íconos que cambian en vivo tienen que volver a pasar por `CommandButton.icono`, o vuelven al tamaño de fábrica y desparejan la fila (decisión 102).
+Consumidores: `CapsuleButton` (widget) y `BarraBoton` (teleprompter). Los íconos que cambian en vivo tienen que volver a pasar por `icono`, o vuelven al tamaño de fábrica.
 
 ## Identidad visual
 
@@ -77,7 +75,7 @@ Paleta, espaciado, tipografía y el botón plano de la marca. Es la traducción 
 
 Consumidores actuales: `ControlWindow`.
 
-**Desde la Fase 16** convive con la paleta clara del rediseño, `BloomindStyle.Claro` (decisión 123), y con `BloomindStyle.reloj` para el cronómetro. Consumidores de la clara: el widget (`RecordingWidget`, `CapsuleButton`) y el panel (`ControlWindow`, `SentenceView`, y los botones `.claro`, `.claroSecundario` y `.falta` de `BloomindButton`). La oscura se borra cuando la última pantalla esté migrada.
+**Desde la Fase 16** convive con la paleta clara del rediseño, `BloomindStyle.Claro` (decisión 123), y con `BloomindStyle.reloj` para el cronómetro. Consumidores de la clara: el widget (`RecordingWidget`, `CapsuleButton`) y el panel (`ControlWindow`, `SentenceView`, y los botones `.claro`, `.claroSecundario` y `.falta` de `BloomindButton`). La oscura **no se borra**: es la del teleprompter, que sigue oscuro (decisión 134). Todo lo demás usa la clara.
 
 Consumidores previstos: absolutamente toda la UI que venga. El panel de configuración y el widget flotante (Fase 11), la pantalla de preferencias (Fase 9), la tarjeta de atajos (Fase 9), el countdown (Fase 11) y los avisos de disco.
 

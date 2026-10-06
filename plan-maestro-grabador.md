@@ -230,6 +230,8 @@ Además, y **solo mientras el teleprompter tiene el foco**: barra espaciadora pa
 
 #### Aspecto
 
+**Desde el 2026-10-06 el teleprompter viene claro, como el resto de la app, y se puede pasar a oscuro** con un interruptor en el panel o un botón en su propia barra; lo elegido queda recordado (decisión 135).
+
 Sigue la identidad Bloomind de 8.13, como toda la interfaz de la app: fondo Azul Profundo, texto blanco, la línea de lectura y los controles en Azul Lab. No hereda la paleta del prototipo web.
 
 ### 8.8 Atajos de teclado
