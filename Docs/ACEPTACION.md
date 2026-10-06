@@ -966,3 +966,51 @@ Tocá **Pausar**: tiene que decir «Reanudar» con el ícono de play (antes dec�
 Con el tablero prendido, y después con el marcador sobre la pantalla, tocá botones de la cápsula y abrí los menús de grupo.
 
 **Tiene que:** responder todo igual que sin dibujo, y lo que dibujes seguir saliendo en el video. Al terminar, mirá el video: la cápsula, los menús y las pastillas **no pueden aparecer en ningún cuadro**.
+
+## Fase 16. Rediseño visual — parte 2: el panel — VALIDADA el 2026-10-06
+
+Lo que cambia: el panel de antes de grabar pasa a ser **una oración**: «Voy a grabar la pantalla entera del Retina, con el micrófono DJI y la cámara FaceTime, leyendo 3 guiones». Cada parte en azul se toca y abre su menú. Las mismas opciones de siempre, en otro lugar.
+
+### 1. Que entre en la pantalla
+
+Abrí el panel desde el ícono de la barra de menú, «Iniciar grabación…».
+
+**Tiene que:** verse entero en el Air, con el botón **Grabar** a la vista sin mover nada (antes se cortaba abajo).
+
+### 2. Cada parte de la frase
+
+Tocá cada parte en azul: la pantalla entera, el nombre de la pantalla, el micrófono, la cámara y los guiones.
+
+**Tiene que:** abrir debajo un menú con lo elegido marcado. Cambiá algo en cada uno y mirá que la frase lo diga: pasá a «El micrófono y el sonido del PC», poné «Sin sonido», apagá la cámara, elegí «Un área…» y dibujá un rectángulo. La frase tiene que decir «sin sonido y sin cámara» o «un área de 1280×720», según el caso, y el punto de abajo ponerse ámbar con «El video va a salir sin sonido».
+
+### 3. El medidor
+
+Volvé al micrófono de siempre y hablá.
+
+**Tiene que:** moverse con tu voz la línea azul debajo del nombre del micrófono.
+
+### 4. El guion
+
+Tocá «3 guiones» (o «sin guion»).
+
+**Tiene que:** abrir un globo con el cuadro para escribir, «Cargar archivos…», la lista de cargados con «Quitar» y las filas de velocidad y letra. Escribí algo y cerrá el globo tocando afuera: la frase tiene que contar un guion más. Cerrá la app, abrila: tiene que estar lo escrito.
+
+Cargá tres archivos con «Cargar archivos…». Tienen que aparecer los tres con su casilla marcada. Desmarcá uno: la frase cuenta uno menos. Grabá: el teleprompter no puede tener la pestaña del que desmarcaste. Detené, cerrá y abrí la app: el desmarcado sigue cargado y desmarcado.
+
+### 4 bis. Velocidad y letra que se recuerdan
+
+Grabá con un guion. En la barra de abajo del teleprompter, a la derecha, están los números de velocidad y letra: tocá el de velocidad, escribí 3,5 y Enter; después cambiá la letra con los botones. Sin tocar nada más, apretá la barra espaciadora.
+
+**Tiene que:** cambiar la velocidad y la letra en el acto, y la barra espaciadora seguir pausando y arrancando el guion. Detené, abrí el panel y tocá los guiones: la velocidad y la letra tienen que ser las que dejaste. Grabá otra toma: el guion arranca con esas. Cerrá la app, abrila: siguen ahí.
+
+### 5. El resto
+
+Cambiá el nombre de la sesión tocando el título grande, cambiá la carpeta con «Cambiar…» y apagá y prendé la cuenta regresiva con el interruptor. Cerrá y abrí la app.
+
+**Tiene que:** recordar todo, como siempre.
+
+### 6. Grabar
+
+Dale **Grabar**.
+
+**Tiene que:** hacer la cuenta, irse el panel y aparecer la cápsula. Al detener, el archivo tiene que tener el nombre que pusiste y grabarse lo que dice la frase: esa pantalla o esa área, ese sonido y esa cámara.

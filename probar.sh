@@ -64,6 +64,11 @@ correr configuracion \
 	"$FUENTES/Registro/Logger.swift" \
 	Pruebas/configuracion/main.swift
 
+correr oracion \
+	"$FUENTES/UI/PanelSentence.swift" \
+	"$FUENTES/Audio/AudioMode.swift" \
+	Pruebas/oracion/main.swift
+
 correr mezcla \
 	"$FUENTES/Audio/AudioMixer.swift" \
 	"$FUENTES/Registro/Logger.swift" \

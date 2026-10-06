@@ -285,7 +285,9 @@ Defaults propuestos (todos reasignables; al implementar, verificar que no choque
 
 Aparece al iniciar una grabación (o desde el menu bar). Contiene: display o área personalizada, modo de audio y dispositivo de micrófono con su indicador de nivel en vivo, cámara, nombre de la sesión, carpeta de salida, countdown on/off, y el **guion del teleprompter con su velocidad y su tamaño de letra de arranque**. Todo con memoria pegajosa: cada campo recuerda el último valor usado y arranca ahí. Elegir una vez, grabar muchas.
 
-**Desde la adenda 2 (2026-10-05) el panel es una oración** (decisión 128): «Voy a grabar la pantalla entera del Retina, con el micrófono DJI y la cámara FaceTime, leyendo 3 guiones». Cada fragmento azul se toca y abre su menú, y el subrayado del micrófono es el medidor de nivel. Mismos campos, misma memoria pegajosa.
+**Desde la adenda 2 (2026-10-05) el panel es una oración** (decisión 128): «Voy a grabar la pantalla entera del Retina, con el micrófono DJI y la cámara FaceTime, leyendo 3 guiones». Cada fragmento azul se toca y abre su menú, y el subrayado del micrófono es el medidor de nivel. Mismos campos, misma memoria pegajosa. Cada guion cargado de archivo tiene su casilla para usarlo o no en esta clase sin borrarlo (decisión 131).
+
+**Desde el 2026-10-06, la velocidad y la letra que se ajustan grabando pasan al panel** y quedan para la próxima vez, y en la barra del teleprompter se escriben con números (decisión 132). Lo que sigue sobre lo que no se hereda vale para el resto: posición, tamaño y guion editado en vivo.
 
 El guion es la excepción a la memoria pegajosa por el lado contrario: se guarda como cualquier otro campo, pero lo que **no** se hereda de una grabación a otra son los cambios hechos en vivo. Cada grabación arranca con lo que dice el panel (decisión 91).
 

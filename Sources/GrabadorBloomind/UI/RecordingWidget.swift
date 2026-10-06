@@ -712,7 +712,7 @@ final class RecordingWidget: NSPanel {
 
 /// Un renglón de menú que ejecuta un bloque. `NSMenuItem` solo sabe de
 /// target y selector, y el target es débil: el renglón se sostiene a sí mismo.
-private final class MenuClosureItem: NSMenuItem {
+final class MenuClosureItem: NSMenuItem {
     private let bloque: () -> Void
 
     init(titulo: String, bloque: @escaping () -> Void) {

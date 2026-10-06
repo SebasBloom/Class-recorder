@@ -77,7 +77,7 @@ Paleta, espaciado, tipografía y el botón plano de la marca. Es la traducción 
 
 Consumidores actuales: `ControlWindow`.
 
-**Desde la Fase 16** convive con la paleta clara del rediseño, `BloomindStyle.Claro` (decisión 123), y con `BloomindStyle.reloj` para el cronómetro. Consumidores de la clara: el widget (`RecordingWidget`, `CapsuleButton`). La oscura se borra cuando la última pantalla esté migrada.
+**Desde la Fase 16** convive con la paleta clara del rediseño, `BloomindStyle.Claro` (decisión 123), y con `BloomindStyle.reloj` para el cronómetro. Consumidores de la clara: el widget (`RecordingWidget`, `CapsuleButton`) y el panel (`ControlWindow`, `SentenceView`, y los botones `.claro`, `.claroSecundario` y `.falta` de `BloomindButton`). La oscura se borra cuando la última pantalla esté migrada.
 
 Consumidores previstos: absolutamente toda la UI que venga. El panel de configuración y el widget flotante (Fase 11), la pantalla de preferencias (Fase 9), la tarjeta de atajos (Fase 9), el countdown (Fase 11) y los avisos de disco.
 

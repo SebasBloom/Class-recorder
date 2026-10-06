@@ -57,6 +57,10 @@ enum BloomindStyle {
         static let coral = NSColor(hex: 0xC93C30)
         static let coralSuave = NSColor(hex: 0xFDEDEB)
         static let coralHundido = NSColor(hex: 0xA9302A)
+        /// Aviso que no bloquea («los AirPods graban con calidad de teléfono»).
+        static let ambar = NSColor(hex: 0xE3A008)
+        /// Solo «todo listo», como punto, nunca como texto sobre blanco.
+        static let turquesa = NSColor(hex: 0x45D3C5)
     }
 
     /// Fraunces con cifras de ancho fijo, para un cronómetro que no baila al
@@ -152,9 +156,24 @@ final class BloomindButton: NSButton {
         case primary
         /// Acción secundaria: solo borde hairline.
         case ghost
+        /// Acción principal sobre fondo claro (adenda 2): azul, oscurece a
+        /// tinta al pasar el mouse.
+        case claro
+        /// Secundaria sobre fondo claro: borde fino y texto tinta.
+        case claroSecundario
+        /// Lo que falta para poder grabar («Dar permiso al micrófono»): coral.
+        case falta
     }
 
-    private let kind: Kind
+    /// Se puede cambiar en vivo: el botón de grabar pasa a «Dar permiso» si
+    /// falta el permiso del micrófono.
+    var kind: Kind {
+        didSet {
+            layer?.cornerRadius = kind == .ghost || kind == .primary ? BloomindStyle.cornerRadius : 8
+            layer?.borderWidth = [.ghost, .claroSecundario, .falta].contains(kind) ? 1.5 : 0
+            applyColors()
+        }
+    }
     private var isHovered = false
 
     init(title: String, kind: Kind = .primary) {
@@ -164,8 +183,8 @@ final class BloomindButton: NSButton {
         self.title = title
         isBordered = false
         wantsLayer = true
-        layer?.cornerRadius = BloomindStyle.cornerRadius
-        layer?.borderWidth = kind == .ghost ? 1 : 0
+        layer?.cornerRadius = kind == .ghost || kind == .primary ? BloomindStyle.cornerRadius : 8
+        layer?.borderWidth = [.ghost, .claroSecundario, .falta].contains(kind) ? 1.5 : 0
 
         applyColors()
     }
@@ -225,6 +244,21 @@ final class BloomindButton: NSButton {
             layer?.borderColor = edge.withAlphaComponent(dimmed ? 0.4 : 1).cgColor
             setTitleColor((isHovered ? BloomindStyle.ink : BloomindStyle.muted)
                 .withAlphaComponent(dimmed ? 0.5 : 1))
+
+        case .claro:
+            layer?.backgroundColor = (isHovered ? BloomindStyle.Claro.tinta : BloomindStyle.Claro.azul)
+                .withAlphaComponent(dimmed ? 0.35 : 1).cgColor
+            setTitleColor(.white)
+
+        case .claroSecundario:
+            layer?.backgroundColor = (isHovered ? BloomindStyle.Claro.papel : BloomindStyle.Claro.blanco).cgColor
+            layer?.borderColor = (isHovered ? BloomindStyle.Claro.tinta : BloomindStyle.Claro.lineaFuerte).cgColor
+            setTitleColor(BloomindStyle.Claro.tinta.withAlphaComponent(dimmed ? 0.4 : 1))
+
+        case .falta:
+            layer?.backgroundColor = (isHovered ? BloomindStyle.Claro.coral : BloomindStyle.Claro.coralSuave).cgColor
+            layer?.borderColor = BloomindStyle.Claro.coral.cgColor
+            setTitleColor(isHovered ? .white : BloomindStyle.Claro.coral)
         }
     }
 

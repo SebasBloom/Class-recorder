@@ -52,6 +52,16 @@ comprobar("no se pierde la cuenta regresiva apagada", cargado.countdownEnabled =
 comprobar("no se pierde el nombre de la sesión", cargado.lastSessionName == "Plataforma Neon")
 comprobar("no se pierde la burbuja", cargado.bubbleFrame?.width == 317)
 
+// Un guion cargado antes de que se pudiera desmarcar: tiene que entrar marcado.
+let guionViejo = #"{ "teleprompterScripts" : [ { "nombre" : "Intro", "texto" : "Hola" } ] }"#
+if let conGuion = try? JSONDecoder().decode(Configuration.self, from: Data(guionViejo.utf8)) {
+    comprobar("un guion de la versión anterior carga y queda marcado",
+              conGuion.teleprompterScripts.first?.usar == true && conGuion.teleprompterScripts.first?.nombre == "Intro")
+} else {
+    print("  ✗ un guion de la versión anterior ya no carga")
+    fallos += 1
+}
+
 // Un archivo vacío también tiene que cargar: es el caso de un reset a mano.
 if let vacio = try? JSONDecoder().decode(Configuration.self, from: Data("{}".utf8)) {
     comprobar("un archivo vacío arranca con los valores por defecto",

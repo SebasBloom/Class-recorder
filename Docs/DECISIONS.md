@@ -464,6 +464,7 @@ Razón: el prototipo web vivía a pantalla completa y necesitaba una perilla par
 Alternativa descartada: mantener el deslizador de ancho. Ahorra un arrastre de ventana y agrega un estado más que recordar y que reiniciar entre grabaciones.
 
 **91. 2026-09-06 — El teleprompter recuerda dentro de la grabación y se reinicia entre grabaciones.**
+*Reemplazada en parte por la decisión 132 (2026-10-06): la velocidad y la letra sí quedan para la próxima vez.*
 Mientras dura una grabación conserva posición, tamaño, velocidad, tamaño de letra y guion, aunque se apague y se prenda. Al terminar la grabación vuelve a los valores del panel de configuración previo.
 Razón: cada grabación es un guion distinto. Heredar el guion anterior significa arrancar la toma siguiente leyendo el texto equivocado, que es peor que arrancar en blanco.
 Lo que sí persiste en `config.json` es lo del panel: el guion cargado ahí, su velocidad y su tamaño de letra de arranque, con la misma memoria pegajosa que el resto de los campos.
@@ -711,3 +712,25 @@ Costo aceptado: AppKit no trae texto con zonas que se tocan y abren un menú, as
 - **La posición se guarda por la esquina de arriba a la derecha** (`widgetTopRight`) y no por el origen (`widgetPosition`, que se deja de leer). La cápsula cambia de ancho según el contexto y en modo mini; guardada por el origen, cada cambio la correría. Costo: la primera vez después de actualizar, el widget vuelve a su esquina por defecto.
 - **`widgetMini` reemplaza a `widgetExpanded`**, con la lectura tolerante de la decisión 96: un `config.json` viejo carga igual y arranca con la cápsula completa.
 - **El widget es siempre claro**, aunque el Mac esté en modo oscuro (`appearance = .aqua`), así sus menús y tooltips no salen oscuros sobre la cápsula blanca.
+
+**130. 2026-10-05 — Cómo se construyó la oración del panel.**
+- **Las reglas de la frase viven aparte de la vista** (`UI/PanelSentence.swift`): qué se dice en cada caso y cómo se acortan los nombres, sin AppKit, con su prueba automática (`./probar.sh`, bloque "oracion"). La vista (`UI/SentenceView.swift`) solo dibuja y traduce el clic a un fragmento. Así un nombre de micrófono nuevo que se lea raro se arregla con una regla y un caso de prueba, sin abrir ninguna ventana.
+- **La vista es un `NSTextView` de solo lectura** con un atributo propio por fragmento. Un clic se traduce a la letra de debajo y de ahí a su fragmento. Los espacios de cada fragmento son de los que no cortan, para que «la cámara FaceTime» no quede partida en dos renglones; el de «sin permiso» sí puede cortar, porque es largo a propósito.
+- **El subrayado del micrófono se dibuja encima del texto** en cada muestra del medidor, no como subrayado tipográfico: una línea fina gris en reposo y una azul que crece con la voz. Reemplaza la barra de nivel, y `UI/LevelBar.swift` se borra.
+- **Los menús de cada fragmento son `NSMenu`**, igual que en el widget (decisión 129). **El guion abre un globo (`NSPopover`)** y no un menú, porque lleva un cuadro de texto, botones y las dos filas de velocidad y letra, y un menú no deja escribir adentro.
+- **Diferencias con la maqueta:** el globo del guion no deja elegir cuáles de los guiones cargados se usan (en la maqueta se marcaban uno por uno). Hoy la app usa todos, y elegir sería una función nueva. El ámbar #E3A008 de los avisos que no bloquean (AirPods, sin sonido) es un color nuevo en la paleta, tomado de la maqueta.
+- **Al cambiar de pantalla, un área elegida se descarta** y se vuelve a la pantalla entera. Un área está en coordenadas de una pantalla, y conservarla al cambiar grabaría un rectángulo ajeno.
+- **Si falta el permiso del micrófono, el botón de grabar se vuelve «Dar permiso al micrófono»** y abre Configuración del Sistema. Grabar así saldría mudo, que es peor que no grabar.
+
+**131. 2026-10-06 — Cada guion cargado se puede desmarcar para no usarlo, sin borrarlo.**
+En el globo del guion, cada archivo cargado tiene su casilla. Solo los marcados van al teleprompter y cuentan en la frase («leyendo 2 guiones»). El escrito a mano en el panel no tiene casilla: se usa si tiene texto.
+Razón: pedido de Sebas el 2026-10-06, sobre la maqueta. Antes la única forma de no usar un guion cargado era «Quitar», que los sacaba todos, y volver a usarlo obligaba a buscar el archivo otra vez.
+La marca se guarda con el guion (`usar` en `StoredScript`), con lectura tolerante (decisión 96): los guiones guardados antes cargan marcados, que es como se usaban. Cargar de nuevo un archivo que ya estaba le actualiza el texto y respeta su marca.
+Alternativa descartada: elegir los guiones desde el teleprompter, ya grabando. Las pestañas del teleprompter ya permiten pasar de uno a otro (decisión 121); esto es otra cosa, decidir antes de arrancar qué entra en esta clase.
+
+**132. 2026-10-06 — La velocidad y la letra que se ajustan grabando quedan para la próxima vez, y se pueden escribir con números.**
+En cuanto cambian en el teleprompter (botones, flechas, el menú del widget o escribiendo el número), se copian al panel y a `config.json` como valores de arranque. La barra del teleprompter cambia el texto «velocidad 2.0 · letra 34» por dos campos donde se escribe el número y Enter.
+Razón, en palabras de Sebas: «es una mamera depender de mi memoria para usarlo». Ajustaba en vivo, y la toma siguiente arrancaba otra vez con lo del panel.
+**Reemplaza en parte a la decisión 91.** Lo que se mantiene de ella: la posición, el tamaño y el guion editado en vivo siguen muriendo con la grabación. El argumento de la 91 era que el panel no mintiera sobre con qué se arranca, y se sigue cumpliendo: el panel muestra lo último que se usó, que es con lo que va a arrancar.
+Al terminar de escribir un número, el teclado vuelve a la ventana del teleprompter, para que la barra espaciadora y las flechas sigan andando sin tener que tocarla (decisión 92).
+Alternativa descartada: guardar todo el estado en vivo, también la posición y el tamaño de la ventana. No se pidió, y la ventana ya arranca en un lugar razonable de la pantalla que se graba.

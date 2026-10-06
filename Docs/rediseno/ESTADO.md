@@ -51,6 +51,10 @@ Sebas aprobó retomar. Las decisiones del rediseño quedaron como la adenda 2: d
 
 Nuevos `UI/CapsuleButton.swift` y `UI/RecordingWidget.swift` reescrito, con la misma interfaz hacia `ControlWindow` (más el color del lienzo y la etiqueta de cada atajo). Decisión 129. Los pasos están en `Docs/ACEPTACION.md`, «Fase 16 — parte 1». Las fotos del arnés se ven como la maqueta. Sebas corrió los pasos y todo funcionó; en la prueba salió un caso que se arregló: la cápsula abierta desde la pastilla mini contra el borde izquierdo quedaba fuera de la pantalla, y ahora se corre para quedar entera. Siguiente: parte 2, el panel.
 
+## Parte 2, el panel: VALIDADA por Sebas (2026-10-06)
+
+La oración vive en `UI/PanelSentence.swift` (reglas, con prueba) y `UI/SentenceView.swift` (dibujo y clic). `ControlWindow` reescrito sobre eso; el guion va en un globo. Decisión 130. Pasos en `Docs/ACEPTACION.md`, «Fase 16 — parte 2». Fotografiado con arnés: se ve como la maqueta y mide unos 415 pt de alto. En la misma parte entraron dos pedidos de Sebas: casillas para usar o no cada guion cargado (decisión 131) y velocidad y letra que se recuerdan y se escriben con números (decisión 132). Siguiente: parte 3.
+
 ## Cómo seguir
 
 Sebas pidió **no arrancar** hasta que retome. El plan propuesto es pasar a AppKit por pedazos, cada uno validado por Sebas antes del siguiente:

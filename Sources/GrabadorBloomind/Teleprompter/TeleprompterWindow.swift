@@ -54,7 +54,11 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     /// aprendérselas (decisión 119).
     private let ayuda = NSTextField(labelWithString: "")
     /// Velocidad y tamaño de letra, debajo de la ayuda.
-    private let valores = NSTextField(labelWithString: "")
+    /// Velocidad y letra, escritas con números (decisión 132). Se escribe el
+    /// valor y Enter, o se sale del campo.
+    private let campoVelocidad = NSTextField()
+    private let campoLetra = NSTextField()
+    private var valores: NSStackView!
 
     /// La combinación que prende y apaga el teleprompter, tal como está
     /// asignada hoy. Se muestra en la barra.
@@ -202,7 +206,7 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
     private static let altoPestañas: CGFloat = 36
 
     /// Ancho de la columna de ayuda y valores, a la derecha de los botones.
-    private static let anchoColumna: CGFloat = 178
+    private static let anchoColumna: CGFloat = 200
 
     /// Alto de la barra: el botón más el aire de arriba y abajo.
     private static let altoBarra: CGFloat = CommandButton.alto + BloomindStyle.Space.tight * 2
@@ -307,9 +311,29 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         ayuda.textColor = BloomindStyle.muted
         ayuda.alignment = .right
 
-        valores.font = BloomindStyle.mono(11)
-        valores.textColor = BloomindStyle.muted
-        valores.alignment = .right
+        for campo in [campoVelocidad, campoLetra] {
+            campo.font = BloomindStyle.mono(11)
+            campo.alignment = .center
+            campo.bezelStyle = .roundedBezel
+            campo.controlSize = .small
+            campo.target = self
+            campo.action = #selector(escribirValor(_:))
+            // Confirma también al salir del campo, no solo con Enter.
+            campo.cell?.sendsActionOnEndEditing = true
+            campo.translatesAutoresizingMaskIntoConstraints = false
+            campo.widthAnchor.constraint(equalToConstant: 42).isActive = true
+        }
+        campoVelocidad.toolTip = "Velocidad del guion: escribí un número y Enter"
+        campoLetra.toolTip = "Tamaño de letra: escribí un número y Enter"
+        let etiquetaVelocidad = NSTextField(labelWithString: "velocidad")
+        let etiquetaLetra = NSTextField(labelWithString: "letra")
+        for etiqueta in [etiquetaVelocidad, etiquetaLetra] {
+            etiqueta.font = BloomindStyle.mono(11)
+            etiqueta.textColor = BloomindStyle.muted
+        }
+        valores = NSStackView(views: [etiquetaVelocidad, campoVelocidad, etiquetaLetra, campoLetra])
+        valores.spacing = 4
+        valores.setCustomSpacing(10, after: campoVelocidad)
         // Los números son lo primero que sobra si la ventana se hace angosta:
         // los botones no se pueden perder. Pero se **esconden enteros** en vez
         // de recortarse, porque "velocidad !" a medio cortar se ve peor que no
@@ -327,7 +351,6 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         columnaDerecha.translatesAutoresizingMaskIntoConstraints = false
         columnaDerecha.widthAnchor.constraint(equalToConstant: Self.anchoColumna).isActive = true
         ayuda.lineBreakMode = .byTruncatingTail
-        valores.lineBreakMode = .byTruncatingTail
 
         let espaciador = NSView()
         espaciador.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -429,6 +452,22 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
         motor.cambiarVelocidad(delta)
         refrescarControles()
         onChange?()
+    }
+
+    /// Un número escrito en la barra. Lo que no es número vuelve a lo que
+    /// había; lo que se pasa del rango queda en el borde, igual que en el
+    /// panel. Al terminar, el teclado vuelve a la ventana para que la barra
+    /// espaciadora y las flechas sigan andando.
+    @objc private func escribirValor(_ campo: NSTextField) {
+        if let valor = NumberRow.leer(campo.stringValue) {
+            if campo === campoVelocidad {
+                cambiarVelocidad(valor - motor.velocidad)
+            } else {
+                cambiarLetra(valor - motor.tamañoLetra)
+            }
+        }
+        makeFirstResponder(nil)
+        refrescarControles()
     }
 
     @objc private func tocarMasLetra() { cambiarLetra(4) }
@@ -612,8 +651,16 @@ final class TeleprompterWindow: NSPanel, NSWindowDelegate {
             boton.isEnabled = !editando
         }
 
-        valores.stringValue = String(format: "velocidad %.1f · letra %d",
-                                     motor.velocidad, Int(motor.tamañoLetra))
+        // Lo que se está escribiendo no se pisa: el refresco llega en cada
+        // cuadro mientras el guion corre.
+        if campoVelocidad.currentEditor() == nil {
+            campoVelocidad.stringValue = String(format: "%.1f", motor.velocidad)
+        }
+        if campoLetra.currentEditor() == nil {
+            campoLetra.stringValue = String(Int(motor.tamañoLetra))
+        }
+        campoVelocidad.isEnabled = !editando
+        campoLetra.isEnabled = !editando
         // La combinación sale del registro de atajos: si se reasigna, acá se lee
         // la nueva. Las teclas sueltas no se nombran cuando se está editando,
         // porque justamente ahí no funcionan (decisión 92).

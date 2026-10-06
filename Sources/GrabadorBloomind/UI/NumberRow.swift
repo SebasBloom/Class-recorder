@@ -42,7 +42,7 @@ final class NumberRow: NSStackView {
 
         let etiqueta = NSTextField(labelWithString: titulo)
         etiqueta.font = BloomindStyle.ui(12)
-        etiqueta.textColor = BloomindStyle.muted
+        etiqueta.textColor = BloomindStyle.Claro.pizarra
         // Ancho fijo y no el que le pida su palabra: "Velocidad" y "Tamaño de
         // letra" miden distinto, y sin esto cada fila arranca su barra en un
         // lugar distinto. Es la misma regla que la grilla de botones del widget

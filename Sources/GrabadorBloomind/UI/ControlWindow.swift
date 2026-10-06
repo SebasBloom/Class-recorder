@@ -1,14 +1,17 @@
 import AppKit
+import AVFoundation
 import UniformTypeIdentifiers
 
-/// Ventana temporal de la Fase 1: elegir pantalla, iniciar y detener.
+/// El panel de configuración antes de grabar, y dueño del widget durante la
+/// grabación.
 ///
-/// Es andamiaje para poder probar la captura. El panel de configuración de
-/// verdad y el widget flotante llegan en la Fase 11 y la reemplazan, pero ya
-/// lleva la identidad visual de `BloomindStyle` para que la cara del producto
-/// sea la misma desde el primer día.
+/// Desde la Fase 16 el panel es **una oración** (decisión 128): «Voy a grabar
+/// la pantalla entera del Retina, con el micrófono DJI y la cámara FaceTime,
+/// leyendo 3 guiones». Cada fragmento azul se toca y abre su menú; el guion
+/// abre un globo con el texto, los archivos y los valores de arranque. Abajo,
+/// solo lo que no cabe en la frase: la carpeta y la cuenta regresiva.
 @MainActor
-final class ControlWindow: NSWindowController, NSTextViewDelegate {
+final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDelegate {
 
     let recorder = RecordingController()
 
@@ -20,65 +23,79 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
     /// tienen que existir aunque no haya ninguna grabación en curso.
     var onToggleShortcutCard: (() -> Void)?
 
-    private var displays: [CaptureDisplay] = []
-    private let displayPopUp = NSPopUpButton()
+    /// Ancho del texto del panel: 640 de ventana menos 44 de margen a cada lado.
+    private static let anchoTexto: CGFloat = 552
 
-    private let audioModePopUp = NSPopUpButton()
+    // MARK: - Lo elegido
+
+    private var displays: [CaptureDisplay] = []
+    private var displayIndex = 0
+
+    private var audioMode: AudioMode = .microphone
     private let microphoneEnumerator = AudioDeviceEnumerator()
     private let levelMeter = AudioLevelMeter()
     private var microphones: [AudioDevice] = []
-    private let microphonePopUp = NSPopUpButton()
-    private let levelBar = LevelBar()
+    private var microphoneID: String?
+    /// Se pidió el permiso de micrófono y macOS dijo que no.
+    private var microfonoSinPermiso = false
 
     private let cameraEnumerator = CameraDeviceEnumerator()
     private var cameras: [CameraDevice] = []
-    private let cameraPopUp = NSPopUpButton()
+    /// La cámara elegida en el panel, aunque todavía se esté abriendo. La que
+    /// está encendida de verdad es `camera`.
+    private var camaraElegidaID: String?
     /// Cámara encendida, con su ventana espejo. Existen desde que se elige una
-    /// cámara en la lista, no desde que se graba: así Sebas se encuadra antes de
-    /// arrancar.
+    /// cámara, no desde que se graba: así Sebas se encuadra antes de arrancar.
     private var camera: CameraCapture?
     private var mirror: CameraMirrorWindow?
 
-    private let areaButton = NSButton()
-    private let areaLabel = NSTextField(labelWithString: "")
     /// Área personalizada en coordenadas globales. Nil graba la pantalla entera.
     private var customArea: CGRect?
 
+    /// Un problema que no sale del estado (no se pudieron listar las pantallas,
+    /// la cámara no abrió). Se muestra en el pie hasta el próximo cambio.
+    private var avisoTemporal: String?
+
+    // MARK: - Vistas
+
+    private let sentence = SentenceView(ancho: ControlWindow.anchoTexto)
     private let sessionField = NSTextField()
     private let folderLabel = NSTextField(labelWithString: "")
     private let folderButton = NSButton()
-    private let countdownCheck = NSButton(checkboxWithTitle: "Cuenta regresiva 3, 2, 1", target: nil, action: nil)
+    private let countdownSwitch = NSSwitch()
+
+    private let statusDot = NSView()
+    private let statusLabel = NSTextField(wrappingLabelWithString: "")
+    private let actionButton = BloomindButton(title: "Grabar", kind: .claro)
+    private let pauseButton = BloomindButton(title: "Pausar", kind: .claroSecundario)
 
     private let widget = RecordingWidget()
 
-    /// La fila que lista los guiones cargados. Se esconde cuando no hay ninguno.
-    private var filaLista: NSStackView!
-
-    /// El teleprompter existe solo mientras dura una grabación: al terminar se
-    /// suelta, y con él se van posición, tamaño, velocidad, letra y guion en
-    /// vivo. Los valores de arranque salen siempre del panel (decisión 91).
-    private var teleprompter: TeleprompterWindow?
-
-    /// El widget se escondió a mano con su atajo. Vuelve solo en la grabación
-    /// siguiente: cada toma arranca con el widget a la vista.
-    private var widgetEscondido = false
-
+    /// El globo del guion: el texto escrito a mano, los archivos cargados y los
+    /// valores de arranque del teleprompter.
+    private let popoverGuion = NSPopover()
     private let scriptView = NSTextView()
     private let scriptLoadButton = NSButton()
     private let scriptClearButton = NSButton()
     private let scriptListLabel = NSTextField(labelWithString: "")
+    /// Los guiones cargados, con su casilla para usarlo o no en esta clase
+    /// (decisión 131). Se esconde entero cuando no hay ninguno.
+    private var filaLista: NSStackView!
+    private let listaGuiones = NSStackView()
     /// Velocidad y tamaño de letra de arranque del teleprompter. Se pueden
     /// arrastrar, escribir o mover de a pasos con los botones (decisión 115).
     private var speedRow: NumberRow!
     private var fontRow: NumberRow!
 
-    private let actionButton = BloomindButton(title: "Iniciar grabación")
-    private let pauseButton = BloomindButton(title: "Pausar", kind: .ghost)
-    private let statusLabel = NSTextField(labelWithString: "")
-    private let titleLabel = NSTextField(labelWithString: "Grabador")
-    private let eyebrowLabel = NSTextField(labelWithString: "")
+    /// El teleprompter existe solo mientras dura una grabación: al terminar se
+    /// suelta, y con él se van posición, tamaño y guion editado en vivo. La
+    /// velocidad y la letra no se pierden: se copian al panel en cuanto cambian
+    /// (decisión 132).
+    private var teleprompter: TeleprompterWindow?
 
-    private var microphoneLabel: NSTextField?
+    /// El widget se escondió a mano con su atajo. Vuelve solo en la grabación
+    /// siguiente: cada toma arranca con el widget a la vista.
+    private var widgetEscondido = false
 
     private var timer: Timer?
     private var startedAt: Date?
@@ -87,23 +104,26 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
     private var accumulated: TimeInterval = 0
 
     init() {
-        // Sin fullSizeContentView a propósito: con la barra de título transparente
-        // sobre el fondo deep ya se ve como una sola pieza, y el contenido no
-        // queda debajo de los botones de cerrar.
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 400),
-            styleMask: [.titled, .closable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 460),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Grabador Bloomind"
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = BloomindStyle.deep
+        // Clara siempre, aunque el Mac esté en modo oscuro (decisión 123).
+        window.appearance = NSAppearance(named: .aqua)
+        window.backgroundColor = BloomindStyle.Claro.blanco
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
-        window.center()
         super.init(window: window)
+
+        let guardado = ConfigurationStore.shared.current
+        if let modo = guardado.lastAudioMode.flatMap(AudioMode.init(rawValue:)) { audioMode = modo }
+        if let area = guardado.customArea {
+            customArea = CGRect(x: area.x, y: area.y, width: area.width, height: area.height)
+        }
 
         buildLayout()
         recorder.onStateChange = { [weak self] in self?.refresh() }
@@ -122,10 +142,10 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         widget.onCameraMenu = { [weak self] in self?.cameraMenu() }
         widget.onToggleMicrophone = { [weak self] in self?.recorder.toggleMute(.microphone) }
         widget.onToggleSystemAudio = { [weak self] in self?.recorder.toggleMute(.system) }
-        // Los botones del modo expandido van todos por el mismo camino que los
-        // atajos, sin lógica propia: `perform(_:)` es el punto único por donde
-        // pasa todo lo que se puede hacer con el teclado. La tarjeta es la
-        // excepción, porque no vive acá.
+        // Todo lo del widget va por el mismo camino que los atajos, sin lógica
+        // propia: `perform(_:)` es el punto único por donde pasa todo lo que se
+        // puede hacer con el teclado. La tarjeta es la excepción, porque no
+        // vive acá.
         widget.onAction = { [weak self] action in
             guard let self else { return }
             if action == .tarjeta {
@@ -142,8 +162,9 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         // El atajo ⌥⌘T entra por el mismo lugar que el botón del widget.
         recorder.onTeleprompterRequested = { [weak self] in self?.toggleTeleprompter() }
         recorder.onWidgetRequested = { [weak self] in self?.toggleWidget() }
+        // El subrayado del micrófono en la oración es el medidor.
         levelMeter.onLevel = { [weak self] level in
-            self?.levelBar.level = CGFloat(level)
+            self?.sentence.nivel = CGFloat(level)
         }
         microphoneEnumerator.onChange = { [weak self] in
             // La lista se refresca sola al conectar o desconectar: AirPods,
@@ -177,12 +198,14 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         Task { await loadDisplays() }
         loadMicrophones()
         loadCameras()
-        sizeWindowToFit()
+        refrescarOracion()
+        window.center()
     }
 
     @objc private func ventanaCerrada() {
+        popoverGuion.close()
         levelMeter.stop()
-        levelBar.level = 0
+        sentence.nivel = 0
     }
 
     /// Al volver a mostrarse, el medidor arranca de nuevo con el micrófono
@@ -190,25 +213,24 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
     /// captura.
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
-        if !recorder.isRecording { audioModeChanged() }
+        if !recorder.isRecording { microphoneChanged() }
     }
 
-    /// Ajusta la ventana al alto exacto de su contenido y le prohíbe encogerse
-    /// por debajo. Se llama cada vez que aparece o desaparece una fila.
+    /// La ventana mide exactamente lo que su contenido. Se llama cada vez que la
+    /// oración cambia de largo.
     ///
-    /// Es la red de seguridad contra el error de agregar un control y no darse
-    /// cuenta de que empujó los botones fuera de la vista.
+    /// Es la red de seguridad contra el error de agregar algo y no darse
+    /// cuenta de que empujó el botón de grabar fuera de la vista, que es
+    /// justamente lo que le pasaba al panel viejo en el Air.
     private func sizeWindowToFit() {
         guard let window, let contentView = window.contentView else { return }
-
         contentView.layoutSubtreeIfNeeded()
         let fitting = contentView.fittingSize
-        guard fitting.height > 0 else { return }
-
-        window.contentMinSize = fitting
-        if window.contentView!.frame.height < fitting.height {
-            window.setContentSize(fitting)
-        }
+        guard fitting.height > 0, fitting != contentView.frame.size else { return }
+        // Crece y se encoge hacia abajo: el título se queda donde estaba.
+        let arriba = window.frame.maxY
+        window.setContentSize(fitting)
+        window.setFrameTopLeftPoint(NSPoint(x: window.frame.minX, y: arriba))
     }
 
     deinit {
@@ -217,113 +239,180 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
 
     required init?(coder: NSCoder) { fatalError("no se usa") }
 
+    // MARK: - Construcción
+
     private func buildLayout() {
         guard let contentView = window?.contentView else { return }
+        let c = BloomindStyle.Claro.self
 
-        eyebrowLabel.attributedStringValue = BloomindStyle.eyebrow("Bloomind Lab")
+        let ceja = NSTextField(labelWithString: "")
+        ceja.attributedStringValue = NSAttributedString(string: "GRABADOR BLOOMIND", attributes: [
+            .font: BloomindStyle.ui(11, weight: .semibold),
+            .kern: 1.5,
+            .foregroundColor: c.pizarra
+        ])
 
-        titleLabel.font = BloomindStyle.display(30)
-        titleLabel.textColor = BloomindStyle.ink
+        // El nombre de la sesión es el título: se escribe directo encima.
+        sessionField.font = BloomindStyle.display(30)
+        sessionField.textColor = c.tinta
+        sessionField.isBordered = false
+        sessionField.drawsBackground = false
+        sessionField.focusRingType = .none
+        sessionField.placeholderAttributedString = NSAttributedString(string: "Nombre de la sesión", attributes: [
+            .font: BloomindStyle.display(30), .foregroundColor: c.lineaFuerte
+        ])
+        sessionField.stringValue = ConfigurationStore.shared.current.lastSessionName ?? ""
+        sessionField.toolTip = "El nombre del archivo. Tocalo para cambiarlo."
 
-        let displayLabel = NSTextField(labelWithString: "Pantalla")
-        displayLabel.font = BloomindStyle.ui(12)
-        displayLabel.textColor = BloomindStyle.muted
+        sentence.onTap = { [weak self] parte, rect in self?.tocar(parte, en: rect) }
 
-        displayPopUp.font = BloomindStyle.ui(13)
-        displayPopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        // La ficha: lo que no cabe en la frase.
+        folderLabel.font = BloomindStyle.mono(12)
+        folderLabel.textColor = c.tinta
+        folderLabel.lineBreakMode = .byTruncatingHead
+        mostrarCarpeta(ConfigurationStore.shared.current.outputFolder)
+        enlace(folderButton, "Cambiar…", #selector(chooseFolder))
 
-        let audioModeLabel = NSTextField(labelWithString: "Audio")
-        audioModeLabel.font = BloomindStyle.ui(12)
-        audioModeLabel.textColor = BloomindStyle.muted
+        let explicacionCuenta = NSTextField(labelWithString: "3, 2, 1 antes de arrancar. No sale en el video.")
+        explicacionCuenta.font = BloomindStyle.ui(13)
+        explicacionCuenta.textColor = c.pizarra
+        countdownSwitch.state = ConfigurationStore.shared.current.countdownEnabled ? .on : .off
+        countdownSwitch.target = self
+        countdownSwitch.action = #selector(countdownChanged)
 
-        audioModePopUp.font = BloomindStyle.ui(13)
-        audioModePopUp.target = self
-        audioModePopUp.action = #selector(audioModeChanged)
-        for mode in AudioMode.available { audioModePopUp.addItem(withTitle: mode.label) }
-        if let saved = ConfigurationStore.shared.current.lastAudioMode,
-           let mode = AudioMode(rawValue: saved),
-           let index = AudioMode.available.firstIndex(of: mode) {
-            audioModePopUp.selectItem(at: index)
-        } else {
-            audioModePopUp.selectItem(at: AudioMode.available.firstIndex(of: .microphone) ?? 0)
+        let ficha = NSStackView(views: [
+            linea(),
+            filaFicha("Se guarda en", folderLabel, folderButton),
+            linea(),
+            filaFicha("Cuenta regresiva", explicacionCuenta, countdownSwitch),
+            linea()
+        ])
+        ficha.orientation = .vertical
+        ficha.alignment = .leading
+        ficha.spacing = 0
+        for fila in ficha.arrangedSubviews {
+            fila.widthAnchor.constraint(equalTo: ficha.widthAnchor).isActive = true
         }
 
-        let microphoneLabel = NSTextField(labelWithString: "Micrófono")
-        microphoneLabel.font = BloomindStyle.ui(12)
-        microphoneLabel.textColor = BloomindStyle.muted
+        // El pie: cómo está todo, y el botón.
+        statusDot.wantsLayer = true
+        statusDot.layer?.cornerRadius = 4
+        statusDot.translatesAutoresizingMaskIntoConstraints = false
+        statusDot.widthAnchor.constraint(equalToConstant: 8).isActive = true
+        statusDot.heightAnchor.constraint(equalToConstant: 8).isActive = true
+        statusLabel.font = BloomindStyle.ui(13)
+        statusLabel.textColor = c.pizarra
+        statusLabel.stringValue = "Buscando pantallas…"
+        statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        microphonePopUp.font = BloomindStyle.ui(13)
-        microphonePopUp.target = self
-        microphonePopUp.action = #selector(microphoneChanged)
-        microphonePopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        actionButton.target = self
+        actionButton.action = #selector(toggleRecording)
+        actionButton.heightAnchor.constraint(equalToConstant: 42).isActive = true
+        pauseButton.target = self
+        pauseButton.action = #selector(togglePause)
+        pauseButton.isHidden = true
+        pauseButton.heightAnchor.constraint(equalToConstant: 42).isActive = true
 
-        let cameraLabel = NSTextField(labelWithString: "Cámara")
-        cameraLabel.font = BloomindStyle.ui(12)
-        cameraLabel.textColor = BloomindStyle.muted
+        let pie = NSStackView(views: [statusDot, statusLabel, pauseButton, actionButton])
+        pie.alignment = .centerY
+        pie.distribution = .fill
+        pie.spacing = 8
+        pie.setCustomSpacing(14, after: statusLabel)
+        pie.edgeInsets = NSEdgeInsets(top: 22, left: 0, bottom: 26, right: 0)
 
-        cameraPopUp.font = BloomindStyle.ui(13)
-        cameraPopUp.target = self
-        cameraPopUp.action = #selector(cameraChanged)
-        cameraPopUp.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let stack = NSStackView(views: [ceja, sessionField, sentence, ficha, pie])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 0
+        stack.setCustomSpacing(8, after: ceja)
+        stack.setCustomSpacing(18, after: sessionField)
+        stack.setCustomSpacing(26, after: sentence)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(stack)
 
-        areaButton.bezelStyle = .rounded
-        areaButton.font = BloomindStyle.ui(12)
-        areaButton.target = self
-        areaButton.action = #selector(chooseArea)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 44),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -44),
+            // 30 de la barra de título transparente más el aire de la maqueta.
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 44),
+            // El borde de abajo también, para que la ventana **se mida sola** por
+            // su contenido.
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            sessionField.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            ficha.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            pie.widthAnchor.constraint(equalTo: stack.widthAnchor)
+        ])
 
-        areaLabel.font = BloomindStyle.mono(11)
-        areaLabel.textColor = BloomindStyle.muted
+        construirGlobo()
+    }
 
-        if let guardada = ConfigurationStore.shared.current.customArea {
-            customArea = CGRect(x: guardada.x, y: guardada.y, width: guardada.width, height: guardada.height)
-        }
-        refreshAreaLabels()
+    /// Un renglón de la ficha: qué es, el valor y su acción.
+    private func filaFicha(_ titulo: String, _ valor: NSView, _ accion: NSView) -> NSView {
+        let etiqueta = NSTextField(labelWithString: titulo)
+        etiqueta.font = BloomindStyle.ui(13)
+        etiqueta.textColor = BloomindStyle.Claro.pizarra
+        etiqueta.translatesAutoresizingMaskIntoConstraints = false
+        etiqueta.widthAnchor.constraint(equalToConstant: 150).isActive = true
+        valor.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        valor.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let fila = NSStackView(views: [etiqueta, valor, accion])
+        fila.alignment = .centerY
+        fila.distribution = .fill
+        fila.spacing = 12
+        fila.edgeInsets = NSEdgeInsets(top: 12, left: 0, bottom: 12, right: 0)
+        return fila
+    }
 
-        let scriptLabel = NSTextField(labelWithString: "Guion del teleprompter")
-        scriptLabel.font = BloomindStyle.ui(12)
-        scriptLabel.textColor = BloomindStyle.muted
+    private func linea() -> NSView {
+        let linea = NSView()
+        linea.wantsLayer = true
+        linea.layer?.backgroundColor = BloomindStyle.Claro.linea.cgColor
+        linea.translatesAutoresizingMaskIntoConstraints = false
+        linea.heightAnchor.constraint(equalToConstant: 1).isActive = true
+        linea.widthAnchor.constraint(equalToConstant: Self.anchoTexto).isActive = true
+        return linea
+    }
 
-        scriptLoadButton.title = "Cargar archivos…"
-        scriptLoadButton.bezelStyle = .rounded
-        scriptLoadButton.font = BloomindStyle.ui(12)
-        scriptLoadButton.toolTip = "Traer uno o varios guiones de Word, texto o RTF"
-        scriptLoadButton.target = self
-        scriptLoadButton.action = #selector(cargarGuionDesdeArchivo)
+    /// Un botón con forma de enlace: texto azul, sin caja.
+    private func enlace(_ boton: NSButton, _ titulo: String, _ accion: Selector) {
+        boton.isBordered = false
+        boton.attributedTitle = NSAttributedString(string: titulo, attributes: [
+            .font: BloomindStyle.ui(13, weight: .medium),
+            .foregroundColor: BloomindStyle.Claro.azul
+        ])
+        boton.target = self
+        boton.action = accion
+        boton.setContentHuggingPriority(.required, for: .horizontal)
+    }
 
-        scriptClearButton.title = "Quitar"
-        scriptClearButton.bezelStyle = .rounded
-        scriptClearButton.font = BloomindStyle.ui(12)
-        scriptClearButton.toolTip = "Sacar todos los guiones cargados de archivos"
-        scriptClearButton.target = self
-        scriptClearButton.action = #selector(quitarGuionesCargados)
+    private func mostrarCarpeta(_ ruta: String) {
+        folderLabel.stringValue = (ruta as NSString).abbreviatingWithTildeInPath
+        folderLabel.toolTip = ruta
+    }
 
-        scriptListLabel.font = BloomindStyle.ui(11)
-        scriptListLabel.textColor = BloomindStyle.muted
-        scriptListLabel.lineBreakMode = .byTruncatingTail
+    /// El globo del guion. Lleva lo que antes era media tarjeta del panel: el
+    /// guion escrito a mano, los archivos cargados y los valores de arranque.
+    private func construirGlobo() {
+        let c = BloomindStyle.Claro.self
 
-        let espaciadorGuion = NSView()
-        espaciadorGuion.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let filaGuion = NSStackView(views: [scriptLabel, espaciadorGuion, scriptLoadButton])
-        filaGuion.orientation = .horizontal
-        filaGuion.alignment = .centerY
-        filaGuion.spacing = BloomindStyle.Space.tight
+        let titulo = NSTextField(labelWithString: "Guiones para el teleprompter")
+        titulo.font = BloomindStyle.ui(11, weight: .semibold)
+        titulo.textColor = c.pizarra
 
-        let espaciadorLista = NSView()
-        espaciadorLista.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let filaLista = NSStackView(views: [scriptListLabel, espaciadorLista, scriptClearButton])
-        filaLista.orientation = .horizontal
-        filaLista.alignment = .centerY
-        filaLista.spacing = BloomindStyle.Space.tight
-        self.filaLista = filaLista
-        refrescarListaDeGuiones()
+        let escritoTitulo = NSTextField(labelWithString: "Escrito acá")
+        escritoTitulo.font = BloomindStyle.ui(12)
+        escritoTitulo.textColor = c.pizarra
 
         scriptView.string = ConfigurationStore.shared.current.teleprompterScript ?? ""
         scriptView.font = BloomindStyle.ui(12)
-        scriptView.textColor = BloomindStyle.ink
-        scriptView.backgroundColor = BloomindStyle.deep
+        scriptView.textColor = c.tinta
+        scriptView.backgroundColor = c.papel
+        scriptView.insertionPointColor = c.tinta
         scriptView.isRichText = false
         scriptView.isVerticallyResizable = true
         scriptView.autoresizingMask = [.width]
+        scriptView.textContainerInset = NSSize(width: 4, height: 6)
         scriptView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         scriptView.textContainer?.widthTracksTextView = true
         scriptView.delegate = self
@@ -331,11 +420,41 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         let scriptScroll = NSScrollView()
         scriptScroll.documentView = scriptView
         scriptScroll.hasVerticalScroller = true
-        scriptScroll.borderType = .lineBorder
-        scriptScroll.drawsBackground = true
-        scriptScroll.backgroundColor = BloomindStyle.deep
+        scriptScroll.borderType = .noBorder
+        scriptScroll.wantsLayer = true
+        scriptScroll.layer?.cornerRadius = 6
+        scriptScroll.layer?.borderWidth = 1
+        scriptScroll.layer?.borderColor = c.linea.cgColor
         scriptScroll.translatesAutoresizingMaskIntoConstraints = false
-        scriptScroll.heightAnchor.constraint(equalToConstant: 88).isActive = true
+        scriptScroll.heightAnchor.constraint(equalToConstant: 110).isActive = true
+
+        enlace(scriptLoadButton, "Cargar archivos…", #selector(cargarGuionDesdeArchivo))
+        scriptLoadButton.toolTip = "Traer uno o varios guiones de Word, texto o RTF"
+        let formatos = NSTextField(labelWithString: "Word, texto, RTF")
+        formatos.font = BloomindStyle.ui(11)
+        formatos.textColor = c.pizarra
+        let filaCargar = NSStackView(views: [scriptLoadButton, formatos])
+        filaCargar.spacing = 8
+
+        scriptListLabel.font = BloomindStyle.ui(12)
+        scriptListLabel.textColor = c.pizarra
+        enlace(scriptClearButton, "Quitar todos", #selector(quitarGuionesCargados))
+        scriptClearButton.toolTip = "Sacar todos los guiones cargados de archivos"
+        let espaciador = NSView()
+        espaciador.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let encabezado = NSStackView(views: [scriptListLabel, espaciador, scriptClearButton])
+        encabezado.alignment = .firstBaseline
+        encabezado.distribution = .fill
+        listaGuiones.orientation = .vertical
+        listaGuiones.alignment = .leading
+        listaGuiones.spacing = 4
+        let filaLista = NSStackView(views: [encabezado, listaGuiones])
+        filaLista.orientation = .vertical
+        filaLista.alignment = .leading
+        filaLista.spacing = 6
+        encabezado.widthAnchor.constraint(equalTo: filaLista.widthAnchor).isActive = true
+        self.filaLista = filaLista
+        refrescarListaDeGuiones()
 
         speedRow = NumberRow(titulo: "Velocidad",
                              minimo: TeleprompterEngine.velocidadMinima,
@@ -355,152 +474,211 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
             ConfigurationStore.shared.update { $0.teleprompterFontSize = valor }
         }
 
-        let sessionLabel = NSTextField(labelWithString: "Nombre de la sesión")
-        sessionLabel.font = BloomindStyle.ui(12)
-        sessionLabel.textColor = BloomindStyle.muted
+        let separador = NSBox()
+        separador.boxType = .separator
 
-        sessionField.font = BloomindStyle.ui(13)
-        sessionField.placeholderString = "Clase de n8n"
-        sessionField.stringValue = ConfigurationStore.shared.current.lastSessionName ?? ""
-        sessionField.bezelStyle = .roundedBezel
-
-        let folderTitle = NSTextField(labelWithString: "Carpeta de salida")
-        folderTitle.font = BloomindStyle.ui(12)
-        folderTitle.textColor = BloomindStyle.muted
-
-        folderLabel.font = BloomindStyle.mono(11)
-        folderLabel.textColor = BloomindStyle.sky
-        folderLabel.lineBreakMode = .byTruncatingHead
-        folderLabel.stringValue = ConfigurationStore.shared.current.outputFolder
-
-        folderButton.title = "Cambiar…"
-        folderButton.bezelStyle = .rounded
-        folderButton.font = BloomindStyle.ui(12)
-        folderButton.target = self
-        folderButton.action = #selector(chooseFolder)
-
-        countdownCheck.font = BloomindStyle.ui(12)
-        countdownCheck.contentTintColor = BloomindStyle.ink
-        countdownCheck.state = ConfigurationStore.shared.current.countdownEnabled ? .on : .off
-        countdownCheck.target = self
-        countdownCheck.action = #selector(countdownChanged)
-
-        statusLabel.font = BloomindStyle.mono(12)
-        statusLabel.textColor = BloomindStyle.muted
-        statusLabel.stringValue = "Buscando pantallas…"
-
-        // Tarjeta: superficie elevada con hairline y sin sombra.
-        let card = NSView()
-        card.wantsLayer = true
-        card.layer?.backgroundColor = BloomindStyle.surface.cgColor
-        card.layer?.cornerRadius = BloomindStyle.cornerRadius
-        card.layer?.borderWidth = 1
-        card.layer?.borderColor = BloomindStyle.hairline.cgColor
-
-        let cardStack = NSStackView(views: [
-            displayLabel, displayPopUp, areaButton, areaLabel,
-            audioModeLabel, audioModePopUp,
-            microphoneLabel, microphonePopUp, levelBar,
-            cameraLabel, cameraPopUp,
-            filaGuion, scriptScroll, filaLista, speedRow, fontRow,
-            sessionLabel, sessionField,
-            folderTitle, folderLabel, folderButton,
-            countdownCheck
-        ])
-        cardStack.orientation = .vertical
-        cardStack.alignment = .leading
-        cardStack.spacing = BloomindStyle.Space.tight
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: areaLabel)
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: audioModePopUp)
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: levelBar)
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: cameraPopUp)
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: fontRow)
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: sessionField)
-        cardStack.setCustomSpacing(BloomindStyle.Space.normal, after: folderButton)
-        self.microphoneLabel = microphoneLabel
-        cardStack.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(cardStack)
-        NSLayoutConstraint.activate([
-            cardStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: BloomindStyle.Space.normal),
-            cardStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -BloomindStyle.Space.normal),
-            cardStack.topAnchor.constraint(equalTo: card.topAnchor, constant: BloomindStyle.Space.normal),
-            cardStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -BloomindStyle.Space.normal),
-            displayPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            audioModePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            microphonePopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            levelBar.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            cameraPopUp.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            filaGuion.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            filaLista.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            scriptScroll.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            speedRow.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            fontRow.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            sessionField.widthAnchor.constraint(equalTo: cardStack.widthAnchor),
-            folderLabel.widthAnchor.constraint(equalTo: cardStack.widthAnchor)
-        ])
-
-        let header = NSStackView(views: [eyebrowLabel, titleLabel])
-        header.orientation = .vertical
-        header.alignment = .leading
-        header.spacing = 2
-
-        pauseButton.target = self
-        pauseButton.action = #selector(togglePause)
-        pauseButton.isHidden = true
-
-        let buttons = NSStackView(views: [actionButton, pauseButton])
-        buttons.orientation = .horizontal
-        buttons.spacing = BloomindStyle.Space.tight
-        buttons.distribution = .fillEqually
-
-        let stack = NSStackView(views: [header, card, buttons, statusLabel])
+        let stack = NSStackView(views: [titulo, escritoTitulo, scriptScroll, filaCargar, filaLista,
+                                        separador, speedRow, fontRow])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = BloomindStyle.Space.loose
+        stack.spacing = 8
+        stack.setCustomSpacing(12, after: titulo)
+        stack.setCustomSpacing(12, after: filaLista)
+        stack.setCustomSpacing(12, after: separador)
+        stack.edgeInsets = NSEdgeInsets(top: 14, left: 16, bottom: 16, right: 16)
+        for vista in [scriptScroll, filaLista, separador, speedRow!, fontRow!] as [NSView] {
+            vista.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -32).isActive = true
+        }
         stack.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(stack)
+        stack.widthAnchor.constraint(equalToConstant: 380).isActive = true
 
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: BloomindStyle.Space.card),
-            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -BloomindStyle.Space.card),
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: BloomindStyle.Space.card),
-            // El borde de abajo también, para que la ventana **se mida sola** por
-            // su contenido. Sin esto el alto queda clavado en el que se le puso
-            // al crearla, y cada fila nueva empuja los botones fuera de la vista:
-            // fue exactamente lo que pasó al agregar el selector de cámara.
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -BloomindStyle.Space.card),
-            card.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            buttons.widthAnchor.constraint(equalTo: stack.widthAnchor)
-        ])
-
-        actionButton.target = self
-        actionButton.action = #selector(toggleRecording)
+        let contenido = NSViewController()
+        contenido.view = stack
+        popoverGuion.contentViewController = contenido
+        popoverGuion.behavior = .transient
+        popoverGuion.appearance = NSAppearance(named: .aqua)
+        popoverGuion.delegate = self
     }
+
+    // MARK: - La oración
+
+    /// Vuelve a escribir la frase con lo elegido, y el pie con él.
+    private func refrescarOracion() {
+        let pantalla = displays.indices.contains(displayIndex) ? displays[displayIndex].name : "Retina"
+        let estado = PanelSentence.Estado(
+            area: customArea.map { (Int($0.width), Int($0.height)) },
+            pantalla: pantalla,
+            audio: audioMode,
+            microfono: selectedMicrophone()?.name,
+            microfonoSinPermiso: microfonoSinPermiso,
+            camara: selectedCamera()?.name,
+            guiones: guionesParaElTeleprompter().count)
+        sentence.mostrar(PanelSentence.armar(estado))
+        pintarEstado()
+        sizeWindowToFit()
+    }
+
+    /// El pie dice cómo está todo antes de grabar, con lo que falta primero, y
+    /// el botón dice qué hacer con eso.
+    private func pintarEstado() {
+        let c = BloomindStyle.Claro.self
+        let falta = audioMode.capturesMicrophone && microfonoSinPermiso && !recorder.isRecording
+
+        let texto: String
+        let punto: NSColor
+        if recorder.isRecording {
+            let segundos = Int(accumulated + (startedAt.map { Date().timeIntervalSince($0) } ?? 0))
+            let reloj = String(format: "%02d:%02d", segundos / 60, segundos % 60)
+            texto = recorder.isPaused ? "En pausa · \(reloj)" : "Grabando · \(reloj)"
+            punto = recorder.isPaused ? c.pizarra : c.azul
+        } else if let avisoTemporal {
+            texto = avisoTemporal; punto = c.coral
+        } else if displays.isEmpty {
+            texto = "Buscando pantallas…"; punto = c.lineaFuerte
+        } else if falta {
+            texto = "Sin ese permiso el video sale mudo."; punto = c.coral
+        } else if audioMode.capturesMicrophone && selectedMicrophone() == nil {
+            texto = "Conectá un micrófono o elegí otra forma de sonido."; punto = c.coral
+        } else if audioMode.capturesMicrophone && PanelSentence.esMicrofonoDeTelefono(selectedMicrophone()?.name) {
+            texto = "Los AirPods graban con calidad de teléfono."; punto = c.ambar
+        } else if !audioMode.hasAudio {
+            texto = "El video va a salir sin sonido."; punto = c.ambar
+        } else {
+            texto = "Todo listo. " + (audioMode.capturesMicrophone ? "El micrófono te está oyendo." : "Se oye el PC.")
+            // El turquesa es exclusivo del éxito, y esto es justo eso.
+            punto = c.turquesa
+        }
+        statusLabel.stringValue = texto
+        statusDot.layer?.backgroundColor = punto.cgColor
+
+        if recorder.isRecording {
+            actionButton.kind = .claro
+            actionButton.title = "Detener"
+        } else if falta {
+            actionButton.kind = .falta
+            actionButton.title = "Dar permiso al micrófono"
+        } else {
+            actionButton.kind = .claro
+            let atajo = recorder.etiquetaDeAtajo(.iniciarDetener) ?? ShortcutAction.iniciarDetener.porDefecto.etiqueta
+            actionButton.title = "Grabar   \(atajo)"
+        }
+    }
+
+    /// Se tocó un fragmento de la oración: abre su menú debajo de él.
+    private func tocar(_ parte: PanelSentence.Parte, en rect: NSRect) {
+        avisoTemporal = nil
+        if parte == .guion {
+            popoverGuion.show(relativeTo: rect, of: sentence, preferredEdge: .maxY)
+            return
+        }
+
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.appearance = NSAppearance(named: .aqua)
+        switch parte {
+        case .area:
+            menu.addItem(.sectionHeader(title: "Qué parte de la pantalla"))
+            menu.addItem(opcion("La pantalla entera", marcado: customArea == nil) { [weak self] in
+                self?.usarPantallaEntera()
+            })
+            let area = customArea.map { "Otra área…   ahora \(Int($0.width))×\(Int($0.height))" } ?? "Un área…   la dibujás"
+            menu.addItem(opcion(area, marcado: customArea != nil) { [weak self] in self?.chooseArea() })
+
+        case .pantalla:
+            menu.addItem(.sectionHeader(title: "Pantalla"))
+            for (indice, display) in displays.enumerated() {
+                let titulo = "\(display.name)   \(Int(display.pixelSize.width))×\(Int(display.pixelSize.height))"
+                menu.addItem(opcion(titulo, marcado: indice == displayIndex) { [weak self] in
+                    guard let self else { return }
+                    self.displayIndex = indice
+                    // Un área es de una pantalla: al cambiar de pantalla se
+                    // vuelve a la entera, o se grabaría un rectángulo ajeno.
+                    if self.customArea != nil { self.usarPantallaEntera() }
+                    self.refrescarOracion()
+                })
+            }
+
+        case .audio:
+            if audioMode.capturesMicrophone && microfonoSinPermiso {
+                menu.addItem(opcion("Dar permiso al micrófono…") { [weak self] in self?.abrirPermisoDeMicrofono() })
+                menu.addItem(.separator())
+            }
+            menu.addItem(.sectionHeader(title: "Qué se oye"))
+            let modos: [(AudioMode, String)] = [
+                (.microphone, "Solo el micrófono"),
+                (.mixed, "El micrófono y el sonido del PC"),
+                (.system, "Solo el sonido del PC"),
+                (.none, "Sin sonido")
+            ]
+            for (modo, titulo) in modos where AudioMode.available.contains(modo) {
+                menu.addItem(opcion(titulo, marcado: audioMode == modo) { [weak self] in
+                    self?.audioMode = modo
+                    self?.audioModeChanged()
+                })
+            }
+            menu.addItem(.separator())
+            menu.addItem(.sectionHeader(title: "Micrófono"))
+            if microphones.isEmpty {
+                let vacio = NSMenuItem(title: "No hay micrófonos conectados", action: nil, keyEquivalent: "")
+                vacio.isEnabled = false
+                menu.addItem(vacio)
+            }
+            for microfono in microphones {
+                let nota = PanelSentence.esMicrofonoDeTelefono(microfono.name) ? "   calidad de teléfono" : ""
+                menu.addItem(opcion(microfono.name + nota, marcado: microfono.uniqueID == microphoneID) { [weak self] in
+                    guard let self else { return }
+                    self.microphoneID = microfono.uniqueID
+                    // Elegir un micrófono es querer oírlo.
+                    if !self.audioMode.capturesMicrophone { self.audioMode = .microphone }
+                    self.audioModeChanged()
+                })
+            }
+
+        case .camara:
+            menu.addItem(.sectionHeader(title: "Cámara"))
+            menu.addItem(opcion("Sin cámara", marcado: camaraElegidaID == nil) { [weak self] in
+                self?.camaraElegidaID = nil
+                self?.cameraChanged()
+            })
+            for dispositivo in cameras {
+                menu.addItem(opcion(dispositivo.name, marcado: dispositivo.uniqueID == camaraElegidaID) { [weak self] in
+                    self?.camaraElegidaID = dispositivo.uniqueID
+                    self?.cameraChanged()
+                })
+            }
+
+        case .guion:
+            return
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: rect.minX, y: rect.maxY + 2), in: sentence)
+    }
+
+    private func opcion(_ titulo: String, marcado: Bool = false, _ bloque: @escaping () -> Void) -> NSMenuItem {
+        let item = MenuClosureItem(titulo: titulo, bloque: bloque)
+        item.state = marcado ? .on : .off
+        return item
+    }
+
+    // MARK: - Pantallas
 
     private func loadDisplays() async {
         do {
             displays = try await RecordingController.availableDisplays()
-            displayPopUp.removeAllItems()
-            for display in displays {
-                displayPopUp.addItem(withTitle: "\(display.name) · \(Int(display.pixelSize.width))×\(Int(display.pixelSize.height))")
-            }
 
             // Memoria pegajosa: arranca en la última pantalla usada.
             if let last = ConfigurationStore.shared.current.lastDisplayID,
                let index = displays.firstIndex(where: { $0.scDisplay.displayID == last }) {
-                displayPopUp.selectItem(at: index)
+                displayIndex = index
             }
-
-            statusLabel.stringValue = displays.count == 1 ? "1 pantalla disponible" : "\(displays.count) pantallas disponibles"
             Logger.shared.log("Pantallas detectadas: \(displays.count)")
 
         } catch {
             // Sin permiso de grabación de pantalla, la enumeración también falla.
-            statusLabel.stringValue = "No se pudieron listar las pantallas"
-            statusLabel.textColor = BloomindStyle.signal
+            avisoTemporal = "No se pudieron listar las pantallas. Falta el permiso de grabar la pantalla."
             Logger.shared.log("ERROR listando pantallas: \(error.localizedDescription)")
             _ = ScreenRecordingPermission.ensureGranted()
         }
+        refrescarOracion()
     }
 
     @objc private func togglePause() {
@@ -516,51 +694,60 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         if recorder.isRecording {
             actionButton.isEnabled = false
             Task { await recorder.stop() }
+            return
+        }
+
+        // Sin permiso, el botón es «Dar permiso al micrófono»: grabar así
+        // saldría mudo, que es peor que no grabar.
+        if audioMode.capturesMicrophone && microfonoSinPermiso {
+            abrirPermisoDeMicrofono()
+            return
+        }
+
+        guard displays.indices.contains(displayIndex) else { return }
+        let display = displays[displayIndex]
+        let audioMode = self.audioMode
+        let microphone = audioMode.capturesMicrophone ? selectedMicrophone() : nil
+
+        popoverGuion.close()
+        let sessionName = sessionField.stringValue
+        ConfigurationStore.shared.update {
+            $0.lastDisplayID = display.scDisplay.displayID
+            $0.lastAudioMode = audioMode.rawValue
+            $0.lastMicrophoneID = microphone?.uniqueID
+            $0.lastCameraID = camera?.device.uniqueID
+            $0.lastSessionName = sessionName
+            $0.teleprompterScript = self.scriptView.string
+            $0.teleprompterSpeed = self.speedRow.value
+            $0.teleprompterFontSize = self.fontRow.value
+        }
+
+        guard checkDiskBeforeStarting() else {
+            actionButton.isEnabled = true
+            return
+        }
+
+        // El medidor suelta el micrófono antes de que lo tome la captura.
+        levelMeter.stop()
+        sentence.nivel = 0
+
+        actionButton.isEnabled = false
+        let arrancar = { [weak self] in
+            guard let self else { return }
+            Task {
+                await self.recorder.start(display: display, audioMode: audioMode,
+                                          microphoneID: microphone?.uniqueID,
+                                          camera: self.camera, sessionName: sessionName,
+                                          area: self.customArea)
+            }
+        }
+
+        // El archivo empieza después del conteo, así que el 3, 2, 1 no sale
+        // en el video (plan, 8.9).
+        if countdownSwitch.state == .on {
+            CountdownWindow.present(alTerminar: arrancar)
         } else {
-            guard displays.indices.contains(displayPopUp.indexOfSelectedItem) else { return }
-            let display = displays[displayPopUp.indexOfSelectedItem]
-            let audioMode = selectedAudioMode()
-            let microphone = audioMode.capturesMicrophone ? selectedMicrophone() : nil
-
-            let sessionName = sessionField.stringValue
-            ConfigurationStore.shared.update {
-                $0.lastDisplayID = display.scDisplay.displayID
-                $0.lastAudioMode = audioMode.rawValue
-                $0.lastMicrophoneID = microphone?.uniqueID
-                $0.lastCameraID = camera?.device.uniqueID
-                $0.lastSessionName = sessionName
-                $0.teleprompterScript = self.scriptView.string
-                $0.teleprompterSpeed = self.speedRow.value
-                $0.teleprompterFontSize = self.fontRow.value
-            }
-
-            guard checkDiskBeforeStarting() else {
-                actionButton.isEnabled = true
-                return
-            }
-
-            // El medidor suelta el micrófono antes de que lo tome la captura.
-            levelMeter.stop()
-            levelBar.level = 0
-
-            actionButton.isEnabled = false
-            let arrancar = { [weak self] in
-                guard let self else { return }
-                Task {
-                    await self.recorder.start(display: display, audioMode: audioMode,
-                                              microphoneID: microphone?.uniqueID,
-                                              camera: self.camera, sessionName: sessionName,
-                                              area: self.customArea)
-                }
-            }
-
-            // El archivo empieza después del conteo, así que el 3, 2, 1 no sale
-            // en el video (plan, 8.9).
-            if countdownCheck.state == .on {
-                CountdownWindow.present(alTerminar: arrancar)
-            } else {
-                arrancar()
-            }
+            arrancar()
         }
     }
 
@@ -584,6 +771,9 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         panel.canChooseDirectories = false
         panel.allowedContentTypes = ScriptFile.tiposSoportados
 
+        // El globo es transitorio: el cuadro de elegir archivo lo cerraría por
+        // debajo y quedaría flotando sin dueño.
+        popoverGuion.close()
         NSApp.activate(ignoringOtherApps: true)
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
 
@@ -609,6 +799,7 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
 
         ConfigurationStore.shared.update { $0.teleprompterScripts = cargados }
         refrescarListaDeGuiones()
+        refrescarOracion()
 
         guard !fallados.isEmpty else { return }
         let alerta = NSAlert()
@@ -622,30 +813,45 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
     @objc private func quitarGuionesCargados() {
         ConfigurationStore.shared.update { $0.teleprompterScripts = [] }
         refrescarListaDeGuiones()
+        refrescarOracion()
         Logger.shared.log("Guiones cargados: lista vaciada")
     }
 
-    /// La línea que dice qué guiones hay cargados. Sin ninguno, la fila entera
-    /// desaparece: no hay nada que contar.
+    /// Los guiones cargados, cada uno con su casilla. Sin ninguno, la fila
+    /// entera desaparece: no hay nada que contar.
     private func refrescarListaDeGuiones() {
         let guiones = ConfigurationStore.shared.current.teleprompterScripts
         filaLista.isHidden = guiones.isEmpty
-        guard !guiones.isEmpty else { return }
-        let nombres = guiones.map(\.nombre).joined(separator: " · ")
-        scriptListLabel.stringValue = guiones.count == 1
-            ? "1 guion cargado: \(nombres)"
-            : "\(guiones.count) guiones cargados: \(nombres)"
+        scriptListLabel.stringValue = guiones.count == 1 ? "1 cargado de archivo" : "\(guiones.count) cargados de archivos"
+        listaGuiones.setViews(guiones.enumerated().map { indice, guion in
+            let casilla = NSButton(checkboxWithTitle: guion.nombre, target: self, action: #selector(alternarGuion(_:)))
+            casilla.font = BloomindStyle.ui(13)
+            casilla.tag = indice
+            casilla.state = guion.usar ? .on : .off
+            casilla.toolTip = "\(guion.texto.count) caracteres. Desmarcalo para no usarlo en esta clase sin perderlo."
+            casilla.isEnabled = !recorder.isRecording
+            return casilla
+        }, in: .top)
+    }
+
+    /// Marcar o desmarcar un guion lo mete o lo saca del teleprompter, sin
+    /// borrarlo: la clase siguiente puede volver a usarlo con un toque.
+    @objc private func alternarGuion(_ casilla: NSButton) {
+        let indice = casilla.tag
+        guard ConfigurationStore.shared.current.teleprompterScripts.indices.contains(indice) else { return }
+        ConfigurationStore.shared.update { $0.teleprompterScripts[indice].usar = casilla.state == .on }
+        refrescarOracion()
     }
 
     /// Todo lo que el teleprompter puede mostrar: lo escrito a mano en el panel,
-    /// si hay algo, y después cada archivo cargado.
+    /// si hay algo, y después cada archivo cargado que esté marcado.
     private func guionesParaElTeleprompter() -> [(nombre: String, texto: String)] {
         var lista: [(nombre: String, texto: String)] = []
         let escrito = scriptView.string
         if !escrito.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             lista.append((nombre: "Escrito", texto: escrito))
         }
-        lista += ConfigurationStore.shared.current.teleprompterScripts.map {
+        lista += ConfigurationStore.shared.current.teleprompterScripts.filter(\.usar).map {
             (nombre: $0.nombre, texto: $0.texto)
         }
         return lista
@@ -657,6 +863,18 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
     /// el guion y cierra la app sin grabar lo perdería.
     func textDidEndEditing(_ notification: Notification) {
         guard (notification.object as? NSTextView) === scriptView else { return }
+        guardarGuionEscrito()
+    }
+
+    /// Cerrar el globo no siempre termina la edición del cuadro, así que se
+    /// guarda también acá. Y la oración se vuelve a contar los guiones.
+    func popoverDidClose(_ notification: Notification) {
+        guardarGuionEscrito()
+        refrescarOracion()
+    }
+
+    private func guardarGuionEscrito() {
+        guard ConfigurationStore.shared.current.teleprompterScript != scriptView.string else { return }
         ConfigurationStore.shared.update { $0.teleprompterScript = scriptView.string }
     }
 
@@ -673,11 +891,7 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         }
 
         if let teleprompter {
-            if teleprompter.isVisible {
-                teleprompter.setVisible(false)
-            } else {
-                teleprompter.setVisible(true)
-            }
+            teleprompter.setVisible(!teleprompter.isVisible)
             tick()
             return
         }
@@ -689,7 +903,10 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
                                          velocidad: speedRow.value,
                                          tamañoLetra: fontRow.value,
                                          pantalla: pantalla)
-        ventana.onChange = { [weak self] in self?.tick() }
+        ventana.onChange = { [weak self] in
+            self?.recordarValoresDelGuion()
+            self?.tick()
+        }
         // El teclado no puede ser de los dos a la vez: al pasar el foco al
         // teleprompter, el cuadro de texto abierto en el dibujo se cierra
         // (decisión 95).
@@ -701,6 +918,21 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         ventana.setVisible(true)
         Logger.shared.log("Teleprompter abierto: \(ventana.guion.count) caracteres de guion, velocidad \(ventana.velocidad), letra \(Int(ventana.tamañoLetra))")
         tick()
+    }
+
+    /// Lo que se ajusta del guion grabando queda como valor de arranque de la
+    /// próxima vez, y el panel lo muestra (decisión 132): nadie debería tener
+    /// que acordarse de con qué velocidad le gusta leer.
+    private func recordarValoresDelGuion() {
+        guard let teleprompter else { return }
+        if teleprompter.velocidad != speedRow.value {
+            speedRow.set(teleprompter.velocidad)
+            ConfigurationStore.shared.update { $0.teleprompterSpeed = teleprompter.velocidad }
+        }
+        if teleprompter.tamañoLetra != fontRow.value {
+            fontRow.set(teleprompter.tamañoLetra)
+            ConfigurationStore.shared.update { $0.teleprompterFontSize = teleprompter.tamañoLetra }
+        }
     }
 
     /// Esconde y muestra el widget con su atajo (decisión 120).
@@ -744,20 +976,13 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         Logger.shared.log("Teleprompter cerrado y reiniciado")
     }
 
-    // MARK: - Panel
+    // MARK: - Área, carpeta y cuenta regresiva
 
-    /// Define o borra el área personalizada. El selector es el mismo que usa la
-    /// censura (pieza compartida, plan sección 6).
-    @objc private func chooseArea() {
-        if customArea != nil {
-            customArea = nil
-            ConfigurationStore.shared.update { $0.customArea = nil }
-            refreshAreaLabels()
-            return
-        }
-
-        guard displays.indices.contains(displayPopUp.indexOfSelectedItem) else { return }
-        let display = displays[displayPopUp.indexOfSelectedItem]
+    /// Dibuja el área a grabar. El selector es el mismo que usa la censura
+    /// (pieza compartida, plan sección 6).
+    private func chooseArea() {
+        guard displays.indices.contains(displayIndex) else { return }
+        let display = displays[displayIndex]
         let frame = NSScreen.screens.first {
             ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID)
                 == display.scDisplay.displayID
@@ -771,19 +996,15 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
                     $0.customArea = StoredRect(x: rect.minX, y: rect.minY,
                                                width: rect.width, height: rect.height)
                 }
-                self.refreshAreaLabels()
+                self.refrescarOracion()
             }
         }
     }
 
-    private func refreshAreaLabels() {
-        if let area = customArea {
-            areaButton.title = "Grabar pantalla entera"
-            areaLabel.stringValue = "Área: \(Int(area.width)) × \(Int(area.height))"
-        } else {
-            areaButton.title = "Elegir un área…"
-            areaLabel.stringValue = "Se graba la pantalla entera"
-        }
+    private func usarPantallaEntera() {
+        customArea = nil
+        ConfigurationStore.shared.update { $0.customArea = nil }
+        refrescarOracion()
     }
 
     @objc private func chooseFolder() {
@@ -796,12 +1017,12 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         ConfigurationStore.shared.update { $0.outputFolder = url.path }
-        folderLabel.stringValue = url.path
+        mostrarCarpeta(url.path)
         Logger.shared.log("Carpeta de salida cambiada")
     }
 
     @objc private func countdownChanged() {
-        let activo = countdownCheck.state == .on
+        let activo = countdownSwitch.state == .on
         ConfigurationStore.shared.update { $0.countdownEnabled = activo }
     }
 
@@ -824,81 +1045,99 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         return alerta.runModal() == .alertFirstButtonReturn
     }
 
-    private func selectedAudioMode() -> AudioMode {
-        let index = audioModePopUp.indexOfSelectedItem
-        return AudioMode.available.indices.contains(index) ? AudioMode.available[index] : .none
-    }
+    // MARK: - Micrófono
 
     private func selectedMicrophone() -> AudioDevice? {
-        let index = microphonePopUp.indexOfSelectedItem
-        return microphones.indices.contains(index) ? microphones[index] : nil
+        microphones.first { $0.uniqueID == microphoneID }
     }
 
-    /// El selector de micrófono y su medidor solo tienen sentido si el modo usa
-    /// micrófono. Con audio del sistema o sin audio, se apagan.
-    @objc private func audioModeChanged() {
-        let usesMicrophone = selectedAudioMode().capturesMicrophone
-        microphoneLabel?.isHidden = !usesMicrophone
-        microphonePopUp.isHidden = !usesMicrophone
-        levelBar.isHidden = !usesMicrophone
-        sizeWindowToFit()
+    /// Cambió qué se oye: la frase cambia y el medidor se prende o se apaga.
+    private func audioModeChanged() {
+        ConfigurationStore.shared.update { $0.lastAudioMode = audioMode.rawValue }
         microphoneChanged()
+        refrescarOracion()
     }
 
     private func loadMicrophones() {
-        let previous = selectedMicrophone()?.uniqueID ?? ConfigurationStore.shared.current.lastMicrophoneID
+        let previous = microphoneID ?? ConfigurationStore.shared.current.lastMicrophoneID
 
         microphones = AudioDeviceEnumerator.available()
-        microphonePopUp.removeAllItems()
-        for microphone in microphones {
-            microphonePopUp.addItem(withTitle: microphone.name)
-        }
-
-        // Memoria pegajosa: vuelve al último micrófono usado si sigue conectado.
-        if let previous, let index = microphones.firstIndex(where: { $0.uniqueID == previous }) {
-            microphonePopUp.selectItem(at: index)
+        // Memoria pegajosa: vuelve al último micrófono usado si sigue conectado;
+        // si no, el primero de la lista.
+        if let previous, microphones.contains(where: { $0.uniqueID == previous }) {
+            microphoneID = previous
+        } else {
+            microphoneID = microphones.first?.uniqueID
         }
 
         Logger.shared.log("Micrófonos detectados: \(microphones.count)")
-        if !recorder.isRecording { audioModeChanged() }
+        if !recorder.isRecording { microphoneChanged() }
+        refrescarOracion()
     }
 
-    /// La lista arranca con "Sin cámara": grabar solo la pantalla es un caso
-    /// legítimo y frecuente, no una falla.
+    private func microphoneChanged() {
+        sentence.nivel = 0
+        guard audioMode.capturesMicrophone, let microphone = selectedMicrophone() else {
+            levelMeter.stop()
+            return
+        }
+        // El permiso se pide acá y no al grabar: sin él el subrayado no se
+        // movería y el medidor perdería justamente la función que tiene, que es
+        // avisarte antes de arrancar.
+        Task {
+            let concedido = await AudioDeviceEnumerator.requestPermission()
+            if microfonoSinPermiso != !concedido {
+                microfonoSinPermiso = !concedido
+                refrescarOracion()
+            }
+            guard concedido else {
+                levelMeter.stop()
+                return
+            }
+            levelMeter.start(deviceID: microphone.uniqueID)
+        }
+    }
+
+    /// Si ya se negó una vez, macOS no vuelve a preguntar: hay que ir a
+    /// Configuración del Sistema. Al volver, el panel lo vuelve a pedir solo.
+    private func abrirPermisoDeMicrofono() {
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+            microphoneChanged()
+            return
+        }
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!
+        NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - Cámara
+
+    /// Arranca con la última cámara usada si sigue conectada; si no, sin cámara:
+    /// grabar solo la pantalla es un caso legítimo y frecuente, no una falla.
     private func loadCameras() {
-        let previous = selectedCamera()?.uniqueID ?? ConfigurationStore.shared.current.lastCameraID
+        let previous = camaraElegidaID ?? ConfigurationStore.shared.current.lastCameraID
 
         cameras = CameraDeviceEnumerator.available()
-        cameraPopUp.removeAllItems()
-        cameraPopUp.addItem(withTitle: "Sin cámara")
-        for camera in cameras {
-            cameraPopUp.addItem(withTitle: camera.name)
-        }
-
-        // Memoria pegajosa: vuelve a la última cámara usada si sigue conectada.
-        if let previous, let index = cameras.firstIndex(where: { $0.uniqueID == previous }) {
-            cameraPopUp.selectItem(at: index + 1)
-        }
+        camaraElegidaID = cameras.contains { $0.uniqueID == previous } ? previous : nil
 
         Logger.shared.log("Cámaras detectadas: \(cameras.count)")
 
-        // Si lo que quedó seleccionado no es lo que está encendido, se reconcilia:
-        // cubre tanto "se conectó la cámara que se venía usando" como "la que
-        // estaba prendida se desconectó y hay que soltarla".
-        if !recorder.isRecording, selectedCamera()?.uniqueID != camera?.device.uniqueID {
+        // Si lo elegido no es lo que está encendido, se reconcilia: cubre tanto
+        // "se conectó la cámara que se venía usando" como "la que estaba
+        // prendida se desconectó y hay que soltarla".
+        if !recorder.isRecording, camaraElegidaID != camera?.device.uniqueID {
             cameraChanged()
         }
+        refrescarOracion()
     }
 
-    /// El índice 0 es "Sin cámara"; de ahí en adelante van los dispositivos.
     private func selectedCamera() -> CameraDevice? {
-        let index = cameraPopUp.indexOfSelectedItem - 1
-        return cameras.indices.contains(index) ? cameras[index] : nil
+        cameras.first { $0.uniqueID == camaraElegidaID }
     }
 
-    /// Enciende o apaga la cámara y su ventana espejo. Pasa apenas se elige en la
-    /// lista, sin esperar a grabar: así se encuadra antes de arrancar.
-    @objc private func cameraChanged() {
+    /// Enciende o apaga la cámara y su ventana espejo. Pasa apenas se elige, sin
+    /// esperar a grabar: así se encuadra antes de arrancar.
+    private func cameraChanged() {
+        refrescarOracion()
         // Al **cambiar** de cámara no se le avisa al grabador del cierre: sería
         // un "te quedaste sin cámara" falso, y en modo cámara completa lo haría
         // saltar a modo pantalla en el medio del cambio (decisión 83).
@@ -913,15 +1152,16 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         Task {
             guard await CameraDeviceEnumerator.requestPermission() else {
                 showCameraPermissionAlert()
-                cameraPopUp.selectItem(at: 0)
+                camaraElegidaID = nil
+                refrescarOracion()
                 if recorder.isRecording { recorder.setCamera(nil) }
                 return
             }
 
             guard let capture = CameraCapture(device: device) else {
-                statusLabel.stringValue = "No se pudo abrir la cámara"
-                statusLabel.textColor = BloomindStyle.signal
-                cameraPopUp.selectItem(at: 0)
+                avisoTemporal = "No se pudo abrir la cámara."
+                camaraElegidaID = nil
+                refrescarOracion()
                 // Acá sí se avisa: el cambio falló y quedamos sin ninguna.
                 if recorder.isRecording { recorder.setCamera(nil) }
                 return
@@ -967,10 +1207,10 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         let activa = camera?.device.uniqueID
 
         if camera != nil {
-            let apagar = NSMenuItem(title: "Apagar cámara", action: #selector(elegirCamaraDelWidget(_:)), keyEquivalent: "")
-            apagar.target = self
-            apagar.tag = -1
-            menu.addItem(apagar)
+            menu.addItem(opcion("Apagar cámara") { [weak self] in
+                self?.camaraElegidaID = nil
+                self?.cameraChanged()
+            })
             menu.addItem(.separator())
         }
 
@@ -980,21 +1220,15 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
             menu.addItem(vacio)
         }
 
-        for (indice, dispositivo) in cameras.enumerated() {
-            let item = NSMenuItem(title: dispositivo.name, action: #selector(elegirCamaraDelWidget(_:)), keyEquivalent: "")
-            item.target = self
-            item.tag = indice
-            item.state = dispositivo.uniqueID == activa ? .on : .off
-            menu.addItem(item)
+        // El panel y el menú del widget eligen lo mismo: uno solo manda, y es
+        // `camaraElegidaID`.
+        for dispositivo in cameras {
+            menu.addItem(opcion(dispositivo.name, marcado: dispositivo.uniqueID == activa) { [weak self] in
+                self?.camaraElegidaID = dispositivo.uniqueID
+                self?.cameraChanged()
+            })
         }
         return menu
-    }
-
-    @objc private func elegirCamaraDelWidget(_ sender: NSMenuItem) {
-        // El popup del panel y el menú del widget eligen lo mismo, así que se
-        // mantienen sincronizados: uno solo manda, y es la lista de cámaras.
-        cameraPopUp.selectItem(at: sender.tag + 1)
-        cameraChanged()
     }
 
     private func closeCamera(avisandoAlGrabador: Bool = true) {
@@ -1020,49 +1254,30 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
         }
     }
 
-    @objc private func microphoneChanged() {
-        levelBar.level = 0
-        guard selectedAudioMode().capturesMicrophone, let microphone = selectedMicrophone() else {
-            levelMeter.stop()
-            return
-        }
-        // El permiso se pide acá y no al grabar: sin él la barra no se movería y
-        // el medidor perdería justamente la función que tiene, que es avisarte
-        // antes de arrancar.
-        Task {
-            guard await AudioDeviceEnumerator.requestPermission() else {
-                levelMeter.stop()
-                statusLabel.stringValue = "Falta el permiso de micrófono"
-                statusLabel.textColor = BloomindStyle.signal
-                return
-            }
-            levelMeter.start(deviceID: microphone.uniqueID)
-        }
-    }
+    // MARK: - Estado de la grabación
 
     private func refresh() {
+        let grabando = recorder.isRecording
         actionButton.isEnabled = true
-        displayPopUp.isEnabled = !recorder.isRecording
-        audioModePopUp.isEnabled = !recorder.isRecording
-        microphonePopUp.isEnabled = !recorder.isRecording
-        cameraPopUp.isEnabled = !recorder.isRecording
-        areaButton.isEnabled = !recorder.isRecording
-        sessionField.isEnabled = !recorder.isRecording
-        scriptView.isEditable = !recorder.isRecording
-        scriptLoadButton.isEnabled = !recorder.isRecording
-        scriptClearButton.isEnabled = !recorder.isRecording
-        speedRow.setEnabled(!recorder.isRecording)
-        fontRow.setEnabled(!recorder.isRecording)
-        folderButton.isEnabled = !recorder.isRecording
+        sentence.habilitada = !grabando
+        sessionField.isEnabled = !grabando
+        scriptView.isEditable = !grabando
+        scriptLoadButton.isEnabled = !grabando
+        scriptClearButton.isEnabled = !grabando
+        for casilla in listaGuiones.arrangedSubviews.compactMap({ $0 as? NSButton }) { casilla.isEnabled = !grabando }
+        speedRow.setEnabled(!grabando)
+        fontRow.setEnabled(!grabando)
+        folderButton.isEnabled = !grabando
+        countdownSwitch.isEnabled = !grabando
+        if grabando { popoverGuion.close() }
         // Durante la grabación el micrófono lo tiene la captura, así que el
-        // medidor no puede leerlo: la barra se queda quieta a propósito.
-        if !recorder.isRecording { audioModeChanged() }
-        statusLabel.textColor = BloomindStyle.muted
+        // medidor no puede leerlo: el subrayado se queda quieto a propósito.
+        if !grabando { microphoneChanged() }
 
-        pauseButton.isHidden = !recorder.isRecording
+        pauseButton.isHidden = !grabando
         pauseButton.title = recorder.isPaused ? "Reanudar" : "Pausar"
 
-        if recorder.isRecording {
+        if grabando {
             if !widgetEscondido { widget.present() }
             // El panel se va del medio: el widget es lo que se usa en vivo.
             window?.orderOut(nil)
@@ -1072,11 +1287,9 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
             widgetEscondido = false
             releaseTeleprompter()
         }
-        onRecordingStateChange?(recorder.isRecording, recorder.isPaused)
+        onRecordingStateChange?(grabando, recorder.isPaused)
 
-        if recorder.isRecording {
-            actionButton.title = "Detener"
-
+        if grabando {
             if recorder.isPaused {
                 // Congelar el cronómetro: lo corrido hasta acá se guarda y no
                 // sigue sumando mientras dure la pausa.
@@ -1093,12 +1306,11 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
             }
             tick()
         } else {
-            actionButton.title = "Iniciar grabación"
             timer?.invalidate()
             timer = nil
             startedAt = nil
             accumulated = 0
-            statusLabel.stringValue = "Listo"
+            pintarEstado()
         }
     }
 
@@ -1124,30 +1336,9 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate {
                           capturaSistema: recorder.capturesSource(.system),
                           microfonoSilenciado: recorder.isMuted(.microphone),
                           sistemaSilenciado: recorder.isMuted(.system)))
-        var texto = String(format: "%02d:%02d", seconds / 60, seconds % 60)
-        // El modo activo y el color del marcador van en el mismo renglón: son la
-        // única señal de en qué estado está hasta que llegue el widget (Fase 11).
-        switch recorder.mode {
-        case .pantalla: if camera != nil { texto += "   Pantalla" }
-        case .camara:   texto += "   Cámara completa"
-        case .tablero:  texto += "   Tablero \(recorder.boardColor.label) · marcador \(recorder.markerColor.label)"
-        }
-        if recorder.isAnnotationOn, recorder.mode == .pantalla {
-            texto += "   Anotando · marcador \(recorder.markerColor.label)"
-        }
-        // Indicador de censura activa (plan, 8.6): saber sin adivinar si la zona
-        // está tapada. El widget definitivo llega en la Fase 11.
-        if recorder.isRedacting {
-            texto += "   ▓ Censura activa"
-        }
-
-        if recorder.isPaused {
-            statusLabel.stringValue = "❚❚ Pausado   \(texto)"
-            statusLabel.textColor = BloomindStyle.muted
-        } else {
-            statusLabel.stringValue = "● Grabando   \(texto)"
-            // El turquesa es exclusivo del éxito; grabar en curso va en lab.
-            statusLabel.textColor = BloomindStyle.lab
-        }
+        // El panel puede volver a la vista con la grabación corriendo (al
+        // salir del modo de dibujo): el pie dice el tiempo, el resto lo dice
+        // el widget.
+        pintarEstado()
     }
 }

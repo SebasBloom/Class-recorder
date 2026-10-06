@@ -20,6 +20,24 @@ struct StoredPoint: Codable, Equatable {
 struct StoredScript: Codable, Equatable {
     var nombre: String
     var texto: String
+    /// Si va al teleprompter. Se desmarca en el panel para dejar un guion
+    /// cargado sin usarlo en esta clase (decisión 131).
+    var usar: Bool = true
+
+    init(nombre: String, texto: String, usar: Bool = true) {
+        self.nombre = nombre
+        self.texto = texto
+        self.usar = usar
+    }
+
+    /// Lectura tolerante (decisión 96): los guiones guardados antes de que
+    /// existiera `usar` cargan igual, y marcados.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        nombre = try c.decode(String.self, forKey: .nombre)
+        texto = try c.decode(String.self, forKey: .texto)
+        usar = try c.decodeIfPresent(Bool.self, forKey: .usar) ?? true
+    }
 }
 
 /// Configuración central de la app. Un solo archivo, en
