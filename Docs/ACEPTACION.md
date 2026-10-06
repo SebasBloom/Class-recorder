@@ -1050,3 +1050,41 @@ En el panel, tocá «la pantalla entera» y elegí «Un área…». Después, gr
 Con la cámara prendida, grabá.
 
 **Tiene que:** la burbuja en tu pantalla tener un borde blanco fino; en el video sale igual que siempre. Al lado del ícono de la barra de menú, el tiempo corriendo y un punto azul; en pausa, el punto gris. Al detener, se va el tiempo.
+
+## Fase 17. Tutorial dentro de la app — VALIDADA el 2026-10-06 (falta el paso 6, la prueba de Iván)
+
+Lo que cambia: la primera vez que se abre la app sale un recorrido que oscurece la pantalla y va iluminando cada parte, con una burbuja que explica qué es y qué hacer. Tiene dos tramos: el panel y una grabación de práctica que al final se va sola a la Papelera.
+
+### 1. Sale solo la primera vez
+
+Cerrá el Grabador y abrilo.
+
+**Tiene que:** abrirse el panel con la pantalla oscurecida y una burbuja de bienvenida al centro, con «Empezar», «Solo la parte de grabar» y «Salir». Ningún clic en lo oscuro hace nada.
+
+### 2. El tramo del panel
+
+Tocá «Empezar» y seguí con «Siguiente».
+
+**Tiene que:** iluminarse una por una las partes del panel (el nombre, cada parte azul de la frase, la carpeta, la cuenta regresiva, el aviso de abajo), con la burbuja al lado sin tapar lo iluminado. Lo iluminado responde: tocá la parte del micrófono y elegí otro, tocá los guiones y que el globo se vea iluminado junto. «Anterior» vuelve un paso.
+
+### 3. La grabación de práctica
+
+Llegás a «Hacé la grabación de práctica». La burbuja dice «Esperando que grabes…» y no tiene «Siguiente». Tocá «Grabar».
+
+**Tiene que:** pasar solo al paso siguiente cuando arranca, e iluminar la cápsula. Seguí los pasos tocando lo que pide: pausar, callar el micrófono (y que la pastilla roja quede iluminada), el tablero (ahí no se oscurece, para poder dibujar), el guion, achicar. Abrí un menú de la cápsula en cualquier paso: tiene que verse encima de lo oscuro.
+
+### 4. Terminar la práctica
+
+En «Terminá la práctica», tocá «Detener».
+
+**Tiene que:** pasar solo a «¡Listo!». No se abre el Finder ni sale el aviso de grabación lista. En la Papelera está el video de práctica, y en la carpeta de grabaciones no.
+
+### 5. Verlo de nuevo, y salir a la mitad
+
+Tocá «¿Cómo se usa?» arriba a la derecha del panel, y también probá desde el menú del ícono de arriba. Elegí «Solo la parte de grabar»: tiene que saltar al paso de Grabar. Grabá, y en la mitad tocá «Salir».
+
+**Tiene que:** cerrarse el tutorial, detenerse la grabación y su video irse a la Papelera. Cerrá y abrí la app: el tutorial ya no sale solo.
+
+### 6. La prueba que cuenta
+
+Iván lo hace entero, en su Mac, sin preguntarle nada a Sebas.

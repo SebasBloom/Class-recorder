@@ -69,6 +69,12 @@ correr oracion \
 	"$FUENTES/Audio/AudioMode.swift" \
 	Pruebas/oracion/main.swift
 
+correr tutorial \
+	"$FUENTES/Tutorial/TutorialSteps.swift" \
+	"$FUENTES/UI/PanelSentence.swift" \
+	"$FUENTES/Audio/AudioMode.swift" \
+	Pruebas/tutorial/main.swift
+
 correr mezcla \
 	"$FUENTES/Audio/AudioMixer.swift" \
 	"$FUENTES/Registro/Logger.swift" \

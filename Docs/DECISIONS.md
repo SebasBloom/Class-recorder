@@ -755,3 +755,22 @@ Arranca con fondo blanco, letra navy y el azul de la marca, igual que el widget 
 Razón: pedido de Sebas el 2026-10-06. Con el teleprompter oscuro y el resto claro, «no mantienen congruencia entre sí». Pero el oscuro tenía su razón, que es la vista, y Sebas pidió las dos cosas: congruente por defecto, oscuro a un toque.
 **Ajusta la decisión 134**, que lo dejaba siempre oscuro. Todos los colores del teleprompter salen de un solo lugar (`Teleprompter/TeleprompterTheme.swift`), así que los dos fondos no pueden quedar a medio pintar.
 Alternativa descartada: seguir el modo claro u oscuro de macOS. El resto de la app es clara siempre (decisión 123), y atar solo el teleprompter al sistema haría que cambie solo sin que nadie lo haya pedido.
+
+**136. 2026-10-06 — La burbuja de cámara sigue rectangular, con las puntas redondeadas.**
+La maqueta del rediseño la dibujaba como un círculo y no se adoptó.
+Razón: la forma de la burbuja sale en el video, así que cambiarla no es identidad de la app sino cómo aparece Sebas en sus clases (8.13 no aplica adentro del video). Se le consultó el 2026-10-06 y eligió dejarla como está.
+Alternativa descartada: la burbuja redonda de la maqueta.
+
+## Adenda 3 (2026-10-06): tutorial dentro de la app
+
+**137. 2026-10-06 — El tutorial es un recorrido que oscurece todo menos lo que explica, con una toma de práctica que se va a la Papelera.**
+Pedido de Sebas: un tutorial «a prueba de idiotas» para Iván, como el de Reserva. Formato elegido por Sebas: la pantalla oscurecida, lo explicado iluminado y una burbuja con la explicación. Lo iluminado se puede tocar.
+La mitad de la app solo existe grabando, así que el recorrido incluye una **toma de práctica** de verdad: se graba como cualquier otra y al detener se manda a la Papelera, nunca se borra (decisión 12), sin abrir el Finder ni avisar «Grabación lista». La marca de práctica vive en el controlador de grabación y no en el tutorial, porque se puede detener desde cuatro lugares (el widget, el panel, el atajo y la barra de menú) y todos pasan por `stop()`.
+Aparece solo la primera vez (`tutorialVisto` en la configuración, con lectura tolerante según la decisión 96: a quien ya tenía la app le aparece al abrir la versión nueva) y cuando se quiera con «¿Cómo se usa?».
+Alternativa descartada: explicar solo el panel y dejar la grabación en el manual escrito. Más simple, pero no pone a tocar nada justo en la parte que se usa en vivo.
+
+**138. 2026-10-06 — El velo deja pasar los clics por el agujero porque ahí no pinta nada.**
+macOS entrega el clic a la ventana de abajo cuando cae en un píxel totalmente transparente de una ventana sin fondo, que es la misma regla que obliga a la capa de anotación a tener un alfa mínimo (decisión 63). El velo pinta el oscurecido en todo menos el agujero, así que lo iluminado se toca y lo oscuro no responde.
+El velo y la burbuja van por encima del selector y por debajo de los menús y de la cuenta regresiva (`WindowLayer`). Lo que la app abre encima mientras tanto —un menú, el globo del guion, la tarjeta de atajos, la pregunta de reiniciar, el selector de área— se ilumina solo: el agujero se agranda para incluirlo, así nunca queda algo tapado esperando un clic que no se puede dar.
+En los pasos donde hay que dibujar (el tablero y el marcador) no se oscurece: solo se marca con un borde, porque para dibujar hay que poder tocar toda la pantalla.
+Alternativa descartada: calcular a mano qué clics dejar pasar, recibiéndolos en el velo y reenviándolos. AppKit no tiene una forma limpia de reenviar un clic a otra ventana, y lo que sí la tiene no deja pasar el arrastre.

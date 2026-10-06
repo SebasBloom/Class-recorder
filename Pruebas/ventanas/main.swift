@@ -29,10 +29,17 @@ let pila: [(String, WindowLayer)] = [
     ("widget", .widget),
     ("tarjeta de atajos", .tarjeta),
     ("selector de rectángulo", .selector),
+    ("oscurecido del tutorial", .tutorialVelo),
+    ("burbuja del tutorial", .tutorialBurbuja),
     ("countdown", .countdown)
 ]
 
 print("Orden de ventanas")
+
+// El tutorial oscurece todo lo propio, pero los menús que se abren mientras
+// tanto tienen que quedar encima del oscurecido, o no se podrían elegir.
+comprobar("los menús quedan por encima del oscurecido del tutorial",
+          NSWindow.Level.popUpMenu.rawValue > WindowLayer.tutorialBurbuja.level.rawValue)
 
 for (anterior, siguiente) in zip(pila, pila.dropFirst()) {
     comprobar("\(siguiente.0) por encima de \(anterior.0)",

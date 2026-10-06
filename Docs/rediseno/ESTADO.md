@@ -57,7 +57,7 @@ La oración vive en `UI/PanelSentence.swift` (reglas, con prueba) y `UI/Sentence
 
 ## Parte 3, el resto: VALIDADA por Sebas (2026-10-06)
 
-Teleprompter, cuenta regresiva, tarjeta de atajos y Preferencias, selector de área, borde de la burbuja e ícono de la barra con el tiempo. Decisiones 133 y 134. Pasos en `Docs/ACEPTACION.md`, «Fase 16 — parte 3». En la misma parte entró el teleprompter claro por defecto con opción oscura (decisión 135). Pendiente de que Sebas decida: la burbuja redonda de la maqueta (cambia el video, no se hizo).
+Teleprompter, cuenta regresiva, tarjeta de atajos y Preferencias, selector de área, borde de la burbuja e ícono de la barra con el tiempo. Decisiones 133 y 134. Pasos en `Docs/ACEPTACION.md`, «Fase 16 — parte 3». En la misma parte entró el teleprompter claro por defecto con opción oscura (decisión 135). La burbuja redonda de la maqueta no se hizo: Sebas eligió dejarla rectangular (decisión 136).
 
 **Con esto la Fase 16 queda cerrada.** Lo que sigue fuera del rediseño: rehacer el instalador de Iván con `./armar-entrega.sh` (el de Drive se borró el 2026-10-05).
 

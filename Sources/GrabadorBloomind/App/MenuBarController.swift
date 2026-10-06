@@ -18,6 +18,8 @@ final class MenuBarController {
     /// curso ni ventana de control abierta.
     private let registry = ShortcutRegistry()
     private let card = ShortcutCard()
+    private let tutorial = TutorialController()
+    private var tutorialItem: NSMenuItem?
 
     /// Ícono base de la barra. Los estados se pintan encima de esta silueta.
     private var iconoBase: NSImage?
@@ -85,6 +87,11 @@ final class MenuBarController {
         shortcutsItem.target = self
         menu.insertItem(shortcutsItem, at: menu.index(of: folderItem) + 1)
 
+        let tutorialItem = NSMenuItem(title: "¿Cómo se usa?", action: #selector(abrirTutorial), keyEquivalent: "")
+        tutorialItem.target = self
+        menu.insertItem(tutorialItem, at: menu.index(of: shortcutsItem) + 1)
+        self.tutorialItem = tutorialItem
+
         statusItem.menu = menu
 
         registry.onAction = { [weak self] action in self?.handle(action) }
@@ -94,6 +101,36 @@ final class MenuBarController {
         // Fuera de grabación solo queda registrado iniciar/detener, para no
         // robarle combinaciones al resto del sistema (punto delicado 7).
         registry.refresh()
+
+        // La primera vez, el tutorial sale solo (decisión 137). También para
+        // quien ya tenía la app: lo ve al abrir la versión que lo trae.
+        if !ConfigurationStore.shared.current.tutorialVisto {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                MainActor.assumeIsolated { self?.abrirTutorial() }
+            }
+        }
+    }
+
+    /// Abre el tutorial desde el principio. Grabando no se abre: el recorrido
+    /// arranca en el panel y la parte de grabar se hace con la toma de práctica.
+    @objc private func abrirTutorial() {
+        let ventana = ensureControlWindow()
+        guard !ventana.recorder.isRecording, !tutorial.activo else { return }
+
+        tutorial.ubicar = { [weak self, weak ventana] objetivo in
+            if objetivo == .barraDeMenu { return self?.statusItem.button?.window?.frame }
+            return ventana?.marcoEnPantalla(de: objetivo)
+        }
+        tutorial.estaGrabando = { [weak ventana] in ventana?.recorder.isRecording ?? false }
+        tutorial.marcarPractica = { [weak ventana] practica in ventana?.recorder.tomaDePractica = practica }
+        tutorial.prepararPaso = { [weak ventana] paso in ventana?.prepararParaTutorial(paso) }
+        tutorial.detenerPractica = { [weak ventana] in
+            Task { await ventana?.recorder.stop() }
+        }
+        tutorial.onTerminar = {
+            ConfigurationStore.shared.update { $0.tutorialVisto = true }
+        }
+        tutorial.empezar()
     }
 
     // MARK: - Atajos
@@ -119,7 +156,10 @@ final class MenuBarController {
         window.recorder.attach(registry: registry)
         window.onRecordingStateChange = { [weak self] grabando, pausado in
             self?.actualizarIcono(grabando: grabando, pausado: pausado)
+            self?.tutorial.avisarCambioDeGrabacion(grabando: grabando)
+            self?.tutorialItem?.isEnabled = !grabando
         }
+        window.onAyuda = { [weak self] in self?.abrirTutorial() }
         window.onTiempo = { [weak self] segundos in self?.mostrarTiempo(segundos) }
         // Con el atajo la tarjeta se muestra mientras se mantiene apretado; con
         // el botón del widget no hay "soltar", así que ahí alterna.

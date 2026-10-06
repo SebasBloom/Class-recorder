@@ -20,6 +20,8 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
     /// Los segundos grabados, una vez por segundo, para el reloj de la barra
     /// de menú.
     var onTiempo: ((Int) -> Void)?
+    /// Se tocó «¿Cómo se usa?».
+    var onAyuda: (() -> Void)?
 
     /// Muestra u oculta la tarjeta de atajos desde el botón del widget. La
     /// tarjeta y el registro de atajos viven en la barra de menú, no acá, porque
@@ -66,6 +68,9 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
     private let folderLabel = NSTextField(labelWithString: "")
     private let folderButton = NSButton()
     private let countdownSwitch = NSSwitch()
+    private let ayudaButton = NSButton()
+    private var filaCarpeta: NSView!
+    private var filaCuenta: NSView!
 
     private let statusDot = NSView()
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
@@ -285,13 +290,9 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
         countdownSwitch.target = self
         countdownSwitch.action = #selector(countdownChanged)
 
-        let ficha = NSStackView(views: [
-            linea(),
-            filaFicha("Se guarda en", folderLabel, folderButton),
-            linea(),
-            filaFicha("Cuenta regresiva", explicacionCuenta, countdownSwitch),
-            linea()
-        ])
+        filaCarpeta = filaFicha("Se guarda en", folderLabel, folderButton)
+        filaCuenta = filaFicha("Cuenta regresiva", explicacionCuenta, countdownSwitch)
+        let ficha = NSStackView(views: [linea(), filaCarpeta, linea(), filaCuenta, linea()])
         ficha.orientation = .vertical
         ficha.alignment = .leading
         ficha.spacing = 0
@@ -326,11 +327,19 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
         pie.setCustomSpacing(14, after: statusLabel)
         pie.edgeInsets = NSEdgeInsets(top: 22, left: 0, bottom: 26, right: 0)
 
-        let stack = NSStackView(views: [ceja, sessionField, sentence, ficha, pie])
+        // El tutorial se vuelve a ver desde acá cuando se quiera (decisión 137).
+        enlace(ayudaButton, "¿Cómo se usa?", #selector(tocarAyuda))
+        let espaciadorCeja = NSView()
+        espaciadorCeja.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let cabecera = NSStackView(views: [ceja, espaciadorCeja, ayudaButton])
+        cabecera.alignment = .firstBaseline
+        cabecera.distribution = .fill
+
+        let stack = NSStackView(views: [cabecera, sessionField, sentence, ficha, pie])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 0
-        stack.setCustomSpacing(8, after: ceja)
+        stack.setCustomSpacing(8, after: cabecera)
         stack.setCustomSpacing(18, after: sessionField)
         stack.setCustomSpacing(26, after: sentence)
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -345,11 +354,55 @@ final class ControlWindow: NSWindowController, NSTextViewDelegate, NSPopoverDele
             // su contenido.
             stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             sessionField.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            cabecera.widthAnchor.constraint(equalTo: stack.widthAnchor),
             ficha.widthAnchor.constraint(equalTo: stack.widthAnchor),
             pie.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
 
         construirGlobo()
+    }
+
+    @objc private func tocarAyuda() { onAyuda?() }
+
+    // MARK: - Tutorial
+
+    /// Dónde está en la pantalla lo que el tutorial quiere iluminar.
+    func marcoEnPantalla(de objetivo: ObjetivoTutorial) -> NSRect? {
+        switch objetivo {
+        case .titulo:  return sessionField.marcoEnPantalla
+        case .carpeta: return filaCarpeta.marcoEnPantalla
+        case .cuenta:  return filaCuenta.marcoEnPantalla
+        case .grabar:  return actionButton.marcoEnPantalla
+        case .estado:
+            return [statusDot, statusLabel].compactMap(\.marcoEnPantalla).reduce(nil) { $0?.union($1) ?? $1 }
+        case .frase(let parte):
+            let fragmento = sentence.marcoEnPantalla(de: parte)
+            // Con el globo del guion abierto, se ilumina junto: la burbuja del
+            // tutorial no lo puede tapar.
+            if parte == .guion, popoverGuion.isShown,
+               let globo = popoverGuion.contentViewController?.view.window?.frame {
+                return fragmento.map { $0.union(globo) } ?? globo
+            }
+            return fragmento
+        case .teleprompter:
+            guard let teleprompter, teleprompter.isVisible else { return nil }
+            return teleprompter.frame
+        case .barraDeMenu:
+            return nil
+        default:
+            return widget.marcoEnPantalla(de: objetivo)
+        }
+    }
+
+    /// Deja la pantalla lista para un paso: el panel a la vista antes de
+    /// grabar, la cápsula completa mientras se graba.
+    func prepararParaTutorial(_ paso: PasoTutorial) {
+        if recorder.isRecording {
+            if paso.objetivo != .achicar { widget.mostrarCompleto() }
+        } else {
+            showWindow(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     /// Un renglón de la ficha: qué es, el valor y su acción.

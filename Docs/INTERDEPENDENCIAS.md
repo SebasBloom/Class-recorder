@@ -67,6 +67,16 @@ Hasta la Fase 15 era la gramática de botón compartida del widget y del telepro
 
 Consumidores: `CapsuleButton` (widget) y `BarraBoton` (teleprompter). Los íconos que cambian en vivo tienen que volver a pasar por `icono`, o vuelven al tamaño de fábrica.
 
+## Tutorial
+
+**Fase 17. Existe.** `Tutorial/TutorialController.swift` (el velo, la burbuja y el recorrido) y `Tutorial/TutorialSteps.swift` (los pasos, sus textos y dónde va la burbuja, con prueba en `./probar.sh`, bloque "tutorial").
+
+No sabe dónde está nada: se lo pregunta al panel (`ControlWindow.marcoEnPantalla(de:)`), que a su vez le pregunta a la cápsula (`RecordingWidget.marcoEnPantalla(de:)`) y a la frase (`SentenceView.marcoEnPantalla(de:)`).
+
+Cuidado al tocarlo: **cada vez que se mueve, se renombra o se agrega un botón de la cápsula o una parte del panel, revisar el texto del paso que lo explica** y su caso en `marcoEnPantalla(de:)`. Un paso que ilumina algo que ya no está muestra la burbuja al centro sin iluminar nada, que no rompe pero confunde.
+
+La toma de práctica la descarta `RecordingController.stop()` con `tomaDePractica`, no el tutorial.
+
 ## Identidad visual
 
 **Fase 1. Existe.** `UI/BloomindStyle.swift` y la fuente en `Recursos/Fuentes/`.

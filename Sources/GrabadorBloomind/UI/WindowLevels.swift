@@ -37,6 +37,10 @@ enum WindowLayer {
     case tarjeta
     /// Selector de rectángulo (censura y área personalizada).
     case selector
+    /// El oscurecido del tutorial y su burbuja (decisión 138). Encima de todo lo
+    /// que explica, debajo de los menús del sistema y de la cuenta regresiva.
+    case tutorialVelo
+    case tutorialBurbuja
     case countdown
 
     var level: NSWindow.Level {
@@ -50,6 +54,8 @@ enum WindowLayer {
         // donde estaban: el selector tapa la pantalla para elegir una zona, y el
         // countdown tiene que verse aunque haya algo en pantalla completa.
         case .selector:     return .modalPanel
+        case .tutorialVelo:    return NSWindow.Level(rawValue: NSWindow.Level.modalPanel.rawValue + 1)
+        case .tutorialBurbuja: return NSWindow.Level(rawValue: NSWindow.Level.modalPanel.rawValue + 2)
         case .countdown:    return .screenSaver
         }
     }

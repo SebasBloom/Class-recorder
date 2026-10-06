@@ -110,17 +110,27 @@ enum PanelSentence {
 
     static func microfonoCorto(_ nombre: String) -> String {
         var n = nombre
-        // «Micrófono DJI vía iPhone» → «Micrófono DJI»: el camino no importa.
+        // Los nombres vienen en el idioma del sistema: «AirPods Pro de
+        // Sebastián» en español, «Sebastián’s AirPods Pro» en inglés. El dueño
+        // y el camino («vía iPhone») no van en la frase.
+        if let dueño = n.range(of: #"^.*['’]s "#, options: .regularExpression) { n.removeSubrange(dueño) }
         if let via = n.range(of: " vía ", options: .caseInsensitive) { n = String(n[..<via.lowerBound]) }
-        // «AirPods Pro de Sebastián Giraldo» → «AirPods Pro»: el dueño tampoco.
         if let de = n.range(of: #" de [A-ZÁÉÍÓÚÑ][\wáéíóúñ]*( [A-ZÁÉÍÓÚÑ][\wáéíóúñ]*)*$"#, options: .regularExpression) {
             n = String(n[..<de.lowerBound])
         }
-        n = n.replacingOccurrences(of: #"MacBook (Air|Pro)"#, with: "Mac", options: .regularExpression)
 
-        if n.lowercased().hasPrefix("airpods") { return "los " + corto(n, 16) }
-        if n.lowercased().hasPrefix("micrófono") || n.lowercased().hasPrefix("microfono") {
+        let minusculas = n.lowercased()
+        if let airpods = minusculas.range(of: "airpods") {
+            return "los " + corto(String(n[airpods.lowerBound...]), 16)
+        }
+        if minusculas.contains("macbook") { return "el micrófono del Mac" }
+        if minusculas == "external microphone" { return "el micrófono externo" }
+        if minusculas.hasPrefix("micrófono") || minusculas.hasPrefix("microfono") {
             return "el " + corto(n.prefix(1).lowercased() + n.dropFirst(), 22)
+        }
+        // «Blue Yeti Microphone» → «el micrófono Blue Yeti».
+        if let palabra = n.range(of: #" (Microphone|Mic)$"#, options: [.regularExpression, .caseInsensitive]) {
+            n = String(n[..<palabra.lowerBound])
         }
         return "el micrófono " + corto(n, 14)
     }

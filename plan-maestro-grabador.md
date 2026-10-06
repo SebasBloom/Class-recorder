@@ -467,6 +467,21 @@ Piezas compartidas que toca: identidad visual, gramática de botón de comando (
 
 Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 16", uno por parte. Como en la Fase 14, no alcanza con que se vea bien: cada parte reverifica que todas las acciones siguen respondiendo, también con el tablero y la capa de anotación prendidos.
 
+### Fase 17. Tutorial dentro de la app
+
+Agregada el 2026-10-06 por la adenda 3, y aprobada por Sebas ese mismo día. Pedido: «un tutorial de cómo usar la app, como el que hicimos para Reserva, a prueba de idiotas, que le enseñe todo a Iván». Iván ya tiene la app instalada: el tutorial enseña a usarla, no a instalarla.
+
+Contenido:
+
+1. **Un recorrido guiado** que oscurece la pantalla y deja iluminada solo la parte que explica, con una burbuja al lado que dice qué es, qué hacer y qué va a pasar, y los botones Anterior, Siguiente y Salir. Lo iluminado responde al clic: se aprende tocando.
+2. **Dos tramos.** Primero el panel, parte por parte de la oración. Después una **toma de práctica**: el recorrido pide tocar Grabar y sigue durante la grabación por la cápsula, sus menús, el tablero, el teleprompter, el modo mini, la barra de menú y los atajos. Al detener, ese video **se va a la Papelera** solo, para que practicar no deje basura en la carpeta.
+3. **Cuándo aparece:** solo la primera vez que se abre la app (también para quien ya la tenía instalada, al abrir la versión nueva), y cuando se quiera con «¿Cómo se usa?», en el panel y en el menú de la barra. Al abrirlo se puede elegir hacerlo entero o ir directo a la parte de grabar.
+4. **Nada de esto sale en el video:** el oscurecido y la burbuja son ventanas de la app (decisión 22).
+
+Piezas compartidas que toca: niveles y orden de ventanas (dos capas nuevas, el velo y la burbuja), configuración central (si ya se vio) y el controlador de grabación (la toma de práctica que se descarta).
+
+Aceptación: los pasos escritos en `Docs/ACEPTACION.md` bajo "Fase 17". El que cuenta es el último: Iván lo hace entero sin preguntarle nada a Sebas.
+
 ## 10. Protocolo de trabajo por sesión
 
 1. Al comenzar cada sesión de Claude Code: leer `CLAUDE.md`, `Docs/DECISIONS.md` y `Docs/INTERDEPENDENCIAS.md`.

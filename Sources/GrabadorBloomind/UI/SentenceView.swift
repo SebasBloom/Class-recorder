@@ -151,6 +151,17 @@ final class SentenceView: NSTextView {
         }
     }
 
+    /// Dónde está un fragmento en la pantalla, para el tutorial. Si ocupa dos
+    /// renglones, el rectángulo que los abarca.
+    func marcoEnPantalla(de parte: PanelSentence.Parte) -> NSRect? {
+        let rects = fragmentos(con: Self.parteKey)
+            .filter { ($0.valor as? String) == parte.rawValue }
+            .map(\.rect)
+        guard let primero = rects.first, let ventana = window, ventana.isVisible else { return nil }
+        let local = rects.dropFirst().reduce(primero) { $0.union($1) }
+        return ventana.convertToScreen(convert(local, to: nil))
+    }
+
     // MARK: - Medidor
 
     override func draw(_ dirtyRect: NSRect) {

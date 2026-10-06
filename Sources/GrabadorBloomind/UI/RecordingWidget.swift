@@ -115,6 +115,7 @@ final class RecordingWidget: NSPanel {
     private let achicar = CapsuleButton(simbolo: "arrow.down.right.and.arrow.up.left", nombre: "Achicar",
                                         ayuda: "Dejar solo el tiempo", ancho: 46)
 
+    private let relojVista = NSStackView()
     private var contextoTablero = NSView()
     private var contextoGuion = NSView()
 
@@ -176,7 +177,8 @@ final class RecordingWidget: NSPanel {
         frase.cell?.truncatesLastVisibleLine = true
         frase.preferredMaxLayoutWidth = 186
 
-        let reloj = NSStackView(views: [lineaReloj, frase])
+        let reloj = relojVista
+        reloj.setViews([lineaReloj, frase], in: .top)
         reloj.orientation = .vertical
         reloj.alignment = .leading
         reloj.spacing = 4
@@ -336,6 +338,37 @@ final class RecordingWidget: NSPanel {
         // La sombra de una ventana transparente sigue la forma de lo que tiene
         // pintado; sin esto se queda con la del tamaño anterior.
         invalidateShadow()
+    }
+
+    // MARK: - Tutorial
+
+    /// Dónde está en la pantalla lo que el tutorial quiere iluminar. Achicado,
+    /// cualquier cosa de la cápsula es la pastilla: es lo único que se ve.
+    func marcoEnPantalla(de objetivo: ObjetivoTutorial) -> NSRect? {
+        guard isVisible else { return nil }
+        if mini { return pastilla.marcoEnPantalla }
+        let union = { (vistas: [NSView]) -> NSRect? in
+            vistas.compactMap(\.marcoEnPantalla).reduce(nil) { $0?.union($1) ?? $1 }
+        }
+        switch objetivo {
+        case .reloj:           return relojVista.marcoEnPantalla
+        case .pausar:          return pausar.marcoEnPantalla
+        case .reiniciar:       return reiniciar.marcoEnPantalla
+        case .detener:         return detener.marcoEnPantalla
+        case .audio:           return union([microfono, sistema, alertas])
+        case .camara:          return camara.marcoEnPantalla
+        case .queSeVe:         return grupoVe.marcoEnPantalla
+        case .tablero:         return union([grupoTablero, contextoTablero])
+        case .sobreLaPantalla: return grupoSobre.marcoEnPantalla
+        case .guion:           return union([guion, guionMenu, contextoGuion])
+        case .achicar:         return achicar.marcoEnPantalla
+        default:               return nil
+        }
+    }
+
+    /// La cápsula completa, para que el tutorial pueda mostrar sus botones.
+    func mostrarCompleto() {
+        ponerMini(false)
     }
 
     // MARK: - Modo mini

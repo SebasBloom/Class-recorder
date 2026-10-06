@@ -254,6 +254,12 @@ final class RecordingController {
         }
     }
 
+    /// La grabación en curso es la de práctica del tutorial: al detenerla se va
+    /// a la Papelera, sin abrir el Finder ni avisar (decisión 137). Vive acá y
+    /// no en el tutorial porque se puede detener desde cuatro lugares, y todos
+    /// pasan por `stop()`.
+    var tomaDePractica = false
+
     /// - Parameter revealInFinder: al reiniciar una toma no se abre el Finder,
     ///   porque el archivo se va a la Papelera un instante después.
     func stop(revealInFinder: Bool = true) async {
@@ -298,7 +304,15 @@ final class RecordingController {
 
         RecoveryMarker.end()
         Logger.shared.log("Grabación terminada")
+        let practica = tomaDePractica
+        tomaDePractica = false
         onStateChange?()
+
+        if practica, let url = writer?.outputURL {
+            Self.mandarAPapelera(url)
+            Logger.shared.log("Toma de práctica del tutorial mandada a la Papelera")
+            return
+        }
 
         if revealInFinder, let url = writer?.outputURL {
             notifyFinished(url)
@@ -469,24 +483,33 @@ final class RecordingController {
     func restartTake() async {
         guard isRecording, let opciones = lastStartOptions else { return }
         let descartado = writer?.outputURL
+        // Reiniciar la práctica sigue siendo práctica.
+        let practica = tomaDePractica
 
         await stop(revealInFinder: false)
 
         if let descartado {
-            let cursor = descartado.deletingPathExtension().appendingPathExtension("cursor.json")
-            for archivo in [descartado, cursor] where FileManager.default.fileExists(atPath: archivo.path) {
-                do {
-                    try FileManager.default.trashItem(at: archivo, resultingItemURL: nil)
-                } catch {
-                    Logger.shared.log("ERROR mandando la toma descartada a la Papelera: \(error.localizedDescription)")
-                }
-            }
+            Self.mandarAPapelera(descartado)
             Logger.shared.log("Toma reiniciada; la anterior quedó en la Papelera")
         }
 
+        tomaDePractica = practica
         await start(display: opciones.display, audioMode: opciones.audioMode,
                     microphoneID: opciones.microphoneID, camera: opciones.camera,
                     sessionName: opciones.sessionName, area: opciones.area)
+    }
+
+    /// Manda una toma y su `.cursor.json` a la Papelera. Nunca borra directo
+    /// (decisión 12): una toma descartada por error se recupera de ahí.
+    private static func mandarAPapelera(_ video: URL) {
+        let cursor = video.deletingPathExtension().appendingPathExtension("cursor.json")
+        for archivo in [video, cursor] where FileManager.default.fileExists(atPath: archivo.path) {
+            do {
+                try FileManager.default.trashItem(at: archivo, resultingItemURL: nil)
+            } catch {
+                Logger.shared.log("ERROR mandando una toma a la Papelera: \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Notificación al detener, con el nombre del archivo (plan, 8.9).
